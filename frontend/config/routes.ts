@@ -9,5 +9,11 @@ export default [
   { path: '/logs', name: '变更日志', icon: 'AuditOutlined', component: './LogsPage' },
   { path: '/settings', name: '管理设置', icon: 'SettingOutlined', component: './SettingsPage' },
   { path: '/system-info', name: '系统信息', icon: 'InfoCircleOutlined', component: './SystemInfoPage' },
+  { path: '/examples/form', name: '表单演示', icon: 'FormOutlined', component: './examples/FormExample' },
+  { path: '/examples/list', name: '列表演示', icon: 'TableOutlined', component: './examples/ListExample' },
+  { path: '/examples/settings', name: '个人设置演示', icon: 'UserOutlined', component: './examples/SettingsExample' },
+  { path: '/examples/login', name: '登录演示', component: './examples/LoginExample' },
+  { path: '/examples/register', name: '注册演示', component: './examples/RegisterExample' },
+  { path: '/examples/chat', name: '聊天演示', icon: 'MessageOutlined', component: './examples/ChatExample' },
   { path: '/*', redirect: '/organization' },
 ];
