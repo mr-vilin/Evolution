@@ -31,7 +31,7 @@ export function SystemInfoPage() {
     (backend.data.commit !== 'unknown' && buildInfo.commit !== 'unknown' && backend.data.commit !== buildInfo.commit) ||
     backend.data.stage !== buildInfo.stage ||
     (backend.data.dirty !== null && buildInfo.dirty !== null && backend.data.dirty !== buildInfo.dirty));
-  return <PageHeader title="系统信息" description="查看当前产品版本、系统能力、技术栈和版本演进规则。" extra={<Tag color="blue">产品版本 {productVersion}</Tag>}>
+  return <PageHeader area="系统管理" title="系统信息" description="查看当前产品版本、系统能力、技术栈和版本演进规则。" extra={<Tag color="blue">产品版本 {productVersion}</Tag>}>
     <Alert className="block-gap" type="info" showIcon title="版本记录规则" description="遵循 SemVer：新功能增加次版本，修复增加修订版本；0.x 阶段的破坏性变化增加次版本。开发改动先记入 Unreleased，发布时按版本整理记录，允许同日多个版本。" />
     {mismatch && <Alert className="block-gap" type="warning" showIcon title="前后端构建不一致" description="请刷新页面；若提示持续存在，请检查前后端是否来自同一次部署。" />}
     {backend.error && <Alert className="block-gap" type="warning" showIcon title="后端运行版本尚未确认" description={backend.error.message} />}
