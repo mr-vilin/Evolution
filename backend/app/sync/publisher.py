@@ -58,7 +58,7 @@ class Publisher:
                     row.sync_quality = 'pending_verification'; changes += 1
             remaining = dict(candidate.departments)
             while remaining:
-                ready = [key for key, value in remaining.items() if not value['parent_id'] or value['parent_id'] not in remaining]
+                ready = sorted(key for key, value in remaining.items() if not value['parent_id'] or value['parent_id'] not in remaining)
                 if not ready: raise RuntimeError('DEPARTMENT_CYCLE')
                 for key in ready:
                     value=remaining.pop(key)
@@ -193,6 +193,10 @@ class Publisher:
             fields['primary_department_id']=None
         else:
             fields={'id':row.id,'status':'inactive'}
+            # 关系未解析不阻止保留本轮已读取的账号事实；不覆盖历史部门资料。
+            fields.update({key: value[key] for key in (
+                'mobile', 'field_readability', 'is_frozen', 'is_resigned', 'is_activated', 'is_exited', 'is_unjoin'
+            ) if key in value})
         fields['sync_quality']='pending_verification'
         changes=self._upsert(db,Employee,fields,'employee',job_id,now)
         db.flush()
@@ -218,6 +222,12 @@ class Publisher:
 
     def _upsert(self, db, model, value, kind, job_id, now):
         row = db.get(model, value['id'])
+        if model is Department:
+            value = {key: item for key, item in value.items() if key != 'sort_order'}
+            if 'parent_id' in value and (row is None or row.parent_id != value['parent_id']):
+                maximum = db.scalar(select(func.max(Department.sort_order)).where(
+                    Department.parent_id == value['parent_id'], Department.id != value['id']))
+                value['sort_order'] = maximum + 1 if maximum is not None else 0
         before = {key: getattr(row, key) for key in value} if row else None
         if before == value:
             row.last_seen_at = now

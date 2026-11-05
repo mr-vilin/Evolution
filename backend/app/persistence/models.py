@@ -2,6 +2,7 @@ from datetime import datetime
 
 from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text as sql_text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.dialects.mysql import INTEGER
 
 
 TABLE_ARGS = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_general_ci"}
@@ -73,12 +74,13 @@ class Department(Base):
     feishu_department_id: Mapped[str] = mapped_column(SOURCE_ID, unique=True, comment="飞书部门标识")
     parent_id: Mapped[str | None] = mapped_column(SOURCE_ID, ForeignKey("department.id"), comment="父部门标识")
     name: Mapped[str] = mapped_column(String(255), comment="部门名称")
+    sort_order: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), 'mysql'), default=0, server_default='0', comment="同父级共享的本地展示顺序，非负整数，普通同步保留")
     leader_user_id: Mapped[str | None] = mapped_column(SOURCE_ID, comment="部门负责人用户标识")
     status: Mapped[str] = mapped_column(String(32), default="active", comment="部门状态")
     sync_quality: Mapped[str] = mapped_column(String(32), default="unknown", comment="部门同步质量")
     is_virtual_root: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否为虚拟根部门")
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), comment="最近一次从飞书看到的时间")
-    __table_args__ = _table_args("飞书部门目录")
+    __table_args__ = (Index('idx_department_order', 'parent_id', 'sort_order', 'id'), _table_args("飞书部门目录"))
 
 
 class Employee(Base):
@@ -88,6 +90,13 @@ class Employee(Base):
     open_id: Mapped[str | None] = mapped_column(SOURCE_ID, unique=True, comment="飞书用户开放标识")
     name: Mapped[str] = mapped_column(String(255), comment="员工姓名")
     employee_no: Mapped[str | None] = mapped_column(String(128), comment="员工工号")
+    mobile: Mapped[str | None] = mapped_column(String(128, collation="utf8mb4_bin"), comment="飞书完整手机号，空值含义由字段可读性说明")
+    is_frozen: Mapped[bool | None] = mapped_column(Boolean, comment="飞书账号是否暂停，NULL 表示未知")
+    is_resigned: Mapped[bool | None] = mapped_column(Boolean, comment="飞书账号是否离职，NULL 表示未知")
+    is_activated: Mapped[bool | None] = mapped_column(Boolean, comment="飞书账号是否已激活，NULL 表示未知")
+    is_exited: Mapped[bool | None] = mapped_column(Boolean, comment="飞书账号是否主动退出，NULL 表示未知")
+    is_unjoin: Mapped[bool | None] = mapped_column(Boolean, comment="飞书账号是否未加入，NULL 表示未知")
+    field_readability: Mapped[dict | None] = mapped_column(JSON, comment="手机号和账号标志可读性：readable、not_collected、unreadable")
     employee_type_id: Mapped[str | None] = mapped_column(SOURCE_ID, comment="员工类型枚举选项标识")
     employee_type_name: Mapped[str | None] = mapped_column(String(255), comment="员工类型展示名称")
     job_title: Mapped[str | None] = mapped_column(String(255), comment="员工职务")

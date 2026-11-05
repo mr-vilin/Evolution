@@ -111,6 +111,8 @@ def test_mcp_upgrade_from_current_main_preserves_existing_schema_and_data(migrat
     assert all(after['tables'][name] == spec for name, spec in before['tables'].items())
     with engine.connect() as connection:
         assert connection.execute(text('SELECT * FROM admin_session')).all() == rows
-    assert check_schema(engine)['errors'] == ['schema.version']
+    # 当前 head 还增加了组织浏览字段；历史 0009 不应被当作当前完整结构。
+    # 本测试的保留保证由上面的逐表快照断言覆盖。
+    assert 'schema.version' in check_schema(engine)['errors']
     command.downgrade(config, '0008_session_digest')
     assert schema_snapshot(engine) == before

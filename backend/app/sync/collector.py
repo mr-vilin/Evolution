@@ -44,6 +44,29 @@ def _custom_value(raw, field_id, allow_text=False):
     return None, None, False
 
 
+ACCOUNT_FLAGS = ('is_frozen', 'is_resigned', 'is_activated', 'is_exited', 'is_unjoin')
+
+
+def optional_user_facts(raw):
+    """保留原始字段的缺省、可读空值和不可读，不从 SDK 类型推定权限。"""
+    status = raw.get('status') if isinstance(raw.get('status'), dict) else {}
+    facts, readability = {}, {}
+    for key in ACCOUNT_FLAGS:
+        value = status.get(key)
+        facts[key] = value if type(value) is bool else None
+        readability[key] = 'not_collected' if key not in status else 'readable' if type(value) is bool else 'unreadable'
+    mobile = raw.get('mobile')
+    if 'mobile' not in raw:
+        readability['mobile'] = 'not_collected'
+    elif raw.get('mobile_visible') is False or (mobile is not None and (not isinstance(mobile, str) or len(mobile) > 128)):
+        readability['mobile'] = 'unreadable'
+    else:
+        readability['mobile'] = 'readable'
+    facts['mobile'] = mobile.strip() if isinstance(mobile, str) and readability['mobile'] == 'readable' else None
+    facts['field_readability'] = readability
+    return facts
+
+
 def normalize_user(raw, custom_mappings=None, employee_type_options=None):
     status=raw.get('status')
     if not isinstance(status,dict) or not any(type(status.get(key)) is bool for key in ('is_resigned','is_exited')):
@@ -71,7 +94,7 @@ def normalize_user(raw, custom_mappings=None, employee_type_options=None):
     quality = 'pending_verification' if not relations_readable else 'inconsistent' if inconsistent else 'complete'
     if type_quality or (mappings.get('permission_role') and not role_present) or (mappings.get('store_attribute') and not store_present):
         quality = 'pending_verification'
-    return {"id": identifier, "feishu_user_id": identifier, "open_id": raw.get("open_id"), "name": raw["name"], "employee_no": raw.get("employee_no"), "employee_type_id": type_id, "employee_type_name": type_name, "job_title": raw.get('job_title'), "leader_user_id": raw.get('leader_user_id'), "permission_role_id": role_id, "permission_role_name": role_name, "store_attribute_id": store_id, "store_attribute_name": store_name, "status": "inactive" if inactive else "active", "primary_department_id": primary if not inconsistent else None, "sync_quality": quality, "department_ids": departments}
+    return {**optional_user_facts(raw), "id": identifier, "feishu_user_id": identifier, "open_id": raw.get("open_id"), "name": raw["name"], "employee_no": raw.get("employee_no"), "employee_type_id": type_id, "employee_type_name": type_name, "job_title": raw.get('job_title'), "leader_user_id": raw.get('leader_user_id'), "permission_role_id": role_id, "permission_role_name": role_name, "store_attribute_id": store_id, "store_attribute_name": store_name, "status": "inactive" if inactive else "active", "primary_department_id": primary if not inconsistent else None, "sync_quality": quality, "department_ids": departments}
 
 
 def normalize_department(raw):

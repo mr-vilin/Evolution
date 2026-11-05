@@ -10,9 +10,11 @@ from app.stores.domain import UNSET, InvalidStoreChanges, StorePatch
 from app.stores.service import StoreAdminService
 from app.web import utc_datetime
 from app.config import get_settings
+from app.admin.organization import router as organization_router
 
 
 router = APIRouter(prefix="/admin/api")
+router.include_router(organization_router)
 
 
 class SyncJobCreate(BaseModel):

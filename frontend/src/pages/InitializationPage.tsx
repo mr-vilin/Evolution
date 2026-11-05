@@ -3,7 +3,7 @@ import { Alert, App, Button, Card, Form, Input, Progress, Result, Space, Spin, S
 import { CheckCircleFilled, CloseCircleFilled, LoadingOutlined } from '@ant-design/icons';
 import { request } from '../services/http';
 
-interface CheckItem { key: string; title: string; status: string; message: string; field?: string; object_id?: string; object_type?: string }
+interface CheckItem { key: string; title: string; status: string; message: string; field?: string; object_id?: string; object_type?: string; readability?: string }
 interface FieldRequirement { key: string; object_type: string; field: string; title: string; requirement: string; rule: string }
 interface Check { step: number; title: string; status: string; items: CheckItem[] }
 interface Mappings { permission_role?: string; store_attribute?: string; employee_type_options?: Record<string, string> }
@@ -41,10 +41,11 @@ function FieldCheckResults({ items, requirements }: { items: CheckItem[]; requir
     { title: '校验结果', key: 'status', width: 140, render: (_, row) => {
       const passed = row.items.filter(item => item.status === 'passed').length;
       const failed = row.items.some(item => item.status === 'failed');
+      if (row.items.some(item => item.readability && item.readability !== 'readable')) return <span className="initialization-muted">含未知信息（可缺省）</span>;
       if (row.items.length === 0) return <span className="initialization-muted">待校验</span>;
       return <span className={failed ? 'check-failed' : passed === row.items.length ? 'check-passed' : 'initialization-muted'}>{failed ? '未通过' : passed === row.items.length ? '已通过' : '未校验'}{row.items.length > 1 && <div>通过 {passed} / {row.items.length}</div>}</span>;
     } },
-    { title: '样本与原因', key: 'details', render: (_, row) => <ul className="initialization-field-details">{row.items.map(item => <li key={item.key}>{item.object_id && <strong>{item.object_id}：</strong>}{item.status === 'passed' ? '校验通过' : item.message}</li>)}</ul> },
+    { title: '样本与原因', key: 'details', render: (_, row) => <ul className="initialization-field-details">{row.items.map(item => <li key={item.key}>{item.object_id && <strong>{item.object_id}：</strong>}{item.readability ? item.message : item.status === 'passed' ? '校验通过' : item.message}</li>)}</ul> },
   ]} />;
 }
 

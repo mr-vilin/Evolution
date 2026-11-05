@@ -328,6 +328,21 @@ def test_field_requirements_cover_all_checked_fields_before_preflight(setup):
     assert '接口仍须返回' in fields['user:job_title']['rule']
 
 
+def test_optional_contact_facts_report_unknown_without_claiming_read_permissions(setup):
+    _, service, api, _ = setup
+    api.users['u']['mobile'] = ''
+    api.users['u']['status']['is_activated'] = False
+    for step in (1, 2, 3):
+        service.run_check(step, 'admin:ou')
+    status = service.run_check(4, 'admin:ou')
+    items = {item['field']: item for item in status['checks'][3]['items'] if item.get('object_id') == 'u'}
+    assert items['mobile']['readability'] == 'readable'
+    assert items['is_activated']['readability'] == 'readable'
+    assert items['is_unjoin']['readability'] == 'not_collected'
+    assert '未知' in items['is_unjoin']['message']
+    assert status['phase'] == 'ready'
+
+
 @pytest.mark.parametrize('leader', ['missing', None, '', 'v'])
 def test_optional_employee_leader_passes_preflight_and_full_pipeline(setup, leader):
     sessions, service, api, _ = setup

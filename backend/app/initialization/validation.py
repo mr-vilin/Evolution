@@ -80,6 +80,8 @@ USER_FIELD_TITLES = {
     'leader_user_id': '直属上级', 'open_id': '登录标识',
     'department_ids': '所属部门', 'orders': '部门顺序与唯一主部门', 'status': '人员状态',
     'employee_type': '员工类型', 'permission_role': '权限角色', 'store_attribute': '门店属性',
+    'mobile': '手机号', 'is_frozen': '账号暂停标志', 'is_resigned': '账号离职标志',
+    'is_activated': '账号激活标志', 'is_exited': '账号主动退出标志', 'is_unjoin': '账号未加入标志',
 }
 DEPARTMENT_FIELD_TITLES = {
     'open_department_id': '部门标识', 'name': '部门名称', 'leader_user_id': '部门负责人',
@@ -114,6 +116,8 @@ def field_requirements():
         ('permission_role', '非必填', '字段定义须可读；允许未填写或接口省略，已返回值须为合法空值或已配置的单选项。'),
         ('store_attribute', '非必填', '字段定义须可读；允许未填写或接口省略，已返回文本最多 255 字符，或为已配置的单选项。'),
     ]
+    users.extend((key, '可缺省', '保留飞书原始事实；缺失、不可读标为未知，不推断为否，也不据此宣称应用有字段读取权限。')
+                 for key in ('mobile', 'is_frozen', 'is_resigned', 'is_activated', 'is_exited', 'is_unjoin'))
     result = [{'key': 'definition:' + key, 'object_type': 'definition', 'field': key,
                'title': title, 'requirement': requirement, 'rule': rule}
               for key, title, requirement, rule in definitions]
@@ -248,6 +252,13 @@ def validate_user(raw, mappings, definitions, field_results=None):
     for key, (option_id, option_name) in selected.items():
         value[key + '_id'], value[key + '_name'] = option_id, option_name
     value['sync_quality'] = 'complete'
+    if field_results is not None:
+        for key, readability in value['field_readability'].items():
+            field_results.append({'key': f'user:{identifier}:{key}', 'object_id': identifier,
+                                  'object_type': 'user', 'field': key, 'title': USER_FIELD_TITLES[key],
+                                  'status': 'passed', 'readability': readability,
+                                  'message': '可读（允许合法空值）' if readability == 'readable' else
+                                             '未知：接口未采集此字段' if readability == 'not_collected' else '未知：字段不可读或格式不支持'})
     return value
 
 

@@ -8,9 +8,10 @@ export interface Meta {
 }
 
 export interface Envelope<T> { data: T; meta: Meta }
+export interface FieldError { department_id?: string; code?: string; message?: string; loc?: Array<string | number>; msg?: string }
 
 export class ApiError extends Error {
-  constructor(public status: number, public code: string, message: string) {
+  constructor(public status: number, public code: string, message: string, public fields: FieldError[] = []) {
     super(message);
     this.name = 'ApiError';
   }
@@ -37,12 +38,12 @@ export async function request<T>(path: string, options: { method?: string; body?
     throw new ApiError(response.status, 'INVALID_RESPONSE', '服务返回了无法识别的响应，请稍后重试');
   }
   if (!response.ok) {
-    const detail = (payload as { error?: { code?: string; message?: string } } | null)?.error;
+    const detail = (payload as { error?: { code?: string; message?: string; fields?: FieldError[] } } | null)?.error;
     if ((response.status === 401 || response.status === 403) && path !== '/admin/auth/session') {
       csrfToken = null;
       window.dispatchEvent(new CustomEvent(AUTH_FAILURE_EVENT, { detail: { status: response.status } }));
     }
-    throw new ApiError(response.status, detail?.code ?? 'REQUEST_FAILED', detail?.message ?? '请求失败，请稍后重试');
+    throw new ApiError(response.status, detail?.code ?? 'REQUEST_FAILED', detail?.message ?? '请求失败，请稍后重试', Array.isArray(detail?.fields) ? detail.fields : []);
   }
   if (typeof payload !== 'object' || payload === null || !('data' in payload)) {
     throw new ApiError(response.status, 'INVALID_RESPONSE', '响应缺少业务数据，请联系维护人员');
