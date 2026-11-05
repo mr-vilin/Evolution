@@ -2,9 +2,9 @@ import type { ProLayoutProps } from '@ant-design/pro-components';
 
 const settings: ProLayoutProps = {
   title: '组织服务',
-  // Pro 3 的 side 模式在桌面隐藏页头；mix + splitMenus=false 保留完整侧栏和顶栏。
+  // 混合导航：顶栏区域，侧栏展示当前区域页面。
   layout: 'mix',
-  splitMenus: false,
+  splitMenus: true,
   navTheme: 'light',
   contentWidth: 'Fluid',
   fixedHeader: true,

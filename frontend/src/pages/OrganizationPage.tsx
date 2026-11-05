@@ -13,7 +13,11 @@ import { ResourceState } from '../components/ResourceState';
 import { StoreEditor } from '../components/StoreEditor';
 
 function makeTree(items: Department[], hits: Set<string>): DataNode[] { const nodes = new Map<string, DataNode>(); items.forEach(d => nodes.set(d.id, { key: d.id, title: <span className={hits.has(d.id) ? 'tree-hit' : ''}>{d.name} {d.is_store && <Tag color="blue">门店</Tag>}</span>, children: [] })); const roots: DataNode[] = []; items.forEach(d => { const node = nodes.get(d.id)!; const parent = d.parent_id ? nodes.get(d.parent_id) : undefined; if (parent) parent.children?.push(node); else roots.push(node); }); return roots; }
-function useNarrow() { return typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches; }
+function useNarrow() {
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches);
+  useEffect(() => { const media = window.matchMedia('(max-width: 900px)'); const update = () => setNarrow(media.matches); media.addEventListener('change', update); return () => media.removeEventListener('change', update); }, []);
+  return narrow;
+}
 export function OrganizationPage() {
   const { message } = App.useApp(); const navigate = useNavigate(); const narrow = useNarrow();
   const departments = useAllResource<Department>('/admin/api/departments?include_inactive=true&limit=200');

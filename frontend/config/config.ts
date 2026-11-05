@@ -12,6 +12,7 @@ if (info.version !== manifest.version) throw new Error('构建元信息与 versi
 export default defineConfig({
   routes,
   title: '组织服务 · 管理工作台',
+  favicons: ['/favicon.svg'],
   hash: true,
   publicPath: '/',
   history: { type: 'browser' },

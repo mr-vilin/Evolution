@@ -78,11 +78,158 @@ def ready(service):
     assert service.run_check(4, 'admin:ou')['phase'] == 'ready'
 
 
+def test_field_report_keeps_passed_fields_and_all_independent_failures(setup):
+    _, service, api, _ = setup
+    api.users['u']['custom_attrs'] = {}
+    api.users['u'].pop('job_title')
+    for step in (1, 2, 3):
+        service.run_check(step, 'admin:ou')
+    status = service.run_check(4, 'admin:ou')
+    fields = {i['field']: i for i in status['checks'][-1]['items'] if i.get('object_id') == 'u'}
+    assert status['phase'] == 'precheck_failed'
+    assert fields['name']['status'] == 'passed'
+    assert fields['employee_no']['status'] == 'passed'  # 明确的空值仍合法。
+    assert {k for k, v in fields.items() if v['status'] == 'failed'} == {'job_title', 'permission_role', 'store_attribute'}
+    assert len(fields) == 12
+    assert len(status['last_error']['issues']) == 3
+
+
+def test_manual_sample_replaces_automatic_users_rereads_and_does_not_bypass_full_validation(setup):
+    _, service, api, _ = setup
+    api.users['u']['custom_attrs'] = {}
+    api.users['manual'] = deepcopy(api.users['v'])
+    api.users['manual']['user_id'] = 'manual'
+    for step in (1, 2, 3):
+        service.run_check(step, 'admin:ou')
+    assert service.run_check(4, 'admin:ou')['phase'] == 'precheck_failed'
+    status = service.run_check(4, 'admin:ou', user_id=' manual ')
+    assert status['phase'] == 'ready'
+    assert status['field_sample'] == {'mode': 'manual', 'user_ids': ['manual']}
+    assert {i['object_id'] for i in status['checks'][-1]['items'] if i.get('object_type') == 'user'} == {'manual'}
+    assert 'samples' not in status and 'last_error' not in status
+    api.users['manual'].pop('job_title')
+    assert service.run_check(4, 'admin:ou', user_id='manual')['phase'] == 'precheck_failed'
+    api.users['manual']['job_title'] = None
+    service.run_check(4, 'admin:ou', user_id='manual')
+    service.start('admin:ou')
+    assert worker_for(setup).step()
+    assert service.status()['phase'] == 'failed'  # 未被手动选中的 u 仍在全量阶段严格校验。
+
+
+def test_automatic_retry_rereads_samples_and_clears_manual_source(setup):
+    _, service, api, _ = setup
+    ready(service)
+    service.run_check(4, 'admin:ou', user_id='v')
+    api.users['u'].pop('job_title')
+    status = service.run_check(4, 'admin:ou')
+    assert status['phase'] == 'precheck_failed'
+    assert status['field_sample'] == {'mode': 'automatic', 'user_ids': ['u']}
+    api.users['u']['job_title'] = None
+    assert service.run_check(4, 'admin:ou')['phase'] == 'ready'
+
+
+@pytest.mark.parametrize('problem', ['missing_user', 'wrong_identity', 'invalid_definition', 'unreadable_definition'])
+def test_field_report_distinguishes_failed_and_unchecked_without_stale_ready(setup, problem):
+    _, service, api, _ = setup
+    ready(service)
+    original_pages = api.pages
+    if problem == 'wrong_identity':
+        api.users['v']['user_id'] = 'other'
+    elif problem in ('invalid_definition', 'unreadable_definition'):
+        def pages(resource, **params):
+            if resource == 'custom_attrs' and problem == 'unreadable_definition':
+                raise RuntimeError('remote failure')
+            for page in original_pages(resource, **params):
+                if resource == 'custom_attrs':
+                    page['items'][0]['type'] = 'TEXT'
+                yield page
+        api.pages = pages
+    status = service.run_check(4, 'admin:ou', user_id='missing' if problem == 'missing_user' else 'v')
+    assert status['phase'] == 'precheck_failed'
+    items = status['checks'][-1]['items']
+    assert any(i['status'] == 'failed' for i in items)
+    assert any(i['status'] == 'pending' and i['field'] == 'permission_role' for i in items)
+    if 'definition' in problem:
+        assert next(i for i in items if i.get('object_id') == 'v' and i.get('field') == 'name')['status'] == 'passed'
+    with pytest.raises(InitializationFailure, match='PREFLIGHT_REQUIRED'):
+        service.start('admin:ou')
+
+
+@pytest.mark.parametrize('step,user_id', [(1, 'u'), (4, ''), (4, '   '), (4, 'x' * 192)])
+def test_invalid_manual_sample_does_not_change_flow(setup, step, user_id):
+    _, service, _, _ = setup
+    before = service.status()
+    with pytest.raises(InitializationFailure, match='VALIDATION_ERROR'):
+        service.run_check(step, 'admin:ou', user_id=user_id)
+    assert service.status() == before
+
+
 def worker_for(setup):
     sessions, _, api, settings = setup
     worker = Worker(sessions, Collector(api), initialization_settings=settings)
     assert worker.acquire(utcnow())
     return worker
+
+
+@pytest.mark.parametrize('attrs', ['omitted', [], [{'id': 'unrelated', 'type': 'TEXT', 'value': {'text': '其他资料'}}]])
+def test_optional_custom_attrs_omitted_outside_sample_complete_initialization(setup, attrs):
+    sessions, service, api, _ = setup
+    ready(service)
+    if attrs == 'omitted':
+        del api.users['v']['custom_attrs']
+    else:
+        api.users['v']['custom_attrs'] = attrs
+    service.start('admin:ou')
+    assert worker_for(setup).step()
+    assert service.status()['complete']
+    with sessions() as db:
+        employee = db.get(Employee, 'v')
+        assert employee.permission_role_id is None
+        assert employee.permission_role_name is None
+        assert employee.store_attribute_id is None
+        assert employee.store_attribute_name is None
+        assert employee.sync_quality == 'complete'
+
+
+def test_optional_custom_attrs_pass_preflight_with_text_definition(setup):
+    _, service, api, _ = setup
+    original_pages = api.pages
+
+    def pages(resource, **params):
+        for page in original_pages(resource, **params):
+            if resource == 'custom_attrs':
+                page['items'][1] = {'id': 'store', 'type': 'TEXT'}
+            yield page
+
+    api.pages = pages
+    for raw in api.users.values():
+        raw['custom_attrs'] = raw['custom_attrs'][:1]
+    del api.users['u']['custom_attrs']
+    ready(service)
+    service.start('admin:ou')
+    assert worker_for(setup).step()
+    assert service.status()['complete']
+
+
+@pytest.mark.parametrize('attrs', [None, {}, '', [None], [
+    {'id': 'role', 'type': 'ENUMERATION', 'value': {}},
+    {'id': 'role', 'type': 'ENUMERATION', 'value': {}},
+], [{'id': 'role', 'type': 'ENUMERATION', 'value': {'option_id': 'unknown'}}]])
+def test_optional_custom_attrs_still_reject_malformed_duplicate_and_unknown_values(setup, attrs):
+    _, service, api, _ = setup
+    ready(service)
+    api.users['v']['custom_attrs'] = attrs
+    service.start('admin:ou')
+    assert worker_for(setup).step()
+    assert service.status()['phase'] == 'failed'
+
+
+def test_omitted_custom_attrs_require_readable_definitions():
+    from app.initialization.validation import validate_user
+    raw = Feishu().users['u']
+    del raw['custom_attrs']
+    with pytest.raises(InitializationFailure):
+        validate_user(raw, MAPPINGS, {})
 
 
 def test_preflight_and_ordinary_api_paths_cannot_bypass(setup):
@@ -120,6 +267,65 @@ def test_real_pipeline_without_evidence_reads_all_pages_and_accepts_official_enu
         assert db.get(Employee, 'v').primary_department_id == 'd'
         assert db.get(Employee, 'u').permission_role_name == '店长'
         assert db.get(SyncJob, job_id).status == 'succeeded'
+
+
+@pytest.mark.parametrize('leader', ['missing', None, '', 'v'])
+def test_optional_department_leader_passes_preflight_and_full_pipeline(setup, leader):
+    sessions, service, api, _ = setup
+    if leader == 'missing':
+        del api.departments['d']['leader_user_id']
+    else:
+        api.departments['d']['leader_user_id'] = leader
+    ready(service)
+    service.start('admin:ou')
+    assert worker_for(setup).step()
+    assert service.status()['complete']
+    with sessions() as db:
+        assert db.get(Department, 'd').leader_user_id == (None if leader == 'missing' else leader)
+
+
+def test_department_leader_missing_only_outside_sample_still_passes_full_collection(setup):
+    _, service, api, _ = setup
+    ready(service)
+    del api.departments['d']['leader_user_id']
+    service.start('admin:ou')
+    assert worker_for(setup).step()
+    assert service.status()['complete']
+
+
+@pytest.mark.parametrize('leader', [123, [], 'x' * 192])
+def test_optional_department_leader_rejects_invalid_values(setup, leader):
+    _, service, api, _ = setup
+    api.departments['d']['leader_user_id'] = leader
+    for step in (1, 2, 3):
+        service.run_check(step, 'admin:ou')
+    status = service.run_check(4, 'admin:ou')
+    assert status['phase'] == 'precheck_failed'
+    assert status['last_error']['issues'][0]['field'] == 'leader_user_id'
+
+
+def test_optional_department_leader_still_rejects_unknown_person(setup):
+    _, service, api, _ = setup
+    api.departments['d']['leader_user_id'] = 'unknown'
+    ready(service)
+    service.start('admin:ou')
+    assert worker_for(setup).step()
+    assert service.status()['phase'] == 'failed'
+
+
+def test_field_requirements_cover_all_checked_fields_before_preflight(setup):
+    from app.initialization.validation import DEPARTMENT_FIELD_TITLES, USER_FIELD_TITLES
+    _, service, _, _ = setup
+    fields = {item['key']: item for item in service.status()['required_fields']}
+    assert {item['field'] for item in fields.values() if item['object_type'] == 'user'} == set(USER_FIELD_TITLES)
+    assert {item['field'] for item in fields.values() if item['object_type'] == 'department'} == set(DEPARTMENT_FIELD_TITLES)
+    for kind in ('user', 'department'):
+        assert fields[kind + ':leader_user_id']['requirement'] == '非必填'
+        assert '接口省略' in fields[kind + ':leader_user_id']['rule']
+    assert fields['user:orders']['requirement'] == '条件必填'
+    assert fields['user:name']['requirement'] == '必填'
+    assert fields['user:job_title']['requirement'] == '非必填'
+    assert '接口仍须返回' in fields['user:job_title']['rule']
 
 
 @pytest.mark.parametrize('leader', ['missing', None, '', 'v'])
@@ -339,6 +545,15 @@ def test_http_auth_gate_keeps_only_initialization_available_and_enforces_csrf(se
         assert client.get('/admin/api/initialization').status_code == 200
         assert client.post('/admin/api/initialization/checks/1').status_code == 403
         assert client.post('/admin/api/initialization/checks/1', headers={'X-CSRF-Token': 'csrf'}).status_code == 200
+        headers = {'X-CSRF-Token': 'csrf'}
+        for step in (2, 3):
+            assert client.post(f'/admin/api/initialization/checks/{step}', headers=headers).status_code == 200
+        assert client.post('/admin/api/initialization/checks/4', json={'user_id': 'v'}).status_code == 403
+        for user_id in (' ', 'x' * 192, 123):
+            assert client.post('/admin/api/initialization/checks/4', json={'user_id': user_id}, headers=headers).status_code == 422
+        result = client.post('/admin/api/initialization/checks/4', json={'user_id': ' v '}, headers=headers)
+        assert result.status_code == 200
+        assert result.json()['data']['field_sample'] == {'mode': 'manual', 'user_ids': ['v']}
     finally:
         app.dependency_overrides.clear()
 
@@ -392,7 +607,6 @@ def test_text_store_attribute_initialization_and_regular_sync(setup, text):
 
 
 @pytest.mark.parametrize('attr', [
-    None,
     {'id': 'store', 'type': 'TEXT', 'value': {}},
     {'id': 'store', 'type': 'TEXT', 'value': {'text': 42}},
     {'id': 'store', 'type': 'TEXT', 'value': {'text': '店' * 256}},

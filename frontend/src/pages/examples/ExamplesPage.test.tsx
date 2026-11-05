@@ -2,13 +2,14 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { App } from 'antd';
 import { afterEach, expect, it, vi } from 'vitest';
 import ListExample from './ListExample';
+import { MemoryRouter } from 'react-router-dom';
 
 afterEach(() => vi.unstubAllGlobals());
 
 it('案例列表可以本地新增和删除，重新打开恢复样本且不发出业务请求', async () => {
   const fetch = vi.fn(() => Promise.reject(new Error('案例不应发出请求')));
   vi.stubGlobal('fetch', fetch);
-  const page = () => <App><ListExample /></App>;
+  const page = () => <MemoryRouter><App><ListExample /></App></MemoryRouter>;
   const first = render(page());
   fireEvent.click(screen.getByText('新增演示条目'));
   fireEvent.change(screen.getByLabelText('条目名称'), { target: { value: '独立本地样本' } });

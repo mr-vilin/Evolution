@@ -1,6 +1,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.config import get_settings
 from app.dependencies import get_admin_identity, get_runtime, require_admin_write
@@ -27,6 +27,16 @@ class Mappings(BaseModel):
     employee_type_options: dict[str, str]
 
 
+class CheckRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    user_id: str | None = Field(default=None, min_length=1, max_length=191)
+
+    @field_validator('user_id', mode='before')
+    @classmethod
+    def trim_user_id(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
 @router.get('')
 def status(identity=Depends(get_admin_identity), service=Depends(get_initialization_service)):
     return {'data': service.status(), 'meta': {}}
@@ -38,10 +48,10 @@ def configure(body: Mappings, authorization=Depends(require_admin_write), servic
 
 
 @router.post('/checks/{step}')
-def run_check(step: int, authorization=Depends(require_admin_write), service=Depends(get_initialization_service)):
+def run_check(step: int, body: CheckRequest | None = None, authorization=Depends(require_admin_write), service=Depends(get_initialization_service)):
     if not 1 <= step <= 4:
         raise HTTPException(422, {'code': 'INVALID_INITIALIZATION_STEP', 'message': '初始化检查步骤无效'})
-    return {'data': service.run_check(step, f'admin:{authorization[0].open_id}'), 'meta': {}}
+    return {'data': service.run_check(step, f'admin:{authorization[0].open_id}', user_id=body.user_id if body else None), 'meta': {}}
 
 
 @router.post('/start', status_code=202)

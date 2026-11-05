@@ -12,7 +12,10 @@ from app.persistence.models import (
     SyncJob, SyncStaging, SystemSetting, WorkerLease,
 )
 from app.persistence.repositories import SqlSyncJobRepository
-from .validation import InitializationFailure, validate_definitions, validate_department, validate_user
+from .validation import (
+    DEPARTMENT_FIELD_TITLES, USER_FIELD_TITLES, InitializationFailure,
+    field_requirements, validate_definitions, validate_department, validate_user,
+)
 
 FLOW_KEY = 'initialization_flow'
 STEP_TITLES = ['检查配置', '测试飞书连接', '试读部门与人员', '核验所需字段']
@@ -128,6 +131,7 @@ class InitializationService:
             result['complete'] = state.initialization_status == 'complete'
             result['phase'] = 'complete' if result['complete'] else flow['phase']
             result['settings'] = custom_attrs_in_session(db)
+            result['required_fields'] = field_requirements()
             result['job'] = None if not job else {
                 'job_id': job.id, 'status': job.status, 'phase': job.phase,
                 'started_at': iso(job.started_at), 'updated_at': iso(job.updated_at), 'finished_at': iso(job.finished_at),
@@ -156,7 +160,11 @@ class InitializationService:
             audit(db, 'configure', actor, flow, mappings=mappings)
         return self.status()
 
-    def run_check(self, step, actor):
+    def run_check(self, step, actor, user_id=None):
+        if user_id is not None:
+            if step != 4 or not isinstance(user_id, str) or not user_id.strip() or len(user_id.strip()) > 191:
+                raise InitializationFailure('VALIDATION_ERROR', '仅字段校验支持指定人员，请填写有效的 user_id（最多 191 字符）')
+            user_id = user_id.strip()
         operation = uuid.uuid4().hex
         with self.sessions.begin() as db:
             state, flow = self._lock(db)
@@ -175,12 +183,19 @@ class InitializationService:
                         operation_expires_at=(utcnow() + timedelta(minutes=5)).isoformat(),
                         config_fingerprint=current_fingerprint, checks=flow['checks'][:step - 1])
             flow.pop('last_error', None)
+            flow.pop('field_sample', None)
+            if step == 4:
+                flow['field_sample'] = {'mode': 'manual' if user_id else 'automatic',
+                                        'user_ids': [user_id] if user_id else [u.get('user_id', '') for u in (flow.get('samples') or {}).get('users', [])]}
             save_flow(db, flow)
             snapshot = dict(flow)
             mappings = custom_attrs_in_session(db)
         try:
             items, extra = self._perform(step, snapshot, mappings)
             failure = None
+            if any(item['status'] != 'passed' for item in items):
+                failure = {'code': 'INITIALIZATION_DATA_INVALID', 'message': '部分检查未通过，请查看逐字段结果',
+                           'issues': [issue for item in items for issue in item.get('issues', [])]}
         except InitializationFailure as exc:
             items, extra = [check_item('error', STEP_TITLES[step - 1], False, exc.message)], {}
             failure = {'code': exc.code, 'message': exc.message, 'issues': exc.issues}
@@ -227,16 +242,50 @@ class InitializationService:
             departments = [self.api.detail('department', item['open_department_id']) for item in children]
             return [check_item('departments', '部门结构试读', True, f'已读取 {len(departments)} 个部门样本；无子部门时核验根结构'),
                     check_item('employees', '人员详情试读', bool(users), f'已读取 {len(users)} 个人员样本' if users else '没有可读取的人员样本，请检查权限')], {'samples': {'users': users, 'departments': departments}}
-        definitions = validate_definitions(list(item for page in self.api.pages('custom_attrs') for item in page.get('items', [])), mappings)
-        items = [check_item('custom_definitions', '自定义字段定义及选项', True)]
+        return self._check_fields(flow, mappings)
+
+    def _check_fields(self, flow, mappings):
+        items, definitions = [], {}
+        try:
+            raw_definitions = [item for page in self.api.pages('custom_attrs') for item in page.get('items', [])]
+            definition_error = None
+        except Exception:
+            raw_definitions, definition_error = [], '字段定义读取失败，请检查飞书权限及网络后重新检测'
+        for key, title in [('permission_role', '权限角色字段定义及选项'), ('store_attribute', '门店属性字段定义及选项')]:
+            item = check_item('definition:' + key, title, False)
+            item['field'] = mappings[key]
+            try:
+                if definition_error:
+                    raise InitializationFailure('INITIALIZATION_FIELD_MAPPING', definition_error)
+                definitions.update(validate_definitions(raw_definitions, mappings, keys=(key,)))
+                item.update(status='passed', message='校验通过')
+            except InitializationFailure as exc:
+                item['message'] = exc.message
+            items.append(item)
         samples = flow.get('samples') or {}
-        for raw in samples.get('departments', []):
-            validate_department(raw)
-        for raw in samples.get('users', []):
-            validate_user(raw, mappings, definitions)
-        for key, title in [('core', '核心标识、名称与状态'), ('relations', '部门关系和唯一主部门'),
-                           ('optional', '工号、职务、上级与员工类型'), ('custom_values', '权限角色与门店属性值')]:
-            items.append(check_item(key, title, True))
+        for kind, identifiers, titles, validator in (
+            ('department', [d.get('open_department_id', '') for d in samples.get('departments', [])], DEPARTMENT_FIELD_TITLES, validate_department),
+            ('user', flow['field_sample']['user_ids'], USER_FIELD_TITLES, validate_user),
+        ):
+            if kind == 'user' and not identifiers:
+                items.append(check_item('no_users', '人员校验样本', False, '没有可校验人员，请重新试读部门与人员'))
+            for identifier in identifiers:
+                try:
+                    raw = self.api.detail(kind, identifier)
+                    id_field = 'user_id' if kind == 'user' else 'open_department_id'
+                    if not isinstance(raw, dict) or raw.get(id_field) != identifier:
+                        raise RuntimeError('FEISHU_ID_MISMATCH')
+                except Exception:
+                    items.append(check_item(f'{kind}:{identifier}:read', '人员详情读取' if kind == 'user' else '部门详情读取', False,
+                                            f'{identifier}：读取失败或响应标识不一致，请检查 ID、通讯录可见范围及权限'))
+                    for key, title in titles.items():
+                        items.append({'key': f'{kind}:{identifier}:{key}', 'object_type': kind, 'object_id': identifier,
+                                      'field': key, 'title': title, 'status': 'pending', 'message': '详情读取未通过，尚未校验此字段'})
+                    continue
+                if kind == 'user':
+                    validator(raw, mappings, definitions, field_results=items)
+                else:
+                    validator(raw, field_results=items)
         return items, {'definitions': definitions}
 
     def start(self, actor):

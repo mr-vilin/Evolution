@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, App, Button, Card, Form, Input, Progress, Result, Space, Spin, Steps } from 'antd';
+import { Alert, App, Button, Card, Form, Input, Progress, Result, Space, Spin, Steps, Table } from 'antd';
 import { CheckCircleFilled, CloseCircleFilled, LoadingOutlined } from '@ant-design/icons';
 import { request } from '../services/http';
 
-interface CheckItem { key: string; title: string; status: string; message: string }
+interface CheckItem { key: string; title: string; status: string; message: string; field?: string; object_id?: string; object_type?: string }
+interface FieldRequirement { key: string; object_type: string; field: string; title: string; requirement: string; rule: string }
 interface Check { step: number; title: string; status: string; items: CheckItem[] }
 interface Mappings { permission_role?: string; store_attribute?: string; employee_type_options?: Record<string, string> }
 interface EmployeeTypeRow { id: string; name: string }
@@ -12,11 +13,40 @@ interface ProgressData { departments_processed?: number; employees_processed?: n
 export interface InitializationStatus {
   flow_id: string | null; phase: string; complete: boolean; checks: Check[]; checking_step?: number;
   settings: Mappings; counts?: { departments: number; employees: number };
+  field_sample?: { mode: 'manual' | 'automatic'; user_ids: string[] };
+  required_fields?: FieldRequirement[];
   last_error?: { code: string; message: string; issues?: { object_id: string; field?: string; message: string }[] };
   job?: { job_id: string; status: string; phase: string; started_at?: string; updated_at?: string; finished_at?: string; progress: ProgressData } | null;
 }
 const titles = ['检查配置', '测试飞书连接', '试读部门与人员', '核验所需字段', '执行全量同步'];
 const phases: Record<string, string> = { queued: '等待后台任务', scopes: '确认企业范围', departments: '采集部门', employees: '采集人员', collected: '完成采集', validating: '校验全量数据', publishing: '提交初始化数据', published: '初始化完成', collection_failed: '初始化失败', interrupted: '后台任务中断' };
+
+function FieldCheckResults({ items, requirements }: { items: CheckItem[]; requirements: FieldRequirement[] }) {
+  const rules = new Map(requirements.map(rule => [rule.key, rule]));
+  const groups = new Map<string, { key: string; title: string; field?: string; requirement?: string; rule?: string; items: CheckItem[] }>();
+  if (items.length === 0) {
+    for (const rule of requirements) groups.set(rule.key, { ...rule, title: `${rule.object_type === 'department' ? '部门 · ' : rule.object_type === 'user' ? '人员 · ' : ''}${rule.title}`, items: [] });
+  }
+  for (const item of items) {
+    const key = item.object_id ? `${item.object_type ?? 'user'}:${item.field ?? item.key}` : item.key;
+    const rule = rules.get(item.object_id ? `${item.object_type ?? 'user'}:${item.field}` : item.key);
+    const group = groups.get(key) ?? { requirement: rule?.requirement, rule: rule?.rule, key, title: `${item.object_type === 'department' ? '部门 · ' : item.object_id ? '人员 · ' : ''}${item.title}`, field: item.field, items: [] };
+    group.items.push(item);
+    groups.set(key, group);
+  }
+  const rows = [...groups.values()];
+  return <Table rowKey="key" size="small" pagination={false} dataSource={rows} scroll={{ x: 1040 }} columns={[
+    { title: '所需字段', key: 'field', width: 280, render: (_, row) => <><strong>{row.title}</strong>{row.field && <div className="initialization-muted">{row.field}</div>}</> },
+    { title: '填写要求', key: 'requirement', width: 280, render: (_, row) => <><strong>{row.requirement ?? '—'}</strong>{row.rule && <div className="initialization-muted">{row.rule}</div>}</> },
+    { title: '校验结果', key: 'status', width: 140, render: (_, row) => {
+      const passed = row.items.filter(item => item.status === 'passed').length;
+      const failed = row.items.some(item => item.status === 'failed');
+      if (row.items.length === 0) return <span className="initialization-muted">待校验</span>;
+      return <span className={failed ? 'check-failed' : passed === row.items.length ? 'check-passed' : 'initialization-muted'}>{failed ? '未通过' : passed === row.items.length ? '已通过' : '未校验'}{row.items.length > 1 && <div>通过 {passed} / {row.items.length}</div>}</span>;
+    } },
+    { title: '样本与原因', key: 'details', render: (_, row) => <ul className="initialization-field-details">{row.items.map(item => <li key={item.key}>{item.object_id && <strong>{item.object_id}：</strong>}{item.status === 'passed' ? '校验通过' : item.message}</li>)}</ul> },
+  ]} />;
+}
 
 export default function InitializationPage({ onComplete }: { onComplete?: () => void }) {
   const { message } = App.useApp();
@@ -87,9 +117,18 @@ export default function InitializationPage({ onComplete }: { onComplete?: () => 
       <section className="initialization-checks" aria-label="初始化检查清单">{titles.slice(0, 4).map((title, index) => {
         const check = data.checks.find(item => item.step === index + 1);
         const checking = data.phase === 'checking' && data.checking_step === index + 1;
-        return <Card key={title} title={<Space>{check?.status === 'passed' ? <CheckCircleFilled className="check-passed" /> : check?.status === 'failed' ? <CloseCircleFilled className="check-failed" /> : checking ? <LoadingOutlined spin /> : <span className="check-pending">{index + 1}</span>}{title}</Space>} extra={check?.status === 'passed' ? '已通过' : checking ? '检查中' : check?.status === 'failed' ? '未通过' : '待检查'}>
-          {check?.items ? <ul className="check-items">{check.items.map(item => <li key={item.key}>{item.status === 'passed' ? <CheckCircleFilled className="check-passed" /> : <CloseCircleFilled className="check-failed" />}<div><strong>{item.title}</strong>{item.message && <p>{item.message}</p>}</div></li>)}</ul> : <p className="initialization-muted">{checking ? '正在验证，请稍候…' : '按顺序完成前置检查。'}</p>}
-          {editable && check?.status === 'failed' && <Button loading={working} onClick={() => { autoAttempt.current = ''; void action(`/checks/${index + 1}`); }}>重新检测</Button>}
+        return <Card key={title} className={index === 3 ? 'initialization-field-check' : undefined} title={<Space>{check?.status === 'passed' ? <CheckCircleFilled className="check-passed" /> : check?.status === 'failed' ? <CloseCircleFilled className="check-failed" /> : checking ? <LoadingOutlined spin /> : <span className="check-pending">{index + 1}</span>}{title}</Space>} extra={check?.status === 'passed' ? '已通过' : checking ? '检查中' : check?.status === 'failed' ? '未通过' : '待检查'}>
+          {index === 3 && <>
+            {data.field_sample && <p>校验方式：{data.field_sample.mode === 'manual' ? '手动指定人员' : '自动抽样'}；人员 user_id：{data.field_sample.user_ids.join('、') || '无'}</p>}
+            <p className="initialization-muted">填写要求已逐项列出：非必填字段允许未填写；其中标注“接口仍须返回”的字段需要飞书返回合法空值，以确认可读。直属上级和部门负责人允许接口省略。样本通过后，全量同步仍逐条校验全部部门与人员。</p>
+          </>}
+          {index === 3 ? <FieldCheckResults items={check?.items ?? []} requirements={data.required_fields ?? []} /> : check?.items ? <ul className="check-items">{check.items.map(item => <li key={item.key}>{item.status === 'passed' ? <CheckCircleFilled className="check-passed" /> : <CloseCircleFilled className="check-failed" />}<div><strong>{item.title}</strong>{item.message && <p>{item.message}</p>}</div></li>)}</ul> : <p className="initialization-muted">{checking ? '正在验证，请稍候…' : '按顺序完成前置检查。'}</p>}
+          {editable && index === 3 && data.checks.find(item => item.step === 3)?.status === 'passed' && <Form<{ user_id: string }> key={`${data.flow_id}:field-user`} name="initialization-field-user" layout="vertical" className="initialization-user-check" disabled={working || data.phase === 'checking'} onFinish={values => { autoAttempt.current = ''; void action('/checks/4', 'POST', { user_id: values.user_id.trim() }); }}>
+            <p>自动抽样未通过时，可指定一位已配置相关字段且在应用通讯录可见范围内的人员重新校验。</p>
+            <Form.Item name="user_id" label="校验人员 user_id" rules={[{ required: true, whitespace: true, message: '请填写校验人员的 user_id' }, { max: 191, message: 'user_id 最多 191 字符' }]}><Input placeholder="请输入飞书 user_id" maxLength={191} /></Form.Item>
+            <Space wrap><Button type="primary" htmlType="submit" loading={working}>校验指定人员</Button><Button disabled={working || data.phase === 'checking'} onClick={() => { autoAttempt.current = ''; void action('/checks/4'); }}>使用自动样本重新检测</Button></Space>
+          </Form>}
+          {editable && index !== 3 && check?.status === 'failed' && <Button loading={working} onClick={() => { autoAttempt.current = ''; void action(`/checks/${index + 1}`); }}>重新检测</Button>}
         </Card>;
       })}</section>
       {editable && <Card title="修正字段映射" extra="仅维护非敏感设置"><Form<MappingFormValues> key={`${data.flow_id}:settings`} name="initialization-settings" initialValues={{ ...data.settings, employee_type_options: Object.entries(data.settings.employee_type_options ?? {}).map(([id, name]) => ({ id, name })) }} layout="vertical" disabled={working || data.phase === 'checking'} onFinish={async values => {

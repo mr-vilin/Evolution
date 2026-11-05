@@ -3,6 +3,9 @@
 .ant-pro-layout .page-heading { margin-bottom: 0; }
 .ant-pro-layout .ant-pro-page-container-children-container { padding-inline: 0; }
 .workspace-actions { white-space: nowrap; }
+.employee-sections { display: flex; flex-direction: column; gap: 24px; }
+.ant-pro-layout .ant-pro-page-container-warp-page-header { padding-inline: 0; }
+.ant-pro-layout .ant-pro-page-container-children-content { margin-inline: 0; }
 @media (max-width: 900px) {
   .ant-pro-layout .ant-pro-layout-content { padding: 16px; }
 }
