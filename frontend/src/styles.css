@@ -9,7 +9,10 @@ body { margin: 0; color: #263449; background: #f5f7fa; }
 .org-grid { height: var(--org-panel-height, calc(100dvh - 240px)); min-height: 0; }
 .ant-pro-page-container:has(.org-grid) .ant-pro-page-container-children-container { padding-bottom: 0; }
 .ant-pro-layout .ant-pro-layout-content:has(.org-grid) { padding-bottom: 16px; }
-.org-grid > .tree-panel { min-height: 0; }
+.org-grid > .tree-panel { min-height: 0; position: relative; }
+.org-grid-tree-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
+.org-tree-panel-content { height: 100%; }
+.org-tree-collapse.ant-btn { position: absolute; z-index: 3; inset-inline-end: -12px; top: 50%; transform: translateY(-50%); width: 24px; height: 40px; padding: 0; }
 .org-tree-card, .org-people-card { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .org-tree-card > .ant-card-head, .org-people-card > .ant-card-head { flex: none; }
 .org-tree-card > .ant-card-body, .org-people-card > .ant-card-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
@@ -20,16 +23,20 @@ body { margin: 0; color: #263449; background: #f5f7fa; }
 .org-inactive-toggle { display: inline-flex; align-items: center; gap: 4px; margin-inline-start: 8px; font-size: 12px; font-weight: 400; cursor: pointer; }
 .org-detail-panel { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
 .org-detail-panel .org-people-card { flex: 1; height: auto; }
+.org-people-card > .ant-card-body { padding: 0; overflow: hidden; }
 .org-summary-card { flex: none; overflow: hidden; }
 .org-company-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .org-stat-cell { padding: 16px; border-inline-end: 1px solid var(--org-border); }
 .org-stat-cell:last-child { border-inline-end: 0; }
 .org-members-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-block: 12px; white-space: normal; font-weight: 400; }
-.org-department-name { margin-inline-end: 8px; overflow-wrap: anywhere; }
-.org-member-search { width: 240px; max-width: 100%; margin-inline-start: auto; }
+.org-department-heading { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; margin-inline-end: 8px; }
+.org-department-name { overflow-wrap: anywhere; }
+.org-member-count.ant-typography { flex: none; font-size: 12px; line-height: 20px; font-weight: 400; white-space: nowrap; }
+.org-member-search { flex: none; width: 320px; max-width: 100%; margin-inline-start: auto; }
 .org-members-header .ant-select { min-width: 140px; font-weight: 400; }
 .org-member-scope { display: inline-flex; }
-.org-department-actions { justify-content: flex-end; margin-bottom: 16px; flex: none; }
+.org-department-actions { flex: none; }
+.org-people-feedback { flex: none; padding: 8px 16px; }
 .org-memberships { display: flex; align-items: center; gap: 4px; max-width: 100%; border: 0; padding: 0; background: transparent; text-align: start; color: inherit; font: inherit; cursor: pointer; }
 .org-memberships:focus-visible { outline: 2px solid var(--org-primary); outline-offset: 2px; }
 .org-memberships .ant-tag { margin-inline-end: 0; }
@@ -37,9 +44,13 @@ body { margin: 0; color: #263449; background: #f5f7fa; }
 .org-membership-more { flex: none; white-space: nowrap; }
 .employee-name-cell { display: flex; align-items: center; gap: 4px; }
 .employee-name-cell > .ant-btn { flex: none; }
-.employee-identity { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.employee-identity { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
 .employee-identity .ant-avatar { flex: none; }
-.employee-identity-button { height: auto; padding: 0; }
+.employee-identity-button.ant-btn { height: auto; max-width: 100%; padding: 0; }
+.org-people-scroll .employee-name-cell .ant-btn { transition: none; }
+.org-people-scroll .employee-identity-button.ant-btn:not(:disabled):hover { color: var(--org-primary); background: transparent; }
+.org-people-scroll .employee-copy.ant-btn:not(:disabled):hover { background: transparent; }
+.employee-copy.ant-btn { width: auto; min-width: 0; padding-inline: 0; }
 .employee-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .employee-status-tags, .employee-detail-departments { display: flex; flex-wrap: wrap; gap: 4px; }
 .employee-status-tags .ant-tag, .employee-detail-departments .ant-tag { margin-inline-end: 0; }
@@ -52,7 +63,7 @@ body { margin: 0; color: #263449; background: #f5f7fa; }
 .org-memberships-popover li + li { margin-top: 8px; }
 @media (max-width: 600px) {
   .org-grid { height: auto; }
-  .org-detail-panel .org-people-card { min-height: 420px; }
+  .org-detail-panel .org-people-card { flex: none; height: max(420px, calc(100dvh - 320px)); }
   .org-company-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .org-stat-cell { border-bottom: 1px solid var(--org-border); }
   .org-stat-cell:nth-child(2n) { border-inline-end: 0; }
@@ -69,7 +80,9 @@ body { margin: 0; color: #263449; background: #f5f7fa; }
 .org-range-descendants { color: #ad6800; background: #fffbe6; border-color: #ffd666; }
 .org-range-all { color: #237804; background: #f6ffed; border-color: #b7eb8f; }
 .org-people-card > .ant-card-body > .toolbar, .org-people-card > .ant-card-body > .ant-typography { flex: none; }
-.org-people-scroll { flex: 1; min-height: 0; overflow: auto; }
+.org-people-scroll { flex: 1; min-height: 0; overflow: hidden; }
+.org-people-scroll .ant-table-wrapper { margin-top: 0; }
+.org-people-scroll .ant-table-body { height: var(--org-table-body-height); }
 .tree-drawer .org-tree-card { height: 100%; }
 @media (max-width: 900px) {
   .org-grid, .detail-grid, .diff-grid { grid-template-columns: 1fr; }

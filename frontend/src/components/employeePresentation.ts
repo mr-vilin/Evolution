@@ -15,5 +15,5 @@ export function departmentPath(department: Department) {
 export function contactLabel(employee: Employee, field: 'mobile' | 'email' | 'join_time') {
   const readability = employee.field_readability?.[field];
   const value = field === 'join_time' ? employee.join_date : employee[field];
-  return readability === 'readable' ? value || '未填写' : readability === 'unreadable' ? '未知（不可读）' : '未知（未采集）';
+  return readability === 'readable' ? value : undefined;
 }

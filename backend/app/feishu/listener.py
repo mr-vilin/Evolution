@@ -11,7 +11,8 @@ class Listener:
 
     def starting(self):
         observe(self.sessions,'degraded')
-        self._reconcile('listener:startup')
+        if self.settings.feishu_reconcile_on_startup:
+            self._reconcile('listener:startup')
 
     def _reconcile(self,reason):
         try:
@@ -25,7 +26,8 @@ class Listener:
     def reconnecting(self): observe(self.sessions,'degraded')
 
     def reconnected(self):
-        self._reconcile('listener:reconnected')
+        if self.settings.feishu_reconcile_on_reconnect:
+            self._reconcile('listener:reconnected')
         observe(self.sessions,'connected')
 
     def receive(self,payload):

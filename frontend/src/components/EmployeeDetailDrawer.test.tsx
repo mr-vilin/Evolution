@@ -35,7 +35,7 @@ it('抽屉展示真实ID、上级头像和入职日期，部门超过5个可展�
   expect(within(drawer).getByText('部门6')).toBeTruthy();
   await userEvent.click(within(drawer).getByRole('button', { name: '收起' }));
   expect(within(drawer).queryByText('部门6')).toBeNull();
-  expect(within(drawer).getByText('已暂停').closest('.ant-tag')?.className).toContain('solid');
+  expect(within(drawer).getByText('已暂停').closest('.ant-tag')?.className).toContain('filled');
   expect(within(drawer).getByText('正式员工').closest('.ant-tag')?.className).toContain('solid');
 });
 

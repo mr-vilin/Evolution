@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     feishu_redirect_uri: str | None = None
     feishu_tenant_key: str | None = None
     feishu_scopes: str = ""
+    feishu_reconcile_on_startup: bool = False
+    feishu_reconcile_on_reconnect: bool = False
     coverage_acceptance_reference: str = ""
     coverage_all_members_verified: bool = False
     coverage_departmentless_verified: bool = False

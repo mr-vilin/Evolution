@@ -149,22 +149,24 @@ it('人员跨三批滚动续载，切换条件忽略旧响应并重置列表', a
   });
   render(<App><MemoryRouter><OrganizationPage /></MemoryRouter></App>);
   await userEvent.click(await screen.findByText('总部'));
-  await screen.findByText('共 45 人，已加载 20 人');
-  fireEvent.scroll(screen.getByRole('region', { name: '部门人员列表' }));
-  await screen.findByText('共 45 人，已加载 40 人');
-  fireEvent.scroll(screen.getByRole('region', { name: '部门人员列表' }));
-  await screen.findByText('共 45 人，已加载 45 人');
+  await screen.findByText('共45人');
+  await screen.findByText('成员19');
+  const tableBody = screen.getByRole('region', { name: '部门人员列表' }).querySelector('.ant-table-body')!;
+  fireEvent.scroll(tableBody);
+  await screen.findByText('成员39');
+  fireEvent.scroll(tableBody);
+  await screen.findByText('成员44');
   expect(employeeUrls).toHaveLength(3);
-  fireEvent.scroll(screen.getByRole('region', { name: '部门人员列表' }));
+  fireEvent.scroll(tableBody);
   expect(employeeUrls).toHaveLength(3);
-  const input = screen.getByPlaceholderText('搜索姓名、完整手机号或 USER_ID');
+  const input = screen.getByPlaceholderText('搜索姓名、完整手机号或user_id');
   fireEvent.change(input, { target: { value: '旧' } });
   await waitFor(() => expect(finishOld).toBeTruthy());
   fireEvent.change(input, { target: { value: '新' } });
   await screen.findByText('新结果');
   await act(async () => { finishOld!(envelope([{ ...employees[1], name: '迟到结果' }], { total_count: 45, next_cursor: '20' })); });
   expect(screen.queryByText('迟到结果')).toBeNull();
-  expect(screen.getByText('共 1 人，已加载 1 人')).toBeTruthy();
+  expect(screen.getByText('共1人')).toBeTruthy();
 }, 120000);
 
 
@@ -184,10 +186,10 @@ it('20人默认全部成员，切换直属与人员搜索不改变固定部门�
   await userEvent.click(screen.getByText('部门直属成员', { selector: '.ant-select-item-option-content' }));
   await waitFor(() => expect(urls.some(url => url.includes('/employees') && url.includes('include_descendants=false'))).toBe(true));
   const summaryRequests = urls.filter(url => url.includes('/summary')).length;
-  fireEvent.change(screen.getByPlaceholderText('搜索姓名、完整手机号或 USER_ID'), { target: { value: '不存在' } });
+  fireEvent.change(screen.getByPlaceholderText('搜索姓名、完整手机号或user_id'), { target: { value: '不存在' } });
   await waitFor(() => expect(urls.some(url => url.includes('keyword=' + encodeURIComponent('不存在')))).toBe(true));
   expect(urls.filter(url => url.includes('/employees')).at(-1)).toContain('include_descendants=true');
-  fireEvent.change(screen.getByPlaceholderText('搜索姓名、完整手机号或 USER_ID'), { target: { value: '' } });
+  fireEvent.change(screen.getByPlaceholderText('搜索姓名、完整手机号或user_id'), { target: { value: '' } });
   await waitFor(() => expect(urls.filter(url => url.includes('/employees')).at(-1)).toContain('include_descendants=false'));
   expect(urls.filter(url => url.includes('/summary'))).toHaveLength(summaryRequests);
   expect(screen.getByRole('region', { name: '部门统计' }).textContent).toContain('总人数20');
@@ -218,7 +220,7 @@ it('超过20人禁用全部成员并在下拉框上方提示，列表包含全�
   await waitFor(() => expect(document.querySelector('.ant-tooltip:not(.ant-tooltip-hidden)')).toBeNull(), { timeout: 3000 });
   await userEvent.click(screen.getByRole('combobox', { name: '展示成员' }));
   expect((await screen.findByRole('tooltip')).textContent).toContain('当前部门人数较多，列表中将只展示部门直属成员，不再展示子部门成员');
-  fireEvent.change(screen.getByPlaceholderText('搜索姓名、完整手机号或 USER_ID'), { target: { value: '下级' } });
+  fireEvent.change(screen.getByPlaceholderText('搜索姓名、完整手机号或user_id'), { target: { value: '下级' } });
   await waitFor(() => expect(urls.filter(url => url.includes('/employees')).at(-1)).toContain('include_descendants=true'));
   await waitFor(() => expect(document.querySelector('.ant-tooltip:not(.ant-tooltip-hidden)')?.textContent ?? '').not.toContain('当前部门人数较多'), { timeout: 3000 });
 });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Alert, App, Button, Card, Drawer, Grid, Input, Select, Space, Statistic, Switch, Tag, Tooltip, Tree, Typography, theme } from 'antd';
-import { CaretDownFilled, EditOutlined, MenuOutlined, SyncOutlined } from '@ant-design/icons';
+import { CaretDownFilled, EditOutlined, LeftOutlined, MenuOutlined, RightOutlined, SyncOutlined } from '@ant-design/icons';
 import { useNavigate } from '@umijs/max';
 import type { DataNode } from 'antd/es/tree';
 import type { TreeProps } from 'antd';
@@ -17,6 +17,7 @@ import { EmployeeDepartments } from '../components/EmployeeDepartments';
 import { EmployeeDetailDrawer } from '../components/EmployeeDetailDrawer';
 import { CopyUserId, EmployeeAccountStatus, EmployeeIdentity } from '../components/EmployeeIdentity';
 import { contactLabel } from '../components/employeePresentation';
+import { EmployeeValue } from '../components/EmployeeValue';
 
 const ROOT: Department = { id: '0', parent_id: null, name: '本组织', path: ['本组织'], status: 'active', is_virtual_root: true, is_store: false, store_code: null, notes: null, has_children: true };
 interface OrganizationSummary {
@@ -42,6 +43,7 @@ export function OrganizationPage() {
   const [keyword, setKeyword] = useState('');
   const [accountStatus, setAccountStatus] = useState('all');
   const [treeOpen, setTreeOpen] = useState(false);
+  const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [editor, setEditor] = useState<{ departments: Department[]; meta: Meta } | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -71,7 +73,22 @@ export function OrganizationPage() {
   const descendants = !membersLimited && (memberChoice?.departmentId === selected ? memberChoice.descendants : true);
   const people = useOrganizationPeople(activeSummary && !summary.error ? selected : undefined, Boolean(keyword.trim()) || descendants, keyword, accountStatus, tree.meta);
   const scroll = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (scroll.current) scroll.current.scrollTop = 0; }, [people.path]);
+  const [tableBodyHeight, setTableBodyHeight] = useState(240);
+  useLayoutEffect(() => {
+    const element = scroll.current;
+    const header = element?.querySelector<HTMLElement>('.ant-table-header');
+    if (!element || !header) return;
+    const resize = () => setTableBodyHeight(Math.max(0, element.clientHeight - header.offsetHeight));
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(element);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    const body = scroll.current?.querySelector('.ant-table-body');
+    if (body) body.scrollTop = 0;
+  }, [people.path]);
   const versionError = people.error?.code === 'DATASET_CHANGED' || summary.error?.code === 'DATASET_CHANGED' || searchResource.error?.code === 'DATASET_CHANGED'
     || Object.values(tree.branches).some(branch => branch.error?.code === 'DATASET_CHANGED');
   useEffect(() => { if (versionError && retries.current < 2) { retries.current += 1; recover(); } }, [versionError, recover]);
@@ -176,7 +193,13 @@ export function OrganizationPage() {
   </Space>}>
     {notice && <Alert type="warning" showIcon title={notice} />}
     {selection.error && <Alert type="error" title={selection.error} action={<Button onClick={retry}>重新计算</Button>} />}
-    <div className="org-grid" ref={grid}><div className="tree-panel">{treePanel}</div>
+    <div className={`org-grid${treeCollapsed ? ' org-grid-tree-collapsed' : ''}`} ref={grid}>
+      <div className="tree-panel">
+        <div id="organization-tree-panel" className="org-tree-panel-content" hidden={treeCollapsed}>{treePanel}</div>
+        <Button className="org-tree-collapse" aria-label={treeCollapsed ? '展开部门面板' : '折叠部门面板'}
+          title={treeCollapsed ? '展开部门面板' : '折叠部门面板'} aria-expanded={!treeCollapsed} aria-controls="organization-tree-panel"
+          icon={treeCollapsed ? <RightOutlined /> : <LeftOutlined />} onClick={() => setTreeCollapsed(value => !value)} />
+      </div>
       <div className="org-detail-panel" style={{ '--org-border': token.colorBorderSecondary, '--org-text': token.colorText, '--org-primary': token.colorPrimary } as CSSProperties}>
         <Card className="org-summary-card" styles={{ body: { padding: 0 } }}>
           <section aria-label="部门统计" aria-busy={!activeSummary || summary.loading}>
@@ -186,7 +209,18 @@ export function OrganizationPage() {
           </section>
         </Card>
         <Card className="org-people-card" title={<div className="org-members-header">
-          <Typography.Text strong className="org-department-name">{current?.name ?? '当前部门'}</Typography.Text>
+          <div className="org-department-heading">
+            <Typography.Title level={4} className="org-department-name" style={{ margin: 0 }}>{current?.name ?? '当前部门'}</Typography.Title>
+            <Typography.Text className="org-member-count" type="secondary" aria-live="polite">共{people.total}人</Typography.Text>
+            {current && current.id !== '0' && <Space className="org-department-actions" size={4}>
+              <Tooltip title="更新此部门及后代" trigger={['hover', 'focus']}>
+                <Button type="text" size="small" aria-label="更新此部门及后代" icon={<SyncOutlined />} loading={syncing} onClick={() => void subtreeSync()} />
+              </Tooltip>
+              <Tooltip title="编辑门店资料" trigger={['hover', 'focus']}>
+                <Button type="text" size="small" aria-label="编辑门店资料" icon={<EditOutlined />} disabled={current.status !== 'active'} onClick={() => setSingleOpen(true)} />
+              </Tooltip>
+            </Space>}
+          </div>
           <Select aria-label="账号状态" value={accountStatus} onChange={setAccountStatus} options={[
             { label: '全部账号状态', value: 'all' }, { label: '已激活', value: 'activated' }, { label: '未激活', value: 'unactivated' },
             { label: '已暂停', value: 'frozen' }, { label: '未加入', value: 'unjoin' }, { label: '状态未知', value: 'unknown' }]} />
@@ -197,32 +231,31 @@ export function OrganizationPage() {
             onChange={value => setMemberChoice({ departmentId: selected, descendants: value === 'all' })} options={[
               { label: '部门直属成员', value: 'direct' }, { label: '部门全部成员', value: 'all', disabled: membersLimited }]} />
           </span></Tooltip>
-          <Input.Search className="org-member-search" aria-label="搜索人员" allowClear placeholder="搜索姓名、完整手机号或 USER_ID" value={keyword} onChange={event => setKeyword(event.target.value)} />
+          <Input.Search className="org-member-search" aria-label="搜索人员" allowClear placeholder="搜索姓名、完整手机号或user_id" value={keyword} onChange={event => setKeyword(event.target.value)} />
         </div>}>
           {summary.error && <Alert type="error" title={summary.error.message} action={<Button onClick={summary.error.code === 'DATASET_CHANGED' ? retry : summary.reload}>重试</Button>} />}
-          {current && current.id !== '0' && <Space className="org-department-actions" wrap>
-            <Button icon={<SyncOutlined />} loading={syncing} onClick={() => void subtreeSync()}>更新此部门及后代</Button>
-            <Button icon={<EditOutlined />} disabled={current.status !== 'active'} onClick={() => setSingleOpen(true)}>编辑门店资料</Button>
-          </Space>}
-          <Typography.Paragraph aria-live="polite">共 {people.total} 人，已加载 {people.data.length} 人</Typography.Paragraph>
-          <div ref={scroll} className="org-people-scroll" role="region" aria-label="部门人员列表" tabIndex={0} onScroll={event => {
+          {(people.loading || people.error || people.cursor) && <div className="org-people-feedback">
+            {people.loading && <Typography.Text role="status">正在加载人员</Typography.Text>}
+            {people.error && <Alert type="error" title={people.error.message} action={<Button onClick={people.error.code === 'DATASET_CHANGED' ? retry : () => void people.more()}>重试</Button>} />}
+            {!people.loading && !people.error && people.cursor && <Button size="small" onClick={() => void people.more()}>加载更多人员</Button>}
+          </div>}
+          <div ref={scroll} className="org-people-scroll" role="region" aria-label="部门人员列表" tabIndex={0}
+            style={{ '--org-table-body-height': `${tableBodyHeight}px` } as CSSProperties}>
+            <ResourceTable<Employee> rowKey="id" dataSource={people.data} pagination={false} rowHoverable={false} scroll={{ x: compactColumns ? 1592 : 1664, y: tableBodyHeight }} onScroll={event => {
             const element = event.currentTarget; if (element.scrollHeight - element.scrollTop - element.clientHeight < 100 && people.cursor && !people.loading && !people.error) void people.more();
-          }}><ResourceTable<Employee> rowKey="id" dataSource={people.data} pagination={false} scroll={{ x: 1880 }} columns={[
+          }} columns={[
               { title: '姓名', dataIndex: 'name', width: compactColumns ? 152 : 208, fixed: 'left', render: (_, row) => <div className="employee-name-cell">
                 <EmployeeIdentity name={row.name} avatar={row.avatar_url} onClick={() => setEmployeeId(row.id)} /><CopyUserId employee={row} /></div> },
               { title: '账号状态', width: 160, render: (_, row) => <EmployeeAccountStatus employee={row} /> },
-              { title: '手机号码', width: 180, render: (_, row) => contactLabel(row, 'mobile') },
+              { title: '手机号码', width: 180, render: (_, row) => <EmployeeValue value={contactLabel(row, 'mobile')} /> },
               { title: '直属上级', width: 180, render: (_, row) => <EmployeeIdentity name={row.leader_name ?? row.leader_user_id} avatar={row.leader_avatar_url} /> },
-              { title: '部门', width: 432, render: (_, row) => <EmployeeDepartments employee={row} /> },
-              { title: '人员类型', dataIndex: 'employee_type_name', width: 140 },
-              { title: '职务', dataIndex: 'job_title', width: 140 },
-              { title: '门店属性', width: 160, render: (_, row) => row.store_attribute_name ?? row.store_attribute_id ?? '—' },
-              { title: '权限角色', width: 160, render: (_, row) => row.permission_role_name ?? row.permission_role_id ?? '—' },
+              { title: '部门', width: 216, render: (_, row) => <EmployeeDepartments employee={row} /> },
+              { title: '人员类型', width: 140, render: (_, row) => <EmployeeValue value={row.employee_type_name || row.employee_type_id} /> },
+              { title: '职务', width: 140, render: (_, row) => <EmployeeValue value={row.job_title} /> },
+              { title: '门店属性', width: 160, render: (_, row) => <EmployeeValue value={row.store_attribute_name || row.store_attribute_id} /> },
+              { title: '权限角色', width: 160, render: (_, row) => <EmployeeValue value={row.permission_role_name || row.permission_role_id} /> },
               { title: '操作', width: compactColumns ? 104 : 120, fixed: 'right', render: (_, row) => <Button type="link" onClick={() => setEmployeeId(row.id)}>查看详情</Button> },
             ]} />
-            {people.loading && <Typography.Paragraph role="status">正在加载人员</Typography.Paragraph>}
-            {people.error && <Alert type="error" title={people.error.message} action={<Button onClick={people.error.code === 'DATASET_CHANGED' ? retry : () => void people.more()}>重试</Button>} />}
-            {!people.loading && !people.error && (people.cursor ? <Button onClick={() => void people.more()}>加载更多人员</Button> : <Typography.Paragraph type="secondary">没有更多人员</Typography.Paragraph>)}
           </div>
         </Card>
       </div></div>

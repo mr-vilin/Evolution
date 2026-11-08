@@ -79,6 +79,22 @@ backend/.venv/Scripts/python.exe deploy/release.py rollback --environment test -
 
 ## 配置持久化、证据与回退
 
+### 飞书监听全量核对开关
+
+在目标环境的 `.env` 中配置以下两个独立开关；未设置时均为 `false`，更新镜像后即采用该默认值：
+
+```dotenv
+ORG_FEISHU_RECONCILE_ON_STARTUP=false
+ORG_FEISHU_RECONCILE_ON_RECONNECT=false
+```
+
+- `ORG_FEISHU_RECONCILE_ON_STARTUP`：监听进程启动时是否提交一次全量核对。
+- `ORG_FEISHU_RECONCILE_ON_RECONNECT`：飞书连接恢复时是否提交一次全量核对。
+
+设置为 `true` 可分别恢复对应触发方式。配置在进程启动时读取，通过标准发布流程重建应用容器后生效，不支持热更新。开关不停止已排队或正在执行的任务，不影响实时事件入箱、手动同步及管理页面中的每日定时核对设置。关闭重连核对后，断线期间可能遗漏的变更需要通过手动或每日定时全量核对补齐。
+
+本次配置无需数据库迁移；发布前仍须等待活动任务结束。回退到不支持这些开关的旧镜像会恢复启动、重连自动核对，旧代码会忽略上述配置。
+
 标准脚本使用原 Compose 加 `<部署目录>/.cache/deployment-image.json` 镜像覆盖文件；只含 app/mcp/migrate 的镜像 ID，不含凭据。此覆盖文件是**后续启动的必要部分**：不要绕过脚本直接 `docker compose up --build`，否则可能回到原 Compose 的旧镜像。只读 exec、ps 可使用原 Compose。
 
 部署来源：`.cache/deployment-source.json`。每次发布证据：`.cache/releases/<release-id>/`，含 `previous-images.json`、`previous-source.json`（若有）、`before.json`、`manifest.json`、`target.json`、`after.json`、`verification.json` 和回退验证记录。远端文件按 umask 077 创建；本地沿用仓库 Windows ACL，禁止公开分享运行证据目录。镜像与证据不自动删除。
