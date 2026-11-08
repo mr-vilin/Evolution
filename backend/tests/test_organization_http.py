@@ -42,6 +42,36 @@ def test_initial_tree_only_reads_top_level_and_search_returns_ancestors(organiza
     assert client.get('/admin/api/organization/search', params={'keyword': 'c'}).json()['data'] == []
 
 
+def test_company_summary_counts_all_records_once_and_only_explicit_status_facts(organization_client):
+    client, sessions = organization_client
+    params = {'dataset_epoch': 'e', 'data_version': 1}
+    empty = client.get('/admin/api/organization/summary', params=params)
+    assert empty.status_code == 200
+    assert empty.json()['data'] == dict(department_id='0', department_count=4, employee_count=0,
+                                       unactivated_count=0, unjoin_count=0, resigned_count=0, member_count=0, members_limited=False)
+    with sessions.begin() as db:
+        db.get(Department, 'x').status = 'inactive'
+        db.add_all([
+            Employee(id='a1', feishu_user_id='a1', name='重叠状态', is_activated=False, is_unjoin=True),
+            Employee(id='a2', feishu_user_id='a2', name='历史离职', status='inactive', is_resigned=True),
+            Employee(id='a3', feishu_user_id='a3', name='未知状态'),
+            Employee(id='a4', feishu_user_id='a4', name='已激活', is_activated=True, is_unjoin=False, is_resigned=False),
+        ])
+        db.flush()
+        db.add_all([EmployeeDepartment(employee_id='a1', department_id='a', active=True),
+                    EmployeeDepartment(employee_id='a1', department_id='b', active=True)])
+    response = client.get('/admin/api/organization/summary', params=params).json()
+    assert response['data'] == dict(department_id='0', department_count=3, employee_count=4,
+                                    unactivated_count=1, unjoin_count=1, resigned_count=1, member_count=3, members_limited=False)
+    assert response['meta']['dataset_epoch'] == 'e'
+    assert response['meta']['data_version'] == 1
+    assert client.get('/admin/api/organization/summary', params={**params, 'dataset_epoch': 'old'}).status_code == 409
+    assert client.get('/admin/api/organization/summary', params={**params, 'data_version': 0}).status_code == 409
+    from app.dependencies import get_admin_identity
+    del app.dependency_overrides[get_admin_identity]
+    assert client.get('/admin/api/organization/summary', params=params).status_code == 401
+
+
 def test_selection_cycle_includes_unloaded_descendants_and_preserves_partial_branches(organization_client):
     client, _ = organization_client
     def toggle(selected, target):
@@ -51,18 +81,26 @@ def test_selection_cycle_includes_unloaded_descendants_and_preserves_partial_bra
         return response.json()['data']
     first = toggle(['x'], 'a')
     assert first['selected_ids'] == ['a', 'x']
+    assert first['states']['a']['selected_count'] == 1
+    assert first['states']['0']['selected_count'] == 2
     second = toggle(first['selected_ids'], 'a')
     assert second['selected_ids'] == ['a', 'b', 'c', 'x']
     assert second['count'] == 4
+    assert second['states']['a']['selected_count'] == 3
     partial = toggle(second['selected_ids'], 'c')
-    assert partial['states']['a'] == {'self_selected': True, 'descendants': 'partial'}
+    assert partial['states']['a'] == {'self_selected': True, 'descendants': 'partial', 'selected_count': 2}
     assert toggle(partial['selected_ids'], 'a')['selected_ids'] == ['b', 'x']
     assert toggle(['b', 'x'], 'a')['selected_ids'] == ['x']
-    assert toggle(['a', 'b', 'c'], 'a')['selected_ids'] == ['b', 'c']
+    descendants = toggle(['a', 'b', 'c'], 'a')
+    assert descendants['selected_ids'] == ['b', 'c']
+    assert descendants['states']['a']['selected_count'] == 2
     assert toggle(['b', 'c'], 'a')['selected_ids'] == []
     assert toggle([], '0')['selected_ids'] == ['a', 'b', 'c', 'x']
     assert toggle(['x'], '0')['selected_ids'] == []
-    assert toggle([], 'c')['selected_ids'] == ['c']
+    leaf = toggle([], 'c')
+    assert leaf['selected_ids'] == ['c']
+    assert leaf['states']['c']['selected_count'] == 1
+    assert leaf['states']['a']['selected_count'] == 1
     assert client.post('/admin/api/organization/selection', json={
         'dataset_epoch': 'old', 'data_version': 1, 'selected_ids': []}).status_code == 409
 
@@ -80,7 +118,7 @@ def test_members_are_paged_deduplicated_and_filtered_by_raw_facts(organization_c
                             is_resigned=False if index == 0 else None,
                             is_exited=False if index == 0 else None))
             db.flush()
-            db.add(EmployeeDepartment(employee_id=identifier, department_id='b', active=True))
+            db.add(EmployeeDepartment(employee_id=identifier, department_id='a', active=True))
             db.add(EmployeeDepartment(employee_id=identifier, department_id='c', active=True))
         db.add(Employee(id='old', feishu_user_id='old', name='历史成员', is_activated=True))
         db.flush()
@@ -103,7 +141,9 @@ def test_members_are_paged_deduplicated_and_filtered_by_raw_facts(organization_c
     assert found(account_status='frozen')['meta']['total_count'] == 1
     assert found(account_status='unactivated')['meta']['total_count'] == 1
     assert found(account_status='unknown')['meta']['total_count'] == 44
-    assert found(include_descendants=False)['meta']['total_count'] == 0
+    assert found(include_descendants=False)['meta']['total_count'] == 45
+    assert first['meta']['members_limited'] is True
+    assert first['meta']['include_descendants'] is False
     assert client.get('/admin/api/organization/employees', params={**params, 'cursor': first['meta']['next_cursor'], 'keyword': 'changed'}).status_code == 400
 
 
@@ -168,3 +208,56 @@ def test_organization_direct_save_over_500_is_atomic_epoch_bound_and_isolated_fr
     assert response.json()['meta'] == {'dataset_epoch': 'e', 'data_version': 2}
     with sessions() as db:
         assert db.get(StoreProfile, 's500').store_code == 'S500'
+
+
+@pytest.mark.parametrize('count', [20, 21])
+def test_member_limit_is_based_on_unfiltered_deduplicated_subtree(organization_client, count):
+    client, sessions = organization_client
+    with sessions.begin() as db:
+        for index in range(count):
+            identifier = f't{index:02}'
+            db.add(Employee(id=identifier, feishu_user_id=identifier, name=f'成员{index}',
+                            job_title='工程师', email='person@example.test', employee_type_name='正式员工',
+                            field_readability={'email': 'readable'}))
+            db.flush()
+            db.add(EmployeeDepartment(employee_id=identifier, department_id='c', active=True))
+            if index == 0:
+                db.add(EmployeeDepartment(employee_id=identifier, department_id='a', active=True))
+    params = {'dataset_epoch': 'e', 'data_version': 1, 'department_id': 'a'}
+    summary = client.get('/admin/api/organization/summary', params=params).json()['data']
+    assert summary['member_count'] == count
+    assert summary['department_count'] == 3
+    assert summary['employee_count'] == count
+    assert summary['members_limited'] == (count > 20)
+    result = client.get('/admin/api/organization/employees', params={**params, 'include_descendants': True}).json()
+    assert result['meta']['total_count'] == (count if count <= 20 else 1)
+    # 搜索独立于浏览范围，超限部门也能找到下级成员。
+    filtered = client.get('/admin/api/organization/employees', params={**params, 'include_descendants': True, 'keyword': 't01'}).json()
+    assert filtered['meta']['total_count'] == 1
+    direct_search = client.get('/admin/api/organization/employees', params={**params, 'include_descendants': False, 'keyword': 't01'}).json()
+    assert direct_search['data'] == filtered['data']
+    assert direct_search['meta']['include_descendants'] is True
+    whitespace = client.get('/admin/api/organization/employees', params={**params, 'include_descendants': False, 'keyword': '   '}).json()
+    assert whitespace['meta']['total_count'] == 1
+    outside = client.get('/admin/api/organization/employees', params={**params, 'department_id': 'x', 'keyword': 't01'}).json()
+    assert outside['data'] == []
+    row = result['data'][0]
+    assert row['email'] == 'person@example.test'
+    assert row['job_title'] == '工程师'
+    assert row['employee_type_name'] == '正式员工'
+    assert {department['id'] for department in row['departments']} == {'a', 'c'}
+    company = client.get('/admin/api/organization/employees', params={**params, 'department_id': '0', 'include_descendants': True}).json()
+    assert company['meta']['total_count'] == (count if count <= 20 else 0)
+    assert client.get('/admin/api/organization/summary', params={**params, 'department_id': 'x'}).json()['data']['employee_count'] == 0
+
+
+@pytest.mark.parametrize(('raw', 'value', 'readability'), [
+    ({}, None, 'not_collected'), ({'email': ''}, '', 'readable'),
+    ({'email': ' person@example.test '}, 'person@example.test', 'readable'),
+    ({'email': 12}, None, 'unreadable'), ({'email': 'x' * 255}, None, 'unreadable'),
+])
+def test_email_collection_preserves_missing_empty_and_unreadable(raw, value, readability):
+    from app.sync.collector import optional_user_facts
+    facts = optional_user_facts(raw)
+    assert facts['email'] == value
+    assert facts['field_readability']['email'] == readability

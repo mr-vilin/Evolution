@@ -3,9 +3,12 @@
 .ant-pro-layout .page-heading { margin-bottom: 0; }
 .ant-pro-layout .ant-pro-page-container-children-container { padding-inline: 0; }
 .workspace-actions { white-space: nowrap; }
+.ui-prototypes-frame { display: block; width: 100%; height: calc(100dvh - 240px); min-height: 480px; border: 0; }
 .employee-sections { display: flex; flex-direction: column; gap: 24px; }
 .ant-pro-layout .ant-pro-page-container-warp-page-header { padding-inline: 0; }
 .ant-pro-layout .ant-pro-page-container-children-content { margin-inline: 0; }
+/* 页头由 PageContainer 提供顶部留白，避免与内容区内边距叠加。 */
+.ant-pro-layout .ant-pro-layout-content:has(.page-heading) { padding-block-start: 0; }
 @media (max-width: 900px) {
   .ant-pro-layout .ant-pro-layout-content { padding: 16px; }
 }

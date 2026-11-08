@@ -13,14 +13,20 @@ class DatasetVersion(BaseModel):
     data_version: int = Field(ge=0)
 
 
+@router.get('/summary')
+def summary(dataset_epoch: str = Query(min_length=1), data_version: int = Query(ge=0), department_id: str = '0',
+            identity=Depends(get_admin_identity), runtime=Depends(get_runtime)):
+    data, meta = OrganizationService(runtime.sessions, runtime.reads).summary(
+        dataset_epoch=dataset_epoch, data_version=data_version, department_id=department_id)
+    return {'data': data, 'meta': meta}
+
+
 @router.get('/employees')
 def employees(department_id: str, include_descendants: bool = False, keyword: str = Query('', max_length=255),
               account_status: str = Query('all', pattern='^(all|activated|unactivated|frozen|unjoin|unknown)$'),
               limit: int = Query(20, ge=1, le=20), cursor: str | None = None,
               dataset_epoch: str = Query(min_length=1), data_version: int = Query(ge=0),
               identity=Depends(get_admin_identity), runtime=Depends(get_runtime)):
-    if department_id == '0':
-        raise HTTPException(422, {'code': 'DEPARTMENT_REQUIRED', 'message': '请选择具体部门'})
     data, meta = OrganizationService(runtime.sessions, runtime.reads).employees(
         department_id=department_id, include_descendants=include_descendants, keyword=keyword.strip(),
         account_status=account_status, limit=limit, cursor=cursor,

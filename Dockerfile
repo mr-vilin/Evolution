@@ -3,7 +3,7 @@ WORKDIR /build/frontend
 COPY frontend/ ./
 COPY scripts/versioning.mjs scripts/versioning.d.mts /build/scripts/
 COPY version.json CHANGELOG.md /build/
-RUN npm ci --strict-peer-deps
+RUN npm ci --strict-peer-deps --include=optional
 ARG ORG_COMMIT_SHA=unknown
 ARG ORG_RELEASE_TAG=
 ARG ORG_SOURCE_DIRTY=

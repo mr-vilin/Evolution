@@ -195,7 +195,7 @@ class Publisher:
             fields={'id':row.id,'status':'inactive'}
             # 关系未解析不阻止保留本轮已读取的账号事实；不覆盖历史部门资料。
             fields.update({key: value[key] for key in (
-                'mobile', 'field_readability', 'is_frozen', 'is_resigned', 'is_activated', 'is_exited', 'is_unjoin'
+                'mobile', 'email', 'avatar_url', 'join_time', 'field_readability', 'is_frozen', 'is_resigned', 'is_activated', 'is_exited', 'is_unjoin'
             ) if key in value})
         fields['sync_quality']='pending_verification'
         changes=self._upsert(db,Employee,fields,'employee',job_id,now)

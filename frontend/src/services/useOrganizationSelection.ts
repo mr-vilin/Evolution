@@ -3,7 +3,7 @@ import type { Department } from '../domain';
 import { ApiError, type Meta, request } from './http';
 import { datasetQuery, sameDataset } from './useOrganization';
 
-export interface RangeState { self_selected: boolean; descendants: 'none' | 'partial' | 'all' }
+export interface RangeState { self_selected: boolean; descendants: 'none' | 'partial' | 'all'; selected_count: number }
 interface Selection { selected_ids: string[]; count: number; states: Record<string, RangeState>; departments: Department[] }
 export function rangeLabel(state?: RangeState) {
   if (!state || (!state.self_selected && state.descendants === 'none')) return '未选';

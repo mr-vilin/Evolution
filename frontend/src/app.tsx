@@ -3,7 +3,6 @@ import type { RunTimeLayoutConfig } from '@umijs/max';
 import { Link } from '@umijs/max';
 import { Button, Space } from 'antd';
 import { SettingOutlined, InfoCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons';
-import { exampleGroups } from '../config/examples';
 import { AdminActions } from './components/AdminActions';
 import { useWorkspaceSettings } from './components/WorkspaceSettings';
 import { Providers } from './components/Providers';
@@ -32,7 +31,7 @@ export const layout: RunTimeLayoutConfig = () => {
       return [
         { path: '/business', name: '业务管理', children: business },
         { path: '/system', name: '系统管理', children: system },
-        { path: '/examples', name: '参考案例', children: exampleGroups.map(group => ({ name: group.name, path: `/examples/category/${group.slug}`, children: group.pages.map(page => examples.find(item => item.path === page.path)!).filter(Boolean) })) },
+        { path: '/examples', name: '参考案例', children: examples },
       ];
     },
     menuItemRender: (item, dom) => item.path ? <Link to={item.path} onClick={item.isMobile ? item.onClick : undefined}>{dom}</Link> : dom,

@@ -1,0 +1,171 @@
+"""已授权的本地 0011→0012 邮箱迁移；先加密备份和隔离恢复演练，发布仍使用 release.py。"""
+import argparse
+from datetime import datetime, timezone
+import hashlib
+import json
+import os
+from pathlib import Path
+import secrets
+import sys
+import time
+import uuid
+
+from cryptography.fernet import Fernet
+from migrate_local_0010 import command, dump, metadata, protect, snapshot, sql
+from release import environment, validate_artifact
+from release_host import Host, require_idle, write_json
+
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE = '0011_organization_browser'
+TARGET = '0012_employee_email'
+
+
+def assert_only_email(before, after):
+    if len(before) != len(after):
+        raise RuntimeError('METADATA_SECTION_CHANGED')
+    for index, (old, current) in enumerate(zip(before, after)):
+        if index == 1:
+            extra = [line for line in current.splitlines() if line.startswith('employee\temail\t')]
+            expected = 'employee\temail\tvarchar(254)\tYES\tNULL\t\tutf8mb4\tutf8mb4_bin\t飞书人员邮箱，缺省或不可读时为空，可读性记录于 field_readability\t'
+            if len(extra) != 1 or extra[0].rstrip('\t') != expected.rstrip('\t'):
+                raise RuntimeError('EMAIL_COLUMN_MISMATCH')
+            current = '\n'.join(line for line in current.splitlines() if not line.startswith('employee\temail\t'))
+        if current != old:
+            raise RuntimeError('EXISTING_METADATA_CHANGED: ' + str(index))
+
+
+def business_digest(container):
+    tables = sql(container, "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='organization' AND TABLE_TYPE='BASE TABLE' AND TABLE_NAME<>'alembic_version' ORDER BY TABLE_NAME;").splitlines()
+    result = {}
+    for table in tables:
+        columns = sql(container, "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='organization' AND TABLE_NAME='" + table + "' AND NOT(TABLE_NAME='employee' AND COLUMN_NAME='email') ORDER BY ORDINAL_POSITION;").splitlines()
+        primary = sql(container, "SELECT COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA='organization' AND TABLE_NAME='" + table + "' AND CONSTRAINT_NAME='PRIMARY' ORDER BY ORDINAL_POSITION;").splitlines()
+        if not primary:
+            raise RuntimeError('PRIMARY_KEY_REQUIRED: ' + table)
+        quote = lambda name: '`' + name.replace('`', '``') + '`'
+        data = sql(container, 'SELECT ' + ','.join(map(quote, columns)) + ' FROM ' + quote(table) + ' ORDER BY ' + ','.join(map(quote, primary)) + ';')
+        result[table] = hashlib.sha256(data.encode('utf-8')).hexdigest()
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--artifact', type=Path, required=True)
+    parser.add_argument('--authorized-local-migration', action='store_true', required=True)
+    args = parser.parse_args()
+    manifest = validate_artifact(args.artifact.resolve())
+    if manifest['schema'] != TARGET:
+        raise RuntimeError('ARTIFACT_SCHEMA_MISMATCH')
+    actual_image = command(['docker', 'image', 'inspect', manifest['image'], '--format', '{{.Id}}']).decode().strip()
+    if actual_image not in (manifest['image_id'], manifest.get('image_config_id')):
+        raise RuntimeError('ARTIFACT_IMAGE_MISMATCH')
+    identifier = datetime.now(timezone.utc).strftime('local-0012-%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:6]
+    archive = ROOT / '.cache/migrations' / identifier
+    temporary = 'org-migration-' + identifier
+    host = Host(environment('local', 'inspect', ''))
+    archive.mkdir(parents=True, exist_ok=False)
+    write_json(archive / 'authorization.json', {
+        'scope': '用户本轮明确授权：本地加密备份、隔离恢复演练、0011→0012 邮箱迁移及本地发布',
+        'artifact': manifest['release_id'], 'script_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        'target': host.target})
+    with host.lock():
+        before = host.probe('snapshot()')
+        require_idle(before)
+        if before['schema'] != SOURCE or before['state']['initialization_status'] != 'complete':
+            raise RuntimeError('SOURCE_STATE_MISMATCH')
+        write_json(archive / 'before.json', before)
+        write_json(archive / 'previous-images.json', host.image_config(host.images()))
+        mysql = command(host.dc() + ['ps', '-q', 'mysql']).decode().strip()
+        mysql_image = command(['docker', 'inspect', mysql, '--format', '{{.Image}}']).decode().strip()
+        command(host.dc() + ['stop', 'app', 'mcp'])
+        require_idle(host.probe('snapshot()'))
+        initial = snapshot(mysql)
+        if initial['version'] != SOURCE or not initial['mysql'].startswith('8.4.'):
+            raise RuntimeError('MYSQL_VERSION_MISMATCH')
+        connection = sql(mysql, 'SELECT VERSION(),DATABASE(),@@character_set_database,@@collation_database,@@character_set_connection,@@collation_connection;')
+        if 'utf8mb4' not in connection or 'utf8mb4_general_ci' not in connection:
+            raise RuntimeError('MYSQL_SESSION_MISMATCH')
+        original_metadata = metadata(mysql)
+        if any(line.startswith('employee\temail\t') for line in original_metadata[1].splitlines()):
+            raise RuntimeError('EMAIL_ALREADY_EXISTS')
+        original_digest = business_digest(mysql)
+        write_json(archive / 'database-before.json', initial)
+        write_json(archive / 'metadata-before.json', original_metadata)
+        write_json(archive / 'data-digests-before.json', original_digest)
+        write_json(archive / 'mysql-session.json', {'session': connection})
+        print('应用已停写，开始加密备份', flush=True)
+        backup = dump(mysql)
+        key = Fernet.generate_key()
+        cipher = Fernet(key)
+        encrypted = cipher.encrypt(backup)
+        (archive / 'database.sql.fernet').write_bytes(encrypted)
+        keydir = ROOT / '.cache/backup-keys'
+        keydir.mkdir(exist_ok=True)
+        (keydir / (identifier + '.dpapi')).write_bytes(protect(key))
+        if cipher.decrypt(encrypted) != backup:
+            raise RuntimeError('BACKUP_ENCRYPTION_MISMATCH')
+        write_json(archive / 'backup.json', {
+            'sha256': hashlib.sha256(encrypted).hexdigest(), 'key_file': str(keydir / (identifier + '.dpapi')),
+            'encryption': 'Fernet；密钥使用当前 Windows 用户 DPAPI 单独保护', 'plaintext_saved': False})
+        env = os.environ.copy()
+        env['MYSQL_ROOT_PASSWORD'] = secrets.token_hex(24)
+        env['ORG_DATABASE_URL'] = 'mysql+pymysql://root:' + env['MYSQL_ROOT_PASSWORD'] + '@127.0.0.1:3306/organization?charset=utf8mb4'
+        created = False
+        try:
+            command(['docker', 'run', '-d', '--name', temporary, '--network', 'none', '--tmpfs', '/var/lib/mysql:rw', '-e', 'MYSQL_ROOT_PASSWORD', mysql_image,
+                     '--character-set-server=utf8mb4', '--collation-server=utf8mb4_general_ci'], env=env)
+            created = True
+            for attempt in range(60):
+                try:
+                    command(['docker', 'exec', temporary, 'sh', '-c', 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "SELECT 1"'])
+                    break
+                except RuntimeError:
+                    time.sleep(1)
+            else:
+                raise RuntimeError('REHEARSAL_MYSQL_TIMEOUT')
+            command(['docker', 'exec', temporary, 'sh', '-c', 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "CREATE DATABASE organization CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"'])
+            sql(temporary, cipher.decrypt(encrypted).decode('utf-8'))
+            restored = snapshot(temporary)
+            if restored != initial or metadata(temporary) != original_metadata or business_digest(temporary) != original_digest:
+                raise RuntimeError('RESTORED_DATABASE_MISMATCH')
+            write_json(archive / 'restored.json', restored)
+            print('加密备份恢复、全表数据摘要及结构核验通过，开始隔离迁移', flush=True)
+            command(['docker', 'run', '--rm', '--network', 'container:' + temporary, '-e', 'ORG_DATABASE_URL', actual_image,
+                     'python', '-m', 'alembic', 'upgrade', TARGET], env=env)
+            rehearsed = snapshot(temporary)
+            assert_only_email(original_metadata, metadata(temporary))
+            if rehearsed != {**initial, 'version': TARGET} or business_digest(temporary) != original_digest:
+                raise RuntimeError('REHEARSAL_DATA_CHANGED')
+            if sql(temporary, 'SELECT COUNT(email) FROM employee;') != '0':
+                raise RuntimeError('UNEXPECTED_EMAIL_BACKFILL')
+            write_json(archive / 'rehearsal.json', rehearsed)
+        finally:
+            if created:
+                command(['docker', 'rm', '-f', temporary])
+        candidate = archive / 'candidate.json'
+        write_json(candidate, host.image_config({name: actual_image for name in ('app', 'mcp', 'migrate')}))
+        command(host.dc(candidate) + ['config', '--quiet'])
+        print('隔离演练通过，开始执行已授权的本地 0012 迁移', flush=True)
+        command(host.dc(candidate) + ['run', '--rm', '--no-deps', '-T', 'app', 'python', '-m', 'alembic', 'upgrade', TARGET])
+        after = snapshot(mysql)
+        after_metadata = metadata(mysql)
+        after_digest = business_digest(mysql)
+        assert_only_email(original_metadata, after_metadata)
+        if after != {**initial, 'version': TARGET} or after_digest != original_digest:
+            raise RuntimeError('MIGRATED_DATA_CHANGED')
+        if sql(mysql, 'SELECT COUNT(email) FROM employee;') != '0':
+            raise RuntimeError('UNEXPECTED_EMAIL_BACKFILL')
+        write_json(archive / 'database-after.json', after)
+        write_json(archive / 'metadata-after.json', after_metadata)
+        write_json(archive / 'data-digests-after.json', after_digest)
+        write_json(archive / 'result.json', {'status': 'migrated', 'source': SOURCE, 'target': TARGET,
+                   'only_email_added': True, 'business_data_preserved': True, 'services_stopped': True})
+        print(json.dumps({'status': 'migrated', 'archive': str(archive), 'schema': TARGET}, ensure_ascii=False), flush=True)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as exc:
+        print('MIGRATION_STOPPED: ' + (str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__) + '；停止并检查证据，不自动恢复或重试 DDL', file=sys.stderr)
+        sys.exit(1)

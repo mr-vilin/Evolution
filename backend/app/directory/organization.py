@@ -1,7 +1,7 @@
 """管理员组织浏览边界，与公开目录及 Agent 的既有协议分离。"""
 import json
 from datetime import datetime, timezone
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 
 from app.persistence.models import ChangeLog, DatasetState, Department, Employee, EmployeeDepartment
 from app.persistence.read_service import SqlReadService
@@ -12,6 +12,48 @@ from app.stores.service import StoreAdminService
 class OrganizationService:
     def __init__(self, sessions, reads: SqlReadService):
         self.sessions, self.reads = sessions, reads
+
+    @staticmethod
+    def _scope(department_id):
+        tree = select(Department.id).where(Department.id == department_id).cte('org_member_tree', recursive=True)
+        return tree.union(select(Department.id).join(tree, Department.parent_id == tree.c.id))
+
+    @classmethod
+    def _members(cls, department_id, include_descendants):
+        stmt = select(Employee).where(Employee.status == 'active')
+        if department_id == '0' and include_descendants:
+            return stmt
+        relations = select(EmployeeDepartment.employee_id).join(Department, Department.id == EmployeeDepartment.department_id).where(
+            EmployeeDepartment.active.is_(True), Department.status == 'active')
+        relations = relations.where(EmployeeDepartment.department_id.in_(select(cls._scope(department_id).c.id))
+                                    if include_descendants else EmployeeDepartment.department_id == department_id)
+        return stmt.where(Employee.id.in_(relations))
+
+    def summary(self, *, dataset_epoch, data_version, department_id='0'):
+        """固定统计查看部门的完整子树；不受人员搜索、筛选及分页影响。"""
+        with self.sessions() as db, db.begin():
+            state = self.reads._state(db)
+            self.reads._check_version(state, dict(dataset_epoch=dataset_epoch, data_version=data_version))
+            scope = self._scope(department_id)
+            departments = select(func.count()).select_from(Department).where(
+                Department.is_virtual_root.is_(False), Department.status == 'active')
+            people = select(Employee)
+            if department_id != '0':
+                departments = departments.where(Department.id.in_(select(scope.c.id)))
+                # 历史关系用于部门汇总离职事实；当前成员列表仍只用有效关系。
+                relations = select(EmployeeDepartment.employee_id).where(
+                    EmployeeDepartment.department_id.in_(select(scope.c.id)))
+                people = people.where(Employee.id.in_(relations))
+            facts = people.subquery()
+            counts = db.execute(select(
+                func.count().label('employee_count'),
+                func.count(case((facts.c.is_activated.is_(False), 1))).label('unactivated_count'),
+                func.count(case((facts.c.is_unjoin.is_(True), 1))).label('unjoin_count'),
+                func.count(case((facts.c.is_resigned.is_(True), 1))).label('resigned_count'),
+            ).select_from(facts)).mappings().one()
+            member_count = db.scalar(select(func.count()).select_from(self._members(department_id, True).subquery()))
+            return {'department_id': department_id, 'department_count': db.scalar(departments), **dict(counts),
+                    'member_count': member_count, 'members_limited': member_count > 20}, self.reads._meta(state)
 
     def departments(self, *, parent_id='0', include_inactive=False, limit=100, cursor=None, dataset_epoch=None, data_version=None):
         filters = dict(parent_id=parent_id, include_inactive=include_inactive, limit=limit,
@@ -57,14 +99,12 @@ class OrganizationService:
         with self.sessions() as db, db.begin():
             state = self.reads._state(db)
             self.reads._check_version(state, filters)
-            tree = select(Department.id).where(Department.id == filters['department_id']).cte('org_member_tree', recursive=True)
-            if filters.get('include_descendants'):
-                tree = tree.union_all(select(Department.id).join(tree, Department.parent_id == tree.c.id))
-            relations = select(EmployeeDepartment.employee_id).join(Department, Department.id == EmployeeDepartment.department_id).where(
-                EmployeeDepartment.active.is_(True), Department.status == 'active',
-                EmployeeDepartment.department_id.in_(select(tree.c.id)))
-            stmt = select(Employee).where(Employee.id.in_(relations), Employee.status == 'active')
+            department_id = filters['department_id']
+            member_count = db.scalar(select(func.count()).select_from(self._members(department_id, True).subquery()))
             keyword = filters.get('keyword', '').strip()
+            # 搜索覆盖当前部门及下级；无关键词浏览仍遵守 20 人范围限制。
+            include_descendants = bool(keyword) or (bool(filters.get('include_descendants')) and member_count <= 20)
+            stmt = self._members(department_id, include_descendants)
             if keyword:
                 stmt = stmt.where(or_(Employee.name.contains(keyword, autoescape=True),
                                       Employee.mobile == keyword, Employee.feishu_user_id == keyword))
@@ -85,7 +125,8 @@ class OrganizationService:
             page, next_id = self.reads._page(rows, limit)
             return [self.reads._employee(db, row) for row in page], {
                 **self.reads._meta(state, self.reads._next_cursor(state, 'organization-employees', filters, next_id)),
-                'total_count': total}
+                'total_count': total, 'include_descendants': include_descendants,
+                'members_limited': member_count > 20, 'member_count': member_count}
 
     def _details(self, db, rows, include_inactive=False):
         ids = [row.id for row in rows]
@@ -191,9 +232,10 @@ class OrganizationService:
                     parent = parents.get(parent)
             states = {identifier: {
                 'self_selected': identifier in selected,
+                'selected_count': counts.get(identifier, 0) + int(identifier in selected),
                 'descendants': 'none' if not counts.get(identifier) else 'all' if counts[identifier] == totals.get(identifier) else 'partial',
             } for identifier in valid | {'0'}}
-            states['0'] = {'self_selected': False, 'descendants': 'none' if not selected else 'all' if selected == valid else 'partial'}
+            states['0'] = {'self_selected': False, 'selected_count': len(selected), 'descendants': 'none' if not selected else 'all' if selected == valid else 'partial'}
             details = []
             if include_details:
                 ids = sorted(selected)

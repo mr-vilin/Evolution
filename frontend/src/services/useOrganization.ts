@@ -67,7 +67,7 @@ export function useOrganizationPeople(departmentId: string | undefined, descenda
   const generation = useRef(0);
   const pending = useRef(false);
   const seenCursors = useRef(new Set<string>());
-  const path = departmentId && departmentId !== '0' && meta.dataset_epoch && meta.data_version !== undefined
+  const path = departmentId && meta.dataset_epoch && meta.data_version !== undefined
     ? '/admin/api/organization/employees' + query({ department_id: departmentId, include_descendants: descendants,
       keyword: keyword.trim(), account_status: accountStatus, limit: 20, ...datasetQuery(meta) }) : null;
   const context = useRef({ path, meta });

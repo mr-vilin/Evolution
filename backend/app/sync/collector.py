@@ -1,6 +1,7 @@
 """完整采集候选；分页异常向上抛出，绝不返回半轮结果。"""
 from dataclasses import dataclass, field
 from datetime import datetime,timezone
+from urllib.parse import urlsplit
 
 
 @dataclass
@@ -63,6 +64,35 @@ def optional_user_facts(raw):
     else:
         readability['mobile'] = 'readable'
     facts['mobile'] = mobile.strip() if isinstance(mobile, str) and readability['mobile'] == 'readable' else None
+    email = raw.get('email')
+    if 'email' not in raw:
+        readability['email'] = 'not_collected'
+    elif email is not None and (not isinstance(email, str) or len(email) > 254):
+        readability['email'] = 'unreadable'
+    else:
+        readability['email'] = 'readable'
+    facts['email'] = email.strip() if isinstance(email, str) and readability['email'] == 'readable' else None
+    avatar = raw.get('avatar')
+    avatar_url = None
+    if isinstance(avatar, dict):
+        for size in ('avatar_240', 'avatar_72', 'avatar_640', 'avatar_origin'):
+            value = avatar.get(size)
+            if isinstance(value, str) and 0 < len(value) <= 2048:
+                try:
+                    url = urlsplit(value)
+                    if url.scheme == 'https' and url.hostname and not url.username and not url.password:
+                        avatar_url = value
+                        break
+                except ValueError:
+                    pass
+    empty_avatar = avatar is None or (isinstance(avatar, dict) and all(value in (None, '') for value in avatar.values()))
+    readability['avatar_url'] = 'not_collected' if 'avatar' not in raw else 'readable' if avatar_url or empty_avatar else 'unreadable'
+    facts['avatar_url'] = avatar_url
+    joined = raw.get('join_time')
+    # 保留飞书原始 Unix 秒（包括 0），拒绝布尔、毫秒及超出日期范围的值。
+    valid_joined = type(joined) is int and 0 <= joined <= 253402271999
+    readability['join_time'] = 'not_collected' if 'join_time' not in raw else 'readable' if joined is None or valid_joined else 'unreadable'
+    facts['join_time'] = joined if valid_joined else None
     facts['field_readability'] = readability
     return facts
 

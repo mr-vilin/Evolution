@@ -10,6 +10,7 @@ export default [
   { path: '/logs', name: '变更日志', icon: 'AuditOutlined', component: './LogsPage' },
   { path: '/settings', name: '管理设置', icon: 'SettingOutlined', component: './SettingsPage' },
   { path: '/system-info', name: '系统信息', icon: 'InfoCircleOutlined', component: './SystemInfoPage' },
+  { path: '/examples/ui-prototypes', name: 'UI 原型总览', icon: 'PictureOutlined', component: './UiPrototypesPage' },
   ...examplePages.map(page => ({ path: page.path, name: page.name, component: `./examples/${page.component}` })),
   { path: '/business', redirect: '/organization', hideInMenu: true },
   { path: '/system', redirect: '/sync', hideInMenu: true },

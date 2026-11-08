@@ -99,3 +99,64 @@ def test_0011_preserves_existing_schema_data_and_initializes_stable_sibling_orde
             assert column == next(item for item in current['columns'] if item['name'] == column['name'])
     command.downgrade(config, '0010_initialization_wizard')
     assert schema_snapshot(engine) == before
+
+
+def test_0012_email_preserves_schema_data_and_reverses_only_new_column(migration_database):
+    engine, config = migration_database
+    command.upgrade(config, '0011_organization_browser')
+    with engine.begin() as db:
+        db.execute(text("INSERT INTO employee (id,feishu_user_id,name,status,sync_quality,primary_store_status) VALUES ('u-email','u-email','邮箱演练','active','complete','unknown')"))
+    before = schema_snapshot(engine)
+    command.upgrade(config, '0012_employee_email')
+    after = schema_snapshot(engine)
+    email = next(column for column in after['tables']['employee']['columns'] if column['name'] == 'email')
+    assert email['type'] == 'varchar(254)'
+    assert email['nullable'] is True
+    assert email['charset'] == 'utf8mb4'
+    assert email['collation'] == 'utf8mb4_bin'
+    assert email['comment'] and '邮箱' in email['comment']
+    for table, old in before['tables'].items():
+        current = after['tables'][table]
+        assert current['foreign_keys'] == old['foreign_keys']
+        assert current['indexes'] == old['indexes']
+        for column in old['columns']:
+            assert column == next(item for item in current['columns'] if item['name'] == column['name'])
+    with engine.begin() as db:
+        assert db.scalar(text("SELECT email FROM employee WHERE id='u-email'")) is None
+        db.execute(text("UPDATE employee SET email='test@example.test' WHERE id='u-email'"))
+    command.downgrade(config, '0011_organization_browser')
+    assert schema_snapshot(engine) == before
+    with engine.connect() as db:
+        assert db.scalar(text("SELECT name FROM employee WHERE id='u-email'")) == '邮箱演练'
+
+
+def test_0013_profile_preserves_existing_schema_data_and_roundtrips(migration_database):
+    engine, config = migration_database
+    command.upgrade(config, '0012_employee_email')
+    with engine.begin() as db:
+        db.execute(text("INSERT INTO employee (id,feishu_user_id,name,status,sync_quality,primary_store_status,email) VALUES ('u-profile','u-profile','资料演练','active','complete','unknown','test@example.test')"))
+    before = schema_snapshot(engine)
+    command.upgrade(config, '0013_employee_profile')
+    after = schema_snapshot(engine)
+    columns = {column['name']: column for column in after['tables']['employee']['columns']}
+    assert columns['avatar_url']['type'] == 'varchar(2048)'
+    assert columns['avatar_url']['charset'] == 'utf8mb4'
+    assert columns['avatar_url']['collation'] == 'utf8mb4_bin'
+    assert columns['join_time']['type'] == 'bigint'
+    for name in ('avatar_url', 'join_time'):
+        assert columns[name]['nullable'] and columns[name]['comment']
+    for table, old in before['tables'].items():
+        current = after['tables'][table]
+        assert current['foreign_keys'] == old['foreign_keys']
+        assert current['indexes'] == old['indexes']
+        assert current['options'] == old['options']
+        for column in old['columns']:
+            assert column == next(item for item in current['columns'] if item['name'] == column['name'])
+    with engine.begin() as db:
+        assert db.execute(text("SELECT avatar_url,join_time FROM employee WHERE id='u-profile'")).one() == (None, None)
+        db.execute(text("UPDATE employee SET avatar_url='https://example.test/avatar.png',join_time=1793980800 WHERE id='u-profile'"))
+        assert db.execute(text("SELECT avatar_url,join_time FROM employee WHERE id='u-profile'")).one() == ('https://example.test/avatar.png', 1793980800)
+    command.downgrade(config, '0012_employee_email')
+    assert schema_snapshot(engine) == before
+    with engine.connect() as db:
+        assert db.execute(text("SELECT name,email FROM employee WHERE id='u-profile'")).one() == ('资料演练', 'test@example.test')

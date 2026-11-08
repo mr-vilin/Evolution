@@ -80,7 +80,7 @@ USER_FIELD_TITLES = {
     'leader_user_id': '直属上级', 'open_id': '登录标识',
     'department_ids': '所属部门', 'orders': '部门顺序与唯一主部门', 'status': '人员状态',
     'employee_type': '员工类型', 'permission_role': '权限角色', 'store_attribute': '门店属性',
-    'mobile': '手机号', 'is_frozen': '账号暂停标志', 'is_resigned': '账号离职标志',
+    'mobile': '手机号', 'email': '邮箱', 'is_frozen': '账号暂停标志', 'is_resigned': '账号离职标志',
     'is_activated': '账号激活标志', 'is_exited': '账号主动退出标志', 'is_unjoin': '账号未加入标志',
 }
 DEPARTMENT_FIELD_TITLES = {
@@ -117,7 +117,7 @@ def field_requirements():
         ('store_attribute', '非必填', '字段定义须可读；允许未填写或接口省略，已返回文本最多 255 字符，或为已配置的单选项。'),
     ]
     users.extend((key, '可缺省', '保留飞书原始事实；缺失、不可读标为未知，不推断为否，也不据此宣称应用有字段读取权限。')
-                 for key in ('mobile', 'is_frozen', 'is_resigned', 'is_activated', 'is_exited', 'is_unjoin'))
+                 for key in ('mobile', 'email', 'is_frozen', 'is_resigned', 'is_activated', 'is_exited', 'is_unjoin'))
     result = [{'key': 'definition:' + key, 'object_type': 'definition', 'field': key,
                'title': title, 'requirement': requirement, 'rule': rule}
               for key, title, requirement, rule in definitions]
