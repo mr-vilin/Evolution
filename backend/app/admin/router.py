@@ -181,6 +181,19 @@ def admin_department(department_id: str, identity=Depends(get_admin_identity), r
     return {"data": data, "meta": meta}
 
 
+@router.get('/departments/{department_id}/details')
+def admin_department_details(department_id: str, identity=Depends(get_admin_identity), runtime: Runtime = Depends(get_runtime), settings=Depends(get_settings)):
+    import httpx
+    from app.directory.details import department_details
+    from app.feishu.client import FeishuClient
+    data, meta = runtime.reads.get_department(department_id)
+    if data is None:
+        raise HTTPException(404, {'code': 'DEPARTMENT_NOT_FOUND', 'message': '部门不存在'})
+    with httpx.Client(timeout=5, follow_redirects=False) as http:
+        api = FeishuClient(settings.feishu_app_id, settings.feishu_app_secret.get_secret_value(), http=http) if settings.feishu_app_id and settings.feishu_app_secret else None
+        return {'data': department_details(data, runtime.sessions, api), 'meta': meta}
+
+
 @router.get("/employees")
 def admin_employees(department_id: str | None = None, include_descendants: bool = False, store_id: str | None = None, primary_store_id: str | None = None, include_inactive: bool = False, limit: int = Query(100, ge=1, le=500), cursor: str | None = None, dataset_epoch: str | None = None, data_version: int | None = None, identity=Depends(get_admin_identity), runtime: Runtime = Depends(get_runtime)):
     data, meta = runtime.reads.list_employees(department_id=department_id, include_descendants=include_descendants, store_id=store_id, primary_store_id=primary_store_id, include_inactive=include_inactive, limit=limit, cursor=cursor, dataset_epoch=dataset_epoch, data_version=data_version)

@@ -1,5 +1,13 @@
 export type PrimaryStoreStatus = 'resolved' | 'not_in_store' | 'unknown' | 'inconsistent' | 'inactive';
 export type RecordStatus = 'active' | 'inactive';
+export interface DepartmentPerson { user_id: string; name: string; avatar_url: string | null }
+export interface DepartmentDetails extends Department {
+  feishu_department_id: string; parent_name: string | null;
+  leaders: Array<DepartmentPerson & { leader_type: 1 | 2 }>;
+  chat_id: string | null; chat_name: string | null; chat_owner: DepartmentPerson | null;
+  chat_status: 'available' | 'not_set' | 'unavailable' | 'not_applicable';
+  detail_warnings: string[];
+}
 export interface Department { id: string; name: string; parent_id: string | null; path: string[]; status: RecordStatus; sync_quality?: string; is_virtual_root: boolean; leader_user_id?: string | null; leader_name?: string | null; is_store: boolean; store_code: string | null; notes: string | null; employee_count?: number; has_children?: boolean; sort_order?: number }
 export type FieldReadability = 'readable' | 'not_collected' | 'unreadable';
 export interface Employee { avatar_url?: string | null; leader_avatar_url?: string | null; join_date?: string | null; user_id?: string; email?: string | null; mobile?: string | null; field_readability?: Record<string, FieldReadability>; account_status?: Partial<Record<'is_frozen' | 'is_resigned' | 'is_activated' | 'is_exited' | 'is_unjoin', boolean | null>>; id: string; name: string; employee_no?: string | null; status: RecordStatus; sync_quality?: string; employee_type_id?: string | null; employee_type_name?: string | null; job_title?: string | null; leader_user_id?: string | null; leader_name?: string | null; permission_role_id?: string | null; permission_role_name?: string | null; store_attribute_id?: string | null; store_attribute_name?: string | null; department_ids: string[]; departments: Department[]; primary_department_id: string | null; stores: Array<{ id: string; name: string; is_primary: boolean; path: string[]; path_names: string[] }>; store_ids: string[]; primary_store_id: string | null; primary_store_status: PrimaryStoreStatus }

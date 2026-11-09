@@ -29,6 +29,20 @@ def test_avatar_only_accepts_https_and_falls_back_between_sizes():
     assert optional_user_facts({'avatar': {}})['field_readability']['avatar_url'] == 'readable'
 
 
+@pytest.mark.parametrize('joined,expected_date', [
+    (None, None), (0, None), (1793980800, '2026-11-07'),
+])
+def test_stored_empty_join_time_reads_as_no_date(sqlite_sessions, joined, expected_date):
+    # 同时覆盖已入库的零值；修复展示不依赖再次同步或历史回填。
+    with sqlite_sessions.begin() as db:
+        db.add(Employee(id='u', feishu_user_id='u', name='人员', join_time=joined,
+                        field_readability={'join_time': 'readable'}))
+    data, _ = SqlReadService(sqlite_sessions, 's' * 32).get_employee('u')
+    assert data['join_date'] == expected_date
+    with sqlite_sessions() as db:
+        assert db.get(Employee, 'u').join_time == joined
+
+
 def test_profile_publishes_and_reads_leader_avatar_and_shanghai_date(sqlite_sessions):
     joined = int(datetime(2026, 11, 6, 16, tzinfo=timezone.utc).timestamp())
     normalized = normalize_user({'user_id': 'u', 'name': '人员', 'department_ids': [],

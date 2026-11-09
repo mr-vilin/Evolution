@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Avatar, Button, Descriptions, Divider, Drawer, Tag, Tooltip, Typography, theme } from 'antd';
+import { Avatar, Button, Descriptions, Divider, Tag, Tooltip, Typography, theme } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
 import type { Employee } from '../domain';
 import { useResource } from '../services/useResource';
 import { ResourceState } from './ResourceState';
-import { EmployeeAccountStatus, EmployeeIdentity } from './EmployeeIdentity';
+import { CopyUserId, EmployeeAccountStatus, EmployeeIdentity } from './EmployeeIdentity';
 import { contactLabel, departmentName, departmentPath } from './employeePresentation';
 import { EmployeeValue } from './EmployeeValue';
+import { DetailDrawer } from './DetailDrawer';
 
 function EmployeeDetail({ employee }: { employee: Employee }) {
   const { token } = theme.useToken();
@@ -23,7 +24,7 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
       <EmployeeValue value={primary ? departmentPath(primary) : employee.primary_department_id === '0' ? '本组织' : undefined} /></div>
     <Divider />
     <Descriptions column={1} colon={false} styles={{ label: { width: 96 }, content: { minWidth: 0, overflowWrap: 'anywhere' } }} items={[
-      { key: 'id', label: '用户ID', children: <EmployeeValue value={employee.user_id} /> },
+      { key: 'id', label: '用户ID', children: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><EmployeeValue value={employee.user_id} /><CopyUserId employee={employee} /></span> },
       { key: 'mobile', label: '手机号码', children: <EmployeeValue value={contactLabel(employee, 'mobile')} /> },
       { key: 'email', label: '邮箱', children: <EmployeeValue value={contactLabel(employee, 'email')} /> },
       { key: 'leader', label: '直属上级', children: <EmployeeIdentity name={employee.leader_name ?? employee.leader_user_id} avatar={employee.leader_avatar_url} /> },
@@ -49,7 +50,7 @@ function EmployeeDetailResource({ employeeId }: { employeeId: string }) {
 }
 
 export function EmployeeDetailDrawer({ employeeId, onClose }: { employeeId?: string; onClose: () => void }) {
-  return <Drawer title="人员详情" placement="right" size="min(600px, 100vw)" open={Boolean(employeeId)} onClose={onClose} destroyOnHidden>
+  return <DetailDrawer title="成员详情" open={Boolean(employeeId)} onClose={onClose}>
     {employeeId && <EmployeeDetailResource key={employeeId} employeeId={employeeId} />}
-  </Drawer>;
+  </DetailDrawer>;
 }

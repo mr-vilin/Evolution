@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import { Alert, App, Button, Card, Drawer, Grid, Input, Select, Space, Statistic, Switch, Tag, Tooltip, Tree, Typography, theme } from 'antd';
-import { CaretDownFilled, EditOutlined, LeftOutlined, MenuOutlined, RightOutlined, SyncOutlined } from '@ant-design/icons';
+import { Alert, App, Badge, Button, Card, Drawer, Grid, Input, Select, Space, Statistic, Switch, Tag, Tooltip, Tree, Typography, theme } from 'antd';
+import { CaretDownFilled, EditOutlined, EyeOutlined, LeftOutlined, MenuOutlined, RightOutlined, SyncOutlined } from '@ant-design/icons';
 import { useNavigate } from '@umijs/max';
 import type { DataNode } from 'antd/es/tree';
 import type { TreeProps } from 'antd';
@@ -15,6 +15,7 @@ import { OrganizationStoreEditor } from '../components/OrganizationStoreEditor';
 import { StoreEditor } from '../components/StoreEditor';
 import { EmployeeDepartments } from '../components/EmployeeDepartments';
 import { EmployeeDetailDrawer } from '../components/EmployeeDetailDrawer';
+import { DepartmentDetailDrawer } from '../components/DepartmentDetailDrawer';
 import { CopyUserId, EmployeeAccountStatus, EmployeeIdentity } from '../components/EmployeeIdentity';
 import { contactLabel } from '../components/employeePresentation';
 import { EmployeeValue } from '../components/EmployeeValue';
@@ -27,12 +28,26 @@ const summaryItems = [
   ['department_count', '总部门数'], ['employee_count', '总人数'], ['unactivated_count', '未激活'],
   ['unjoin_count', '未加入'], ['resigned_count', '已离职'],
 ] as const;
+type StatusView = 'none' | 'unactivated' | 'unjoin' | 'resigned';
+const statusViews: Record<string, { value: StatusView; label: string }> = {
+  unactivated_count: { value: 'unactivated', label: '未激活' },
+  unjoin_count: { value: 'unjoin', label: '未加入' },
+  resigned_count: { value: 'resigned', label: '已离职' },
+};
+const accountOptions = [
+  { label: '全部账号状态', value: 'all' }, { label: '已激活', value: 'activated' }, { label: '未激活', value: 'unactivated' },
+  { label: '已暂停', value: 'frozen' }, { label: '未加入', value: 'unjoin' }, { label: '状态未知', value: 'unknown' },
+];
+const accountBadgeColors: Record<string, string> = {
+  activated: '#52C41A', unactivated: '#FAAD14', frozen: '#FF4D4F', unjoin: '#F5F5F5', unknown: '#F5F5F5',
+};
 export function OrganizationPage() {
   const { message } = App.useApp();
   const { token } = theme.useToken();
   const compactColumns = Grid.useBreakpoint().xs === true;
   const navigate = useNavigate();
   const [employeeId, setEmployeeId] = useState<string>();
+  const [departmentId, setDepartmentId] = useState<string>();
   const [includeInactive, setIncludeInactive] = useState(false);
   const tree = useOrganizationTree(includeInactive);
   const [selected, setSelected] = useState<string>('0');
@@ -42,6 +57,7 @@ export function OrganizationPage() {
   const [memberChoice, setMemberChoice] = useState<{ departmentId: string; descendants: boolean }>();
   const [keyword, setKeyword] = useState('');
   const [accountStatus, setAccountStatus] = useState('all');
+  const [statusView, setStatusView] = useState<StatusView>('none');
   const [treeOpen, setTreeOpen] = useState(false);
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -66,12 +82,20 @@ export function OrganizationPage() {
   }, [notice, selection.error]);
   const searchResource = useResource<Department[]>(search.trim() && tree.ready
     ? '/admin/api/organization/search' + query({ keyword: search.trim(), include_inactive: includeInactive, ...datasetQuery(tree.meta) }) : null);
-  const summary = useResource<OrganizationSummary>(tree.ready
+  const companySummary = useResource<OrganizationSummary>(tree.ready
+    ? '/admin/api/organization/summary' + query({ department_id: '0', ...datasetQuery(tree.meta) }) : null);
+  const departmentSummary = useResource<OrganizationSummary>(tree.ready && selected !== '0'
     ? '/admin/api/organization/summary' + query({ department_id: selected, ...datasetQuery(tree.meta) }) : null);
+  const summary = selected === '0' ? companySummary : departmentSummary;
+  const companyStats = companySummary.data?.department_id === '0' && sameDataset(companySummary.meta, tree.meta) ? companySummary.data : null;
   const activeSummary = summary.data?.department_id === selected && sameDataset(summary.meta, tree.meta) ? summary.data : null;
   const membersLimited = activeSummary?.members_limited === true;
   const descendants = !membersLimited && (memberChoice?.departmentId === selected ? memberChoice.descendants : true);
-  const people = useOrganizationPeople(activeSummary && !summary.error ? selected : undefined, Boolean(keyword.trim()) || descendants, keyword, accountStatus, tree.meta);
+  const people = useOrganizationPeople(activeSummary && !summary.error ? selected : undefined, descendants, keyword, accountStatus, tree.meta, statusView);
+  function toggleStatusView(value: StatusView) {
+    setStatusView(current => current === value ? 'none' : value);
+    setSelected('0'); setAccountStatus('all'); setMemberChoice(undefined); setKeyword(''); setMemberScopeOpen(false);
+  }
   const scroll = useRef<HTMLDivElement>(null);
   const [tableBodyHeight, setTableBodyHeight] = useState(240);
   useLayoutEffect(() => {
@@ -89,7 +113,7 @@ export function OrganizationPage() {
     const body = scroll.current?.querySelector('.ant-table-body');
     if (body) body.scrollTop = 0;
   }, [people.path]);
-  const versionError = people.error?.code === 'DATASET_CHANGED' || summary.error?.code === 'DATASET_CHANGED' || searchResource.error?.code === 'DATASET_CHANGED'
+  const versionError = people.error?.code === 'DATASET_CHANGED' || summary.error?.code === 'DATASET_CHANGED' || companySummary.error?.code === 'DATASET_CHANGED' || searchResource.error?.code === 'DATASET_CHANGED'
     || Object.values(tree.branches).some(branch => branch.error?.code === 'DATASET_CHANGED');
   useEffect(() => { if (versionError && retries.current < 2) { retries.current += 1; recover(); } }, [versionError, recover]);
   useEffect(() => { if (people.data.length) retries.current = 0; }, [people.data]);
@@ -180,7 +204,7 @@ export function OrganizationPage() {
         aria-label={`${node.expanded ? '收起' : '展开'}${node.eventKey === '0' ? '本组织' : byId.get(String(node.eventKey))?.name ?? '部门'}`} />}
       treeData={[nodes.get('0')!]} expandedKeys={search.trim() ? ['0', ...visible.map(row => row.id)] : expanded}
       onExpand={(keys, info) => { if (search.trim()) return; setExpanded(keys.map(String)); if (info.expanded && !tree.branches[String(info.node.key)]?.loaded) void tree.load(String(info.node.key)); }}
-      selectedKeys={selected ? [selected] : []} onSelect={keys => { setSelected(keys[0] ? String(keys[0]) : '0'); setTreeOpen(false); }}
+      selectedKeys={selected ? [selected] : []} onSelect={keys => { setStatusView('none'); setSelected(keys[0] ? String(keys[0]) : '0'); setTreeOpen(false); }}
       draggable={search.trim() ? false : { nodeDraggable: node => node.key !== '0' && !String(node.key).startsWith('page:') }}
       allowDrop={({ dragNode, dropNode, dropPosition }) => dropPosition !== 0 && dragNode.key !== dropNode.key && byId.has(String(dragNode.key)) && byId.has(String(dropNode.key)) && byId.get(String(dragNode.key))?.parent_id === byId.get(String(dropNode.key))?.parent_id}
       onDrop={onDrop} />
@@ -196,38 +220,53 @@ export function OrganizationPage() {
     <div className={`org-grid${treeCollapsed ? ' org-grid-tree-collapsed' : ''}`} ref={grid}>
       <div className="tree-panel">
         <div id="organization-tree-panel" className="org-tree-panel-content" hidden={treeCollapsed}>{treePanel}</div>
-        <Button className="org-tree-collapse" aria-label={treeCollapsed ? '展开部门面板' : '折叠部门面板'}
+        <Button className="org-tree-collapse" style={{ borderColor: token.colorBorderSecondary }} aria-label={treeCollapsed ? '展开部门面板' : '折叠部门面板'}
           title={treeCollapsed ? '展开部门面板' : '折叠部门面板'} aria-expanded={!treeCollapsed} aria-controls="organization-tree-panel"
           icon={treeCollapsed ? <RightOutlined /> : <LeftOutlined />} onClick={() => setTreeCollapsed(value => !value)} />
       </div>
       <div className="org-detail-panel" style={{ '--org-border': token.colorBorderSecondary, '--org-text': token.colorText, '--org-primary': token.colorPrimary } as CSSProperties}>
         <Card className="org-summary-card" styles={{ body: { padding: 0 } }}>
-          <section aria-label="部门统计" aria-busy={!activeSummary || summary.loading}>
-            <div className="org-company-summary">{summaryItems.map(([key, title]) => <div className="org-stat-cell" key={key}>
-              <Statistic title={title} value={activeSummary?.[key] ?? '—'} loading={summary.loading} styles={{ content: { fontSize: token.fontSizeHeading3 } }} />
-            </div>)}</div>
+          <section aria-label="部门统计" aria-busy={!companyStats || companySummary.loading}>
+            <div className="org-company-summary">{summaryItems.map(([key, title]) => {
+              const view = statusViews[key];
+              const chosen = Boolean(view && statusView === view.value);
+              return <div className={`org-stat-cell${chosen ? ' org-stat-selected' : ''}`} key={key}
+                style={chosen ? { background: token.colorSuccessBg, boxShadow: `inset 0 0 0 1px ${token.colorSuccessBorder}` } : undefined}>
+                <Statistic title={<span className="org-stat-title">{title}{view && <Tooltip title={chosen ? '恢复本组织默认列表' : `查看全组织${title}人员`}>
+                  <Button type="text" size="small" aria-label={`查看${title}人员`} aria-pressed={chosen} disabled={!companyStats || !!companySummary.error}
+                    style={{ color: chosen ? token.colorSuccessText : token.colorTextTertiary }} icon={<EyeOutlined />} onClick={() => toggleStatusView(view.value)} />
+                </Tooltip>}</span>} value={companyStats?.[key] ?? '—'} loading={companySummary.loading}
+                  styles={{ content: { fontSize: token.fontSizeHeading3, color: chosen ? token.colorSuccessText : undefined } }} />
+              </div>;
+            })}</div>
           </section>
+          {companySummary.error && selected !== '0' && <Alert type="error" title={companySummary.error.message} action={<Button onClick={companySummary.error.code === 'DATASET_CHANGED' ? retry : companySummary.reload}>重试</Button>} />}
         </Card>
-        <Card className="org-people-card" title={<div className="org-members-header">
+        <Card className="org-people-card" styles={{ header: { borderBottom: 0 } }} title={<div className="org-members-header">
           <div className="org-department-heading">
-            <Typography.Title level={4} className="org-department-name" style={{ margin: 0 }}>{current?.name ?? '当前部门'}</Typography.Title>
+            <Typography.Title level={4} className="org-department-name" style={{ margin: 0 }}>{statusView === 'none' ? current?.name ?? '当前部门' : statusViews[`${statusView}_count`].label}</Typography.Title>
             <Typography.Text className="org-member-count" type="secondary" aria-live="polite">共{people.total}人</Typography.Text>
-            {current && current.id !== '0' && <Space className="org-department-actions" size={4}>
+            {statusView === 'none' && current && current.id !== '0' && <Space className="org-department-actions" size={4}>
               <Tooltip title="更新此部门及后代" trigger={['hover', 'focus']}>
                 <Button type="text" size="small" aria-label="更新此部门及后代" icon={<SyncOutlined />} loading={syncing} onClick={() => void subtreeSync()} />
               </Tooltip>
               <Tooltip title="编辑门店资料" trigger={['hover', 'focus']}>
                 <Button type="text" size="small" aria-label="编辑门店资料" icon={<EditOutlined />} disabled={current.status !== 'active'} onClick={() => setSingleOpen(true)} />
               </Tooltip>
+              <Tooltip title="查看部门详情" trigger={['hover', 'focus']}>
+                <Button type="text" size="small" aria-label="查看部门详情" icon={<EyeOutlined />} onClick={() => setDepartmentId(current.id)} />
+              </Tooltip>
             </Space>}
           </div>
-          <Select aria-label="账号状态" value={accountStatus} onChange={setAccountStatus} options={[
-            { label: '全部账号状态', value: 'all' }, { label: '已激活', value: 'activated' }, { label: '未激活', value: 'unactivated' },
-            { label: '已暂停', value: 'frozen' }, { label: '未加入', value: 'unjoin' }, { label: '状态未知', value: 'unknown' }]} />
+          <Select aria-label="账号状态" value={accountStatus} disabled={statusView !== 'none'} onChange={setAccountStatus} options={accountOptions}
+            optionRender={option => <span className="org-account-option"><span>{option.label}</span>{option.value !== 'all' &&
+              <Badge count={people.accountCounts[String(option.value)] ?? 0} showZero overflowCount={Number.MAX_SAFE_INTEGER}
+                color={accountBadgeColors[String(option.value)]}
+                styles={{ indicator: { color: ['unjoin', 'unknown'].includes(String(option.value)) ? token.colorText : undefined } }} />}</span>} />
           <Tooltip title="当前部门人数较多，列表中将只展示部门直属成员，不再展示子部门成员"
-            placement="top" destroyOnHidden open={memberScopeOpen && membersLimited && !keyword.trim()} styles={{ root: { maxWidth: 320 } }}>
+            placement="top" destroyOnHidden open={statusView === 'none' && memberScopeOpen && membersLimited && !keyword.trim()} styles={{ root: { maxWidth: 320 } }}>
           <span className="org-member-scope">
-          <Select aria-label="展示成员" onOpenChange={setMemberScopeOpen} value={descendants ? 'all' : 'direct'} disabled={!activeSummary}
+          <Select aria-label="展示成员" onOpenChange={setMemberScopeOpen} value={descendants ? 'all' : 'direct'} disabled={!activeSummary || statusView !== 'none'}
             onChange={value => setMemberChoice({ departmentId: selected, descendants: value === 'all' })} options={[
               { label: '部门直属成员', value: 'direct' }, { label: '部门全部成员', value: 'all', disabled: membersLimited }]} />
           </span></Tooltip>
@@ -260,6 +299,7 @@ export function OrganizationPage() {
         </Card>
       </div></div>
     <EmployeeDetailDrawer employeeId={employeeId} onClose={() => setEmployeeId(undefined)} />
+    <DepartmentDetailDrawer departmentId={departmentId} onClose={() => setDepartmentId(undefined)} />
     <Drawer className="tree-drawer" title="选择部门" placement="left" size={360} open={treeOpen} onClose={() => setTreeOpen(false)}>{treePanel}</Drawer>
     <OrganizationStoreEditor initial={editor} open={editorOpen} ready={tree.ready} onClose={() => setEditorOpen(false)} onConflict={recover}
       onRecheck={selection.details} onSaved={() => { tree.reload(); people.reload(); }} />

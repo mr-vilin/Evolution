@@ -24,12 +24,13 @@ def summary(dataset_epoch: str = Query(min_length=1), data_version: int = Query(
 @router.get('/employees')
 def employees(department_id: str, include_descendants: bool = False, keyword: str = Query('', max_length=255),
               account_status: str = Query('all', pattern='^(all|activated|unactivated|frozen|unjoin|unknown)$'),
+              view_status: str = Query('none', pattern='^(none|unactivated|unjoin|resigned)$'),
               limit: int = Query(20, ge=1, le=20), cursor: str | None = None,
               dataset_epoch: str = Query(min_length=1), data_version: int = Query(ge=0),
               identity=Depends(get_admin_identity), runtime=Depends(get_runtime)):
     data, meta = OrganizationService(runtime.sessions, runtime.reads).employees(
         department_id=department_id, include_descendants=include_descendants, keyword=keyword.strip(),
-        account_status=account_status, limit=limit, cursor=cursor,
+        account_status=account_status, view_status=view_status, limit=limit, cursor=cursor,
         dataset_epoch=dataset_epoch, data_version=data_version)
     return {'data': data, 'meta': meta}
 

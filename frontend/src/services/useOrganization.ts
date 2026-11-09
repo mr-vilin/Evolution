@@ -57,9 +57,10 @@ export function useOrganizationTree(includeInactive: boolean) {
   return { nodes, meta, branches, load, reload, ready: Boolean(meta.dataset_epoch && meta.data_version !== undefined) };
 }
 
-export function useOrganizationPeople(departmentId: string | undefined, descendants: boolean, keyword: string, accountStatus: string, meta: Meta) {
+export function useOrganizationPeople(departmentId: string | undefined, descendants: boolean, keyword: string, accountStatus: string, meta: Meta, viewStatus = 'none') {
   const [data, setData] = useState<Employee[]>([]);
   const [total, setTotal] = useState(0);
+  const [accountCounts, setAccountCounts] = useState<Record<string, number>>({});
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
@@ -69,7 +70,7 @@ export function useOrganizationPeople(departmentId: string | undefined, descenda
   const seenCursors = useRef(new Set<string>());
   const path = departmentId && meta.dataset_epoch && meta.data_version !== undefined
     ? '/admin/api/organization/employees' + query({ department_id: departmentId, include_descendants: descendants,
-      keyword: keyword.trim(), account_status: accountStatus, limit: 20, ...datasetQuery(meta) }) : null;
+      keyword: keyword.trim(), account_status: accountStatus, view_status: viewStatus, limit: 20, ...datasetQuery(meta) }) : null;
   const context = useRef({ path, meta });
   context.current = { path, meta };
   const read = useCallback(async (next?: string | null) => {
@@ -86,6 +87,7 @@ export function useOrganizationPeople(departmentId: string | undefined, descenda
       if (result.meta.next_cursor) seenCursors.current.add(result.meta.next_cursor);
       setData(previous => next ? [...new Map([...previous, ...result.data].map(row => [row.id, row])).values()] : result.data);
       setTotal(Number(result.meta.total_count ?? 0));
+      setAccountCounts((result.meta.account_status_counts as Record<string, number>) ?? {});
       setCursor(result.meta.next_cursor ?? null);
     } catch (reason) {
       if (stamp === generation.current) setError(asError(reason));
@@ -95,9 +97,9 @@ export function useOrganizationPeople(departmentId: string | undefined, descenda
   }, []);
   useEffect(() => {
     generation.current += 1; pending.current = false; seenCursors.current.clear();
-    setData([]); setTotal(0); setCursor(null); setError(null); setLoading(false);
+    setData([]); setTotal(0); setAccountCounts({}); setCursor(null); setError(null); setLoading(false);
     void read();
     return () => { generation.current += 1; };
   }, [path, revision, read]);
-  return { data, total, cursor, loading, error, path, more: () => read(cursor), reload: () => setRevision(value => value + 1) };
+  return { data, total, accountCounts, cursor, loading, error, path, more: () => read(cursor), reload: () => setRevision(value => value + 1) };
 }

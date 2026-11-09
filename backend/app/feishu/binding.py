@@ -20,6 +20,19 @@ def custom_attrs(sessions):
         return dict(row.custom_attrs or {}) if row else {}
 
 
+def normalize_employee_type_options(options):
+    if not isinstance(options, dict):
+        raise ValueError('VALIDATION_ERROR')
+    result = {}
+    for identifier, name in options.items():
+        if (not isinstance(identifier, str) or not identifier.strip() or len(identifier.strip()) > 191
+                or not isinstance(name, str) or not name.strip() or len(name.strip()) > 255
+                or identifier.strip() in result):
+            raise ValueError('VALIDATION_ERROR')
+        result[identifier.strip()] = name.strip()
+    return result
+
+
 def put_custom_attrs(sessions, value):
     if not isinstance(value, dict):
         raise ValueError('VALIDATION_ERROR')
@@ -29,6 +42,8 @@ def put_custom_attrs(sessions, value):
     for key in ('permission_role', 'store_attribute'):
         if key in value and value[key] is not None and (not isinstance(value[key], str) or not value[key].strip()):
             raise ValueError('VALIDATION_ERROR')
+    if 'employee_type_options' in value:
+        value = {**value, 'employee_type_options': normalize_employee_type_options(value['employee_type_options'])}
     with sessions.begin() as db:
         row = db.scalar(select(FeishuConnection).where(FeishuConnection.id == 1).with_for_update())
         if row is None:

@@ -161,6 +161,71 @@ def test_sibling_order_persists_without_changing_parent_and_rejects_stale_writes
     assert client.post('/admin/api/organization/order', json={**body, 'data_version': 2, 'department_id': 'c'}).status_code == 422
 
 
+def test_account_badges_follow_member_scope_without_search_or_status_filter(organization_client):
+    client, sessions = organization_client
+    with sessions.begin() as db:
+        db.add_all([
+            Employee(id='direct', feishu_user_id='direct', name='直属', is_activated=True, is_frozen=False,
+                     is_unjoin=False, is_resigned=False, is_exited=False),
+            Employee(id='child', feishu_user_id='child', name='下级', is_activated=False, is_frozen=True, is_unjoin=True),
+            Employee(id='past', feishu_user_id='past', name='历史', status='inactive', is_activated=False),
+        ])
+        db.flush()
+        db.add_all([EmployeeDepartment(employee_id='direct', department_id='a', active=True),
+                    EmployeeDepartment(employee_id='direct', department_id='c', active=True),
+                    EmployeeDepartment(employee_id='child', department_id='c', active=True),
+                    EmployeeDepartment(employee_id='past', department_id='a', active=False)])
+    params = dict(department_id='a', dataset_epoch='e', data_version=1)
+    def read(**extra):
+        return client.get('/admin/api/organization/employees', params={**params, **extra}).json()
+    direct = read()['meta']['account_status_counts']
+    assert direct == dict(activated=1, unactivated=0, frozen=0, unjoin=0, unknown=0)
+    complete = read(include_descendants=True)['meta']['account_status_counts']
+    assert complete == dict(activated=1, unactivated=1, frozen=1, unjoin=1, unknown=1)
+    assert read(include_descendants=True, account_status='activated', keyword='不存在')['meta']['account_status_counts'] == complete
+    # 普通搜索仍能找到下级；数标保持下拉框所选的直属范围。
+    searched = read(keyword='下级')
+    assert searched['meta']['total_count'] == 1
+    assert searched['meta']['account_status_counts'] == direct
+    assert read(department_id='x')['meta']['account_status_counts'] == dict.fromkeys(direct, 0)
+
+
+@pytest.mark.parametrize('view_status', ['unactivated', 'unjoin', 'resigned'])
+def test_panel_view_matches_global_summary_includes_history_and_pages(organization_client, view_status):
+    from app.persistence.models import DatasetState
+    client, sessions = organization_client
+    with sessions.begin() as db:
+        for index in range(45):
+            identifier = f'panel{index:02}'
+            db.add(Employee(id=identifier, feishu_user_id=identifier, name=f'状态人员{index}',
+                            status='inactive' if index % 2 else 'active',
+                            is_activated=False, is_unjoin=True, is_resigned=True))
+        db.add(Employee(id='unknown', feishu_user_id='unknown', name='未知'))
+    params = dict(department_id='0', dataset_epoch='e', data_version=1, view_status=view_status)
+    summary = client.get('/admin/api/organization/summary', params=params).json()['data']
+    pages, cursor = [], None
+    for expected in [20, 20, 5]:
+        response = client.get('/admin/api/organization/employees', params={**params, **({'cursor': cursor} if cursor else {})})
+        assert response.status_code == 200
+        result = response.json()
+        assert len(result['data']) == expected
+        assert result['meta']['total_count'] == summary[f'{view_status}_count'] == 45
+        pages.extend(result['data'])
+        cursor = result['meta']['next_cursor']
+    assert cursor is None and len({row['id'] for row in pages}) == 45
+    assert {row['status'] for row in pages} == {'active', 'inactive'}
+    searched = client.get('/admin/api/organization/employees', params={**params, 'keyword': 'panel01', 'account_status': 'activated'}).json()
+    assert [row['id'] for row in searched['data']] == ['panel01']
+    first = client.get('/admin/api/organization/employees', params=params).json()
+    assert client.get('/admin/api/organization/employees', params={**params, 'cursor': first['meta']['next_cursor'], 'view_status': 'none'}).status_code == 400
+    assert client.get('/admin/api/organization/employees', params={**params, 'data_version': 0}).status_code == 409
+    assert client.get('/admin/api/organization/employees', params={**params, 'view_status': 'other'}).status_code == 422
+    with sessions() as db:
+        assert db.get(DatasetState, 1).data_version == 1
+    del app.dependency_overrides[get_admin_identity]
+    assert client.get('/admin/api/organization/employees', params=params).status_code == 401
+
+
 def test_sync_preserves_local_order_appends_moves_and_keeps_raw_optional_facts(organization_client):
     from app.sync.collector import Collector
     from app.sync.publisher import Publisher

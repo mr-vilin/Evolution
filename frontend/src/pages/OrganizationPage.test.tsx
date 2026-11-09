@@ -188,7 +188,8 @@ it('20人默认全部成员，切换直属与人员搜索不改变固定部门�
   const summaryRequests = urls.filter(url => url.includes('/summary')).length;
   fireEvent.change(screen.getByPlaceholderText('搜索姓名、完整手机号或user_id'), { target: { value: '不存在' } });
   await waitFor(() => expect(urls.some(url => url.includes('keyword=' + encodeURIComponent('不存在')))).toBe(true));
-  expect(urls.filter(url => url.includes('/employees')).at(-1)).toContain('include_descendants=true');
+  // 展示范围保持直属；后端搜索独立扩展到下级。
+  expect(urls.filter(url => url.includes('/employees')).at(-1)).toContain('include_descendants=false');
   fireEvent.change(screen.getByPlaceholderText('搜索姓名、完整手机号或user_id'), { target: { value: '' } });
   await waitFor(() => expect(urls.filter(url => url.includes('/employees')).at(-1)).toContain('include_descendants=false'));
   expect(urls.filter(url => url.includes('/summary'))).toHaveLength(summaryRequests);
@@ -221,6 +222,101 @@ it('超过20人禁用全部成员并在下拉框上方提示，列表包含全�
   await userEvent.click(screen.getByRole('combobox', { name: '展示成员' }));
   expect((await screen.findByRole('tooltip')).textContent).toContain('当前部门人数较多，列表中将只展示部门直属成员，不再展示子部门成员');
   fireEvent.change(screen.getByPlaceholderText('搜索姓名、完整手机号或user_id'), { target: { value: '下级' } });
-  await waitFor(() => expect(urls.filter(url => url.includes('/employees')).at(-1)).toContain('include_descendants=true'));
+  await waitFor(() => expect(urls.filter(url => url.includes('/employees')).at(-1)).toContain('keyword=' + encodeURIComponent('下级')));
   await waitFor(() => expect(document.querySelector('.ant-tooltip:not(.ant-tooltip-hidden)')?.textContent ?? '').not.toContain('当前部门人数较多'), { timeout: 3000 });
 });
+
+it('部门下拉数标按成员范围更新，面板始终显示全组织汇总', async () => {
+  const summaryUrls: string[] = [];
+  vi.stubGlobal('fetch', async (url: string) => {
+    const params = new URL(url, 'http://local').searchParams;
+    if (url.includes('/organization/departments')) return envelope([department]);
+    if (url.includes('/organization/selection')) return envelope({ selected_ids: [], count: 0, states: {} });
+    if (url.includes('/organization/summary')) {
+      summaryUrls.push(url);
+      const root = params.get('department_id') === '0';
+      return envelope({ department_id: params.get('department_id'), department_count: root ? 99 : 2, employee_count: root ? 120 : 10,
+        unactivated_count: root ? 25 : 1, unjoin_count: root ? 4 : 0, resigned_count: root ? 3 : 0, member_count: root ? 120 : 10, members_limited: root });
+    }
+    if (url.includes('/organization/employees')) return envelope([], { total_count: 0, account_status_counts:
+      { activated: params.get('include_descendants') === 'true' ? 8 : 2, unactivated: 1, frozen: 0, unjoin: 0, unknown: 1 } });
+    throw new Error(url);
+  });
+  render(<App><MemoryRouter><OrganizationPage /></MemoryRouter></App>);
+  await userEvent.click(await screen.findByText('总部'));
+  await screen.findByRole('button', { name: '查看部门详情' });
+  expect(screen.getByRole('region', { name: '部门统计' }).textContent).toContain('总人数120');
+  expect(summaryUrls.filter(url => url.includes('department_id=0'))).toHaveLength(1);
+  await userEvent.click(screen.getByRole('combobox', { name: '账号状态' }));
+  await waitFor(() => expect(document.querySelector('.org-account-option')?.textContent).toBe('全部账号状态'));
+  expect(document.querySelectorAll('.org-account-option .ant-badge')).toHaveLength(5);
+  expect([...document.querySelectorAll('.org-account-option')].find(el => el.textContent?.startsWith('已激活'))?.textContent).toBe('已激活8');
+  await userEvent.click(screen.getByText('全部账号状态', { selector: '.org-account-option > span' }));
+  await userEvent.click(screen.getByRole('combobox', { name: '展示成员' }));
+  await userEvent.click(screen.getByText('部门直属成员', { selector: '.ant-select-item-option-content' }));
+  await userEvent.click(screen.getByRole('combobox', { name: '账号状态' }));
+  await waitFor(() => expect([...document.querySelectorAll('.org-account-option')].find(el => el.textContent?.startsWith('已激活'))?.textContent).toBe('已激活2'));
+  expect(screen.getByRole('region', { name: '部门统计' }).textContent).toContain('总人数120');
+});
+
+it('面板状态查看锁定筛选，20人滚动加载、状态内搜索，再次点击恢复本组织', async () => {
+  const urls: string[] = [];
+  const employees = Array.from({ length: 45 }, (_, i) => ({ id: `p${i}`, name: `面板人员${i}`, status: 'inactive' }));
+  let finishOld: ((response: Response) => void) | undefined;
+  vi.stubGlobal('fetch', async (url: string) => {
+    urls.push(url);
+    const params = new URL(url, 'http://local').searchParams;
+    if (url.includes('/organization/departments')) return envelope([department]);
+    if (url.includes('/organization/selection')) return envelope({ selected_ids: [], count: 0, states: {} });
+    if (url.includes('/organization/summary')) return envelope({ department_id: params.get('department_id'), department_count: 5,
+      employee_count: 45, unactivated_count: 45, unjoin_count: 1, resigned_count: 0, member_count: 45, members_limited: true });
+    if (url.includes('/organization/employees')) {
+      if (params.get('view_status') === 'unactivated') {
+        if (params.get('keyword') === '迟到') return new Promise<Response>(resolve => { finishOld = resolve; });
+        if (params.get('keyword')) return envelope([employees[3]], { total_count: 1 });
+        const offset = Number(params.get('cursor') || 0);
+        return envelope(employees.slice(offset, offset + 20), { total_count: 45, next_cursor: offset < 40 ? String(offset + 20) : null });
+      }
+      return envelope([], { total_count: 0 });
+    }
+    throw new Error(url);
+  });
+  render(<App><MemoryRouter><OrganizationPage /></MemoryRouter></App>);
+  await userEvent.click(await screen.findByText('总部'));
+  const view = screen.getByRole('button', { name: '查看未激活人员' });
+  await userEvent.hover(view);
+  expect((await screen.findByRole('tooltip')).textContent).toBe('查看全组织未激活人员');
+  await userEvent.click(view);
+  await screen.findByText('面板人员19');
+  expect(screen.getByRole('heading', { name: '未激活' })).toBeTruthy();
+  expect(screen.getByText('共45人')).toBeTruthy();
+  expect(view.getAttribute('aria-pressed')).toBe('true');
+  expect(view.closest('.org-stat-cell')?.classList.contains('org-stat-selected')).toBe(true);
+  expect((screen.getByRole('combobox', { name: '账号状态' }) as HTMLInputElement).disabled).toBe(true);
+  expect((screen.getByRole('combobox', { name: '展示成员' }) as HTMLInputElement).disabled).toBe(true);
+  expect(urls.filter(url => url.includes('/employees')).at(-1)).toContain('department_id=0');
+  const body = screen.getByRole('region', { name: '部门人员列表' }).querySelector('.ant-table-body')!;
+  fireEvent.scroll(body); await screen.findByText('面板人员39');
+  fireEvent.scroll(body); await screen.findByText('面板人员44');
+  const input = screen.getByPlaceholderText('搜索姓名、完整手机号或user_id');
+  fireEvent.change(input, { target: { value: '查找' } });
+  await screen.findByText('共1人');
+  expect(screen.queryByText('面板人员19')).toBeNull();
+  expect(urls.filter(url => url.includes('/employees')).at(-1)).toContain('view_status=unactivated');
+  fireEvent.change(input, { target: { value: '迟到' } });
+  await waitFor(() => expect(finishOld).toBeTruthy());
+  await userEvent.click(screen.getByRole('button', { name: '查看未加入人员' }));
+  await screen.findByRole('heading', { name: '未加入' });
+  await act(async () => { finishOld!(envelope([employees[44]], { total_count: 45, next_cursor: '20' })); });
+  expect(screen.queryByText('面板人员44')).toBeNull();
+  await userEvent.click(screen.getByRole('button', { name: '查看已离职人员' }));
+  await screen.findByRole('heading', { name: '已离职' });
+  expect(screen.getByText('共0人')).toBeTruthy();
+  await userEvent.click(screen.getByRole('button', { name: '查看已离职人员' }));
+  await screen.findByRole('heading', { name: '本组织' });
+  expect((screen.getByRole('combobox', { name: '账号状态' }) as HTMLInputElement).disabled).toBe(false);
+  expect((screen.getByRole('combobox', { name: '展示成员' }) as HTMLInputElement).disabled).toBe(false);
+  expect((input as HTMLInputElement).value).toBe('');
+  await waitFor(() => expect(urls.filter(url => url.includes('/employees')).at(-1)).toContain('view_status=none'));
+  expect(urls.filter(url => url.includes('/employees')).every(url => url.includes('limit=20'))).toBe(true);
+}, 120000);

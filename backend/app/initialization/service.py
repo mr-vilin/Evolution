@@ -151,9 +151,12 @@ class InitializationService:
                 raise InitializationFailure('VALIDATION_ERROR', '存在不支持的设置')
             if any(not isinstance(mappings.get(k), str) or not mappings[k].strip() for k in ('permission_role', 'store_attribute')):
                 raise InitializationFailure('VALIDATION_ERROR', '请填写两个自定义字段的 ID')
-            options = mappings.get('employee_type_options')
-            if not isinstance(options, dict) or any(not k or not isinstance(v, str) or not v.strip() for k, v in options.items()):
+            from app.feishu.binding import normalize_employee_type_options
+            try:
+                options = normalize_employee_type_options(mappings.get('employee_type_options'))
+            except ValueError:
                 raise InitializationFailure('VALIDATION_ERROR', '员工类型选项必须是标识与名称的对应表')
+            mappings = {**mappings, 'employee_type_options': options}
             connection.custom_attrs = mappings
             flow = {'flow_id': flow['flow_id'], 'phase': 'pending', 'checks': [], 'evidence': None}
             save_flow(db, flow)

@@ -48,6 +48,28 @@ def _custom_value(raw, field_id, allow_text=False):
 ACCOUNT_FLAGS = ('is_frozen', 'is_resigned', 'is_activated', 'is_exited', 'is_unjoin')
 
 
+def _employee_type(raw, mappings, known_options):
+    """飞书 employee_type 是数字 code；保留旧适配格式并使用配置中的显示名。"""
+    value = raw.get('employee_type')
+    if isinstance(value, dict):
+        identifier, name = value.get('id'), value.get('name')
+    elif 'employee_type' in raw:
+        identifier, name = value, None
+    else:
+        identifier, name = raw.get('employee_type_id'), raw.get('employee_type_name')
+    if identifier is not None and type(identifier) not in (str, int):
+        raise RuntimeError('FEISHU_EMPLOYEE_TYPE_UNREADABLE')
+    identifier = str(identifier) if identifier not in (None, '') else None
+    if identifier is not None and (not identifier.strip() or len(identifier) > 191):
+        raise RuntimeError('FEISHU_EMPLOYEE_TYPE_UNREADABLE')
+    if name is not None and (not isinstance(name, str) or len(name) > 255):
+        raise RuntimeError('FEISHU_EMPLOYEE_TYPE_UNREADABLE')
+    options = mappings.get('employee_type_options')
+    if options is not None:
+        return identifier, options.get(identifier), bool(identifier and identifier not in options)
+    return identifier, name if identifier else None, bool(identifier and known_options is not None and identifier not in known_options)
+
+
 def optional_user_facts(raw):
     """保留原始字段的缺省、可读空值和不可读，不从 SDK 类型推定权限。"""
     status = raw.get('status') if isinstance(raw.get('status'), dict) else {}
@@ -111,14 +133,8 @@ def normalize_user(raw, custom_mappings=None, employee_type_options=None):
     primaries = {order["department_id"] for order in (raw.get("orders") or []) if isinstance(order,dict) and order.get("is_primary_dept") is True and order.get("department_id")} if relations_readable else set()
     primary = next(iter(primaries)) if len(primaries) == 1 else None
     inconsistent = len(primaries) > 1 or (primary is not None and primary not in departments)
-    type_value = raw.get('employee_type')
-    type_id = type_value.get('id') if isinstance(type_value, dict) else raw.get('employee_type_id')
-    type_name = type_value.get('name') if isinstance(type_value, dict) else raw.get('employee_type_name')
-    if type_id and employee_type_options and type_id not in employee_type_options:
-        type_name, type_quality = type_name, 'unknown_option'
-    else:
-        type_quality = None
     mappings = custom_mappings or {}
+    type_id, type_name, type_quality = _employee_type(raw, mappings, employee_type_options)
     role_id, role_name, role_present = _custom_value(raw, mappings.get('permission_role'))
     store_id, store_name, store_present = _custom_value(raw, mappings.get('store_attribute'), allow_text=True)
     quality = 'pending_verification' if not relations_readable else 'inconsistent' if inconsistent else 'complete'

@@ -1,7 +1,8 @@
-import { App, Avatar, Button, Tag, Tooltip, theme } from 'antd';
-import { CopyOutlined, UserOutlined } from '@ant-design/icons';
+import { Avatar, Button, Tag, theme } from 'antd';
+import { UserOutlined } from '@ant-design/icons';
 import type { Employee } from '../domain';
 import { EmployeeValue } from './EmployeeValue';
+import { CopyValue } from './CopyValue';
 
 export function EmployeeIdentity({ name, avatar, onClick }: { name?: string | null; avatar?: string | null; onClick?: () => void }) {
   if (!name?.trim()) return <EmployeeValue />;
@@ -11,16 +12,8 @@ export function EmployeeIdentity({ name, avatar, onClick }: { name?: string | nu
 }
 
 export function CopyUserId({ employee }: { employee: Employee }) {
-  const { message } = App.useApp();
-  const { token } = theme.useToken();
-  const userId = employee.user_id;
-  async function copy() {
-    if (!userId) return;
-    try { await navigator.clipboard.writeText(userId); message.success('已复制'); }
-    catch { message.error('复制失败，请在详情中手动复制用户ID'); }
-  }
-  return <Tooltip title={userId ? '复制用户ID' : '用户ID未采集'}><Button type="text" size="small" className="employee-copy" style={{ color: token.colorTextTertiary, border: 0 }} icon={<CopyOutlined />}
-    aria-label={`复制${employee.name}的用户ID`} disabled={!userId} onClick={() => void copy()} /></Tooltip>;
+  return <CopyValue value={employee.user_id} label="用户ID" ariaLabel={`复制${employee.name}的用户ID`}
+    failureMessage="复制失败，请在详情中手动复制用户ID" />;
 }
 
 export function EmployeeAccountStatus({ employee }: { employee: Employee }) {

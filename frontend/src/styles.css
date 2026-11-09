@@ -28,6 +28,8 @@ body { margin: 0; color: #263449; background: #f5f7fa; }
 .org-company-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .org-stat-cell { padding: 16px; border-inline-end: 1px solid var(--org-border); }
 .org-stat-cell:last-child { border-inline-end: 0; }
+.org-stat-title { display: flex; align-items: center; gap: 4px; min-height: 24px; }
+.org-account-option { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .org-members-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-block: 12px; white-space: normal; font-weight: 400; }
 .org-department-heading { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; margin-inline-end: 8px; }
 .org-department-name { overflow-wrap: anywhere; }
@@ -49,7 +51,7 @@ body { margin: 0; color: #263449; background: #f5f7fa; }
 .employee-identity-button.ant-btn { height: auto; max-width: 100%; padding: 0; }
 .org-people-scroll .employee-name-cell .ant-btn { transition: none; }
 .org-people-scroll .employee-identity-button.ant-btn:not(:disabled):hover { color: var(--org-primary); background: transparent; }
-.org-people-scroll .employee-copy.ant-btn:not(:disabled):hover { background: transparent; }
+.employee-copy.ant-btn:not(:disabled):hover { background: transparent; }
 .employee-copy.ant-btn { width: auto; min-width: 0; padding-inline: 0; }
 .employee-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .employee-status-tags, .employee-detail-departments { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -59,6 +61,13 @@ body { margin: 0; color: #263449; background: #f5f7fa; }
 .employee-primary-department > .ant-typography { flex: none; }
 .employee-detail-departments .ant-tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .employee-show-more { padding-inline: 0; }
+.department-leaders-row { display: flex; align-items: center; gap: 16px; margin-top: 16px; }
+.department-leaders { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.department-person-chip { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 4px; max-width: 100%; }
+.department-person-chip .ant-avatar { flex: none; }
+.department-person-chip .ant-tag { margin-inline-end: 0; }
+.detail-copy-value { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
+.detail-copy-value > .employee-copy { flex: none; }
 .org-memberships-popover { max-width: min(480px, 75vw); max-height: 320px; overflow: auto; overflow-wrap: anywhere; margin: 0; padding-inline-start: 20px; }
 .org-memberships-popover li + li { margin-top: 8px; }
 @media (max-width: 600px) {

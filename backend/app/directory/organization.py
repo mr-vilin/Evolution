@@ -29,6 +29,32 @@ class OrganizationService:
                                     if include_descendants else EmployeeDepartment.department_id == department_id)
         return stmt.where(Employee.id.in_(relations))
 
+    @classmethod
+    def _summary_people(cls, department_id):
+        # 与面板相同：保留失效人员和历史部门关系，按人员去重。
+        stmt = select(Employee)
+        if department_id != '0':
+            relations = select(EmployeeDepartment.employee_id).where(
+                EmployeeDepartment.department_id.in_(select(cls._scope(department_id).c.id)))
+            stmt = stmt.where(Employee.id.in_(relations))
+        return stmt
+
+    @staticmethod
+    def _account_conditions():
+        return {'activated': Employee.is_activated.is_(True), 'unactivated': Employee.is_activated.is_(False),
+                'frozen': Employee.is_frozen.is_(True), 'unjoin': Employee.is_unjoin.is_(True),
+                'resigned': Employee.is_resigned.is_(True),
+                'unknown': or_(*(getattr(Employee, key).is_(None) for key in (
+                    'is_activated', 'is_frozen', 'is_unjoin', 'is_resigned', 'is_exited')))}
+
+    @classmethod
+    def _account_counts(cls, db, stmt):
+        # 独立事实可重叠；汇总不受当前状态选项、搜索词和分页影响。
+        aggregate = stmt.with_only_columns(*(
+            func.count(case((condition, 1))).label(key)
+            for key, condition in cls._account_conditions().items() if key != 'resigned'))
+        return dict(db.execute(aggregate).mappings().one())
+
     def summary(self, *, dataset_epoch, data_version, department_id='0'):
         """固定统计查看部门的完整子树；不受人员搜索、筛选及分页影响。"""
         with self.sessions() as db, db.begin():
@@ -37,13 +63,9 @@ class OrganizationService:
             scope = self._scope(department_id)
             departments = select(func.count()).select_from(Department).where(
                 Department.is_virtual_root.is_(False), Department.status == 'active')
-            people = select(Employee)
+            people = self._summary_people(department_id)
             if department_id != '0':
                 departments = departments.where(Department.id.in_(select(scope.c.id)))
-                # 历史关系用于部门汇总离职事实；当前成员列表仍只用有效关系。
-                relations = select(EmployeeDepartment.employee_id).where(
-                    EmployeeDepartment.department_id.in_(select(scope.c.id)))
-                people = people.where(Employee.id.in_(relations))
             facts = people.subquery()
             counts = db.execute(select(
                 func.count().label('employee_count'),
@@ -102,20 +124,19 @@ class OrganizationService:
             department_id = filters['department_id']
             member_count = db.scalar(select(func.count()).select_from(self._members(department_id, True).subquery()))
             keyword = filters.get('keyword', '').strip()
-            # 搜索覆盖当前部门及下级；无关键词浏览仍遵守 20 人范围限制。
-            include_descendants = bool(keyword) or (bool(filters.get('include_descendants')) and member_count <= 20)
-            stmt = self._members(department_id, include_descendants)
+            view_status = filters.get('view_status', 'none')
+            scope_descendants = bool(filters.get('include_descendants')) and member_count <= 20
+            # 面板查看与面板事实统计一致；普通搜索仍覆盖当前部门及下级。
+            include_descendants = view_status != 'none' or bool(keyword) or scope_descendants
+            stmt = (self._summary_people(department_id).where(self._account_conditions()[view_status])
+                    if view_status != 'none' else self._members(department_id, include_descendants))
+            account_counts = self._account_counts(db, self._members(department_id, scope_descendants))
             if keyword:
                 stmt = stmt.where(or_(Employee.name.contains(keyword, autoescape=True),
                                       Employee.mobile == keyword, Employee.feishu_user_id == keyword))
             account_status = filters.get('account_status', 'all')
-            if account_status == 'unknown':
-                stmt = stmt.where(or_(*(getattr(Employee, key).is_(None) for key in (
-                    'is_activated', 'is_frozen', 'is_unjoin', 'is_resigned', 'is_exited'))))
-            elif account_status != 'all':
-                column, expected = {'activated': (Employee.is_activated, True), 'unactivated': (Employee.is_activated, False),
-                                    'frozen': (Employee.is_frozen, True), 'unjoin': (Employee.is_unjoin, True)}[account_status]
-                stmt = stmt.where(column.is_(expected))
+            if view_status == 'none' and account_status != 'all':
+                stmt = stmt.where(self._account_conditions()[account_status])
             total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
             last = self.reads._last_id(state, 'organization-employees', filters)
             if last:
@@ -126,6 +147,7 @@ class OrganizationService:
             return [self.reads._employee(db, row) for row in page], {
                 **self.reads._meta(state, self.reads._next_cursor(state, 'organization-employees', filters, next_id)),
                 'total_count': total, 'include_descendants': include_descendants,
+                'account_status_counts': account_counts,
                 'members_limited': member_count > 20, 'member_count': member_count}
 
     def _details(self, db, rows, include_inactive=False):
