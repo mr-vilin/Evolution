@@ -251,6 +251,16 @@ codex mcp add organization-directory-cloud -- powershell.exe -NoProfile -File "D
 
 验证状态与 Docker Hub 网络限制见[迁移验收记录](../docs/architecture/ant-design-pro-migration-acceptance-2026-10-25.md)。
 
+## Python 本地打包与构建依赖
+
+`pip install --no-deps .` 仍会为 `pyproject.toml` 创建临时构建隔离环境并下载 `setuptools`；`--no-deps` 只跳过项目运行依赖，不跳过构建依赖。源码变化会重新执行这一步，可能在运行依赖已经安装后因 PyPI TLS 连接中断而失败；日志中的 `No matching distribution found for setuptools>=75` 在此前有 SSL 下载错误时不能直接认定为版本不存在。
+
+Docker 先按原 `backend/requirements.lock` 安装业务依赖，再通过独立的 `backend/requirements-build.lock` 固定构建工具版本和 wheel 的 SHA-256。构建工具层位于业务源码复制之前，pip 下载缓存由 BuildKit cache mount 保存（`organization-directory-pip-build`），缓存不写入运行镜像。变更构建工具时同步核对 `pyproject.toml` 的构建要求、Python 版本、发布文件及校验值。
+
+安装本地项目使用 `--no-build-isolation --check-build-dependencies --no-deps --no-index`，并由 Docker `RUN --network=none` 强制禁止联网；构建时同时验证依赖齐备与离线打包成功。构建工具的首次下载仍需正常的 HTTPS 网络，保留证书校验和现有包源。机制参见 [pip 官方构建隔离说明](https://pip.pypa.io/en/stable/reference/build-system/#disabling-build-isolation)与 [pip install 选项](https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-no-build-isolation)。
+
+复核使用 `backend/.venv/Scripts/python.exe deploy/release.py build`，只生成制品，不切换正在运行的服务。下载阶段持续出现 TLS EOF 时，仍需排查本机 Docker Desktop 到 PyPI 的网络／代理链路。
+
 ## 初始化向导迁移（0010）
 
 本节为执行手册，不代表已部署或已获得目标业务库执行授权。适用于 MySQL 8.4；迁移为 `backend/migrations/versions/0010_initialization_wizard.py`，沿用现有表、字段、中文注释、字符集、索引与约束。已确认流程与清理边界见[初始化实施记录](../docs/architecture/initialization-wizard-clarification-2026-10-26.md)。

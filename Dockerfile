@@ -21,9 +21,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/srv/backend:/srv
 WORKDIR /srv/backend
 COPY backend/requirements.lock ./
 RUN pip install --no-cache-dir -r requirements.lock
+COPY backend/requirements-build.lock ./
+# 构建工具独立锁定并缓存下载，不随业务源码变化重新解析隔离构建依赖。
+RUN --mount=type=cache,id=organization-directory-pip-build,target=/root/.cache/pip,sharing=locked \
+    python -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes -r requirements-build.lock
 COPY backend/ ./
 COPY --from=frontend /build/build-info.json /srv/backend/app/_build_info.json
-RUN pip install --no-cache-dir --no-deps .
+# 本地打包必须离线完成；校验已安装的构建依赖，不再创建在线构建隔离环境。
+RUN --network=none python -m pip install --disable-pip-version-check --no-cache-dir --no-deps --no-build-isolation --check-build-dependencies --no-index .
 COPY --from=frontend /build/frontend/dist /srv/frontend/dist
 COPY deploy/ /srv/deploy/
 RUN useradd --create-home --uid 10001 organization

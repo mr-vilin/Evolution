@@ -1,0 +1,4 @@
+# 本地项目打包工具，与 pyproject.toml 的 setuptools>=75 要求兼容。
+# 仅允许已核验的通用 wheel；业务依赖继续由 requirements.lock 管理。
+setuptools==84.2.1 \
+    --hash=sha256:ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2

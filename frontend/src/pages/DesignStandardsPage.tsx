@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { Alert, App, Badge, Button, ColorPicker, ConfigProvider, Input, Modal, Select, Space, Table, Tabs, Tag, theme } from 'antd';
+import { Alert, App, Avatar, Badge, Button, Checkbox, ColorPicker, ConfigProvider, Input, Modal, Popover, Select, Space, Table, Tabs, Tag, Tooltip, theme } from 'antd';
 import { CheckOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, LineChartOutlined, SmileOutlined, SunOutlined, SyncOutlined, UndoOutlined } from '@ant-design/icons';
 import reference from '../design/reference.json';
 import { useThemeColors } from '../theme/ThemeProvider';
@@ -15,11 +15,11 @@ for (const [name, after] of [['tooltip', 'button-default-hover'], ['badge-status
   componentOrder.splice(componentOrder.indexOf(name), 1);
   componentOrder.splice(componentOrder.indexOf(after) + 1, 0, name);
 }
-const sections = [['colors', '色彩体系'], ['typography', '字体层级'], ['layout', '布局'], ['geometry', '圆角与间距'], ['components', '组件样式'], ['notes', '设计说明'], ['custom', '主题预览'], ['source', '完整原文']];
+const sections = [['colors', '色彩体系'], ['typography', '字体层级'], ['layout', '布局'], ['geometry', '圆角与形状'], ['spacing', '间距应用'], ['components', '组件样式'], ['notes', '设计说明'], ['custom', '主题预览'], ['source', '完整原文']];
 const statusTypes = ['success', 'warning', 'error', 'processing', 'default'] as const;
 const statusIcons = [<CheckCircleOutlined />, <ExclamationCircleOutlined />, <CloseCircleOutlined />, <SyncOutlined spin />, <ClockCircleOutlined />];
 const entries = Object.entries;
-const remainingNotes = chapters.map((chapter, sourceIndex) => ({ ...chapter, sourceIndex })).slice(4);
+const remainingNotes = chapters.map((chapter, sourceIndex) => ({ ...chapter, sourceIndex })).slice(4).filter(chapter => chapter.sourceIndex !== 5);
 const typographyStyles = [
   { name: 'page-title', sample: '页面标题 · 标识当前页面，如组织架构、同步中心。', fontSize: '24px', lineHeight: '32px', fontWeight: 600, color: 'colorTextHeading' },
   { name: 'section-title', sample: '模块标题 · 说明这一区域的内容，如同步任务、成员详情。', fontSize: '16px', lineHeight: '24px', fontWeight: 600, color: 'colorTextHeading' },
@@ -143,9 +143,66 @@ function LayoutGuide() {
       <article><h4>内容表面</h4><p><strong>用在哪里：</strong>卡片、面板、表格和表单。</p><p><strong>什么时候用：</strong>内容需要持续展示或编辑时使用。优先用边框与色调对比区分区域，不给每张卡片都加阴影。</p></article>
       <article><h4>浮动表面</h4><p><strong>用在哪里：</strong>模态框、下拉菜单与弹出层。</p><p><strong>什么时候用：</strong>操作需要临时覆盖当前内容时使用。默认浅色主题下它与内容表面同色，通过阴影表达悬浮关系。</p></article>
     </div>
-    <div className="layout-rules"><h3>落到页面时这样选</h3><ol><li>先画页面背景，再按任务划分内容容器；需要临时选择、补充信息或确认时，再使用浮动组件。</li><li>普通内容优先依靠边框与色调对比建立层级，真正悬浮的表面才使用相应阴影；具体效果见下方“高度与深度”。</li><li>容器内边距、模块间隔和控件间隙对齐 4px 网格，从 4、8、16、24、32px 中选择；例如卡片内边距 24px、内部控件间隔 16px。具体刻度见下一节“圆角与间距”。</li><li>表面颜色读取主题中的对应角色，让它随主题联动；不要为了区分层级临时写死白色或浅灰色。浮层位置与交互交给对应组件处理。</li></ol></div>
+    <div className="layout-rules"><h3>落到页面时这样选</h3><ol><li>先画页面背景，再按任务划分内容容器；需要临时选择、补充信息或确认时，再使用浮动组件。</li><li>普通内容优先依靠边框与色调对比建立层级，真正悬浮的表面才使用相应阴影；具体效果见下方“高度与深度”。</li><li>容器内边距、模块间隔和控件间隙对齐 4px 网格，从 4、8、16、24、32px 中选择；例如卡片内边距 24px、内部控件间隔 16px。具体刻度见“间距应用”。</li><li>表面颜色读取主题中的对应角色，让它随主题联动；不要为了区分层级临时写死白色或浅灰色。浮层位置与交互交给对应组件处理。</li></ol></div>
     
   </div>;
+}
+
+function RadiusSmallExamples() {
+  return <>
+    <div className="radius-tag-example"><Tag color="blue">研发部</Tag><span className="radius-caption">分类标签 · 4px</span></div>
+    <div className="radius-popup-examples">
+      <div className="radius-popup-example"><span className="radius-field-label">文字提示浮层（Tooltip）· 4px</span>
+        <div className="radius-popup-stage"><Tooltip title="部门名称用于识别成员所属组织" open arrow placement="top" autoAdjustOverflow={false} trigger={[]} getPopupContainer={trigger => trigger.parentElement!} styles={{ root: { maxWidth: '100%' } }}><span aria-hidden="true" /></Tooltip></div>
+      </div>
+      <div className="radius-popup-example"><span className="radius-field-label">气泡卡片浮层（Popover）· 4px</span>
+        <div className="radius-popup-stage"><Popover title="部门说明" content="用于归类成员，便于按部门筛选。" open arrow placement="top" autoAdjustOverflow={false} trigger={[]} getPopupContainer={trigger => trigger.parentElement!} styles={{ root: { maxWidth: '100%' } }}><span aria-hidden="true" /></Popover></div>
+      </div>
+    </div>
+    <p className="radius-small-explanation">文字提示用于简短解释，气泡卡片可包含标题和更多内容。</p>
+  </>;
+}
+
+function RadiusGuide() {
+  const { token } = theme.useToken();
+  const avatarStyle: CSSProperties = { borderRadius: data.rounded.full, background: token.colorPrimary, color: token.colorTextLightSolid };
+  const applications = [
+    { name: '内部拼接', rounded: 'none' as const, usage: '表格内部、分段控件的相邻边缘。连续内容的接缝使用直角，外部容器可按所属类别保留圆角。',
+      sample: <><div className="radius-table-shell"><table className="radius-table" aria-label="表格内部直角拼接示例"><thead><tr><th scope="col">成员</th><th scope="col">部门</th></tr></thead><tbody><tr><td>林晓</td><td>研发部</td></tr></tbody></table></div><p className="radius-caption">内部单元格接缝 0px · 外部容器 8px</p></> },
+    { name: '复选框', rounded: 'sm' as const, usage: '复选框的方框使用 2px 圆角。用于勾选筛选条件或选择多项内容，选中和未选中时保持一致的轮廓。',
+      sample: <div className="radius-checkbox-examples"><Checkbox defaultChecked>包含子部门</Checkbox><Checkbox>仅显示负责人</Checkbox></div> },
+    { name: '小型元素', rounded: 'md' as const, usage: '分类标签、小 chip、文字提示（Tooltip）和气泡卡片（Popover）。用于分类和补充说明；标签与浮层的外框使用 4px 圆角。',
+      sample: <RadiusSmallExamples /> },
+    { name: '默认控件与多选项', rounded: 'DEFAULT' as const, usage: '按钮、输入框、选择器和下拉触发器，以及多选器内的已选项。用于查询、录入与选择，控件外框和多选已选项均为 6px 圆角。',
+      sample: <><div className="radius-controls"><Input aria-label="圆角示例姓名搜索" placeholder="搜索姓名" /><Select aria-label="圆角示例部门选择" defaultValue="all" options={[{ value: 'all', label: '全部部门' }, { value: 'engineering', label: '研发部' }]} /><Button>查询成员</Button></div><div className="radius-multiple-example"><label htmlFor="radius-selected-members" className="radius-field-label">多选成员 · 已选项 6px</label><Select id="radius-selected-members" mode="multiple" defaultValue={['lin', 'chen', 'zhou']} options={[{ value: 'lin', label: '林晓' }, { value: 'chen', label: '陈晨' }, { value: 'zhou', label: '周宁' }, { value: 'wang', label: '王悦' }]} /></div></> },
+    { name: '内容表面', rounded: 'lg' as const, usage: '卡片、弹窗、抽屉和通知。用于承载一组相关内容，或提供临时确认与反馈。',
+      sample: <div className="radius-surface-example"><h4>部门信息卡片</h4><p>研发部 · 成员与组织资料</p></div> },
+    { name: '圆形元素', rounded: 'full' as const, usage: '圆形头像、徽标和状态圆点。宽高相等时形成圆形；全圆角不用于普通按钮或分类标签。',
+      sample: <div className="radius-round-examples">
+        <div className="radius-round-member"><Avatar aria-label="圆形成员头像示例" style={avatarStyle}>林</Avatar><span>林晓</span></div>
+        <div role="group" aria-label="成员头像叠加示例：林晓、陈晨、周宁"><Avatar.Group>{['林晓', '陈晨', '周宁'].map(name => <Avatar key={name} aria-label={name} style={avatarStyle}>{name[0]}</Avatar>)}</Avatar.Group></div>
+        <Badge status="success" text="同步成功" />
+      </div> },
+  ];
+  return <ConfigProvider theme={{ token: { borderRadius: parseFloat(data.rounded.DEFAULT), borderRadiusSM: parseFloat(data.rounded.md), borderRadiusLG: parseFloat(data.rounded.lg) }, components: { Checkbox: { borderRadiusSM: parseFloat(data.rounded.sm) }, Select: { borderRadiusSM: parseFloat(data.rounded.DEFAULT) }, Tooltip: { borderRadius: parseFloat(data.rounded.md) }, Popover: { borderRadiusLG: parseFloat(data.rounded.md) } } }}>
+    <div className="panel radius-guide">
+      <div id="note-5" className="radius-intro"><h3>按元素用途选择圆角</h3><p>默认圆角为 6px，兼顾友好感与密集表单的清晰轮廓。下方案例按 0px、2px、4px、6px、8px、full 排列，根据元素用途选择对应标准。</p></div>
+      <div className="radius-applications">{applications.map(item => <article className="radius-application" key={item.rounded}>
+        <div className="radius-standard"><strong>{item.rounded === 'full' ? 'full' : data.rounded[item.rounded]}</strong><code>rounded.{item.rounded}</code>{item.rounded === 'full' && <span>{data.rounded.full}</span>}</div>
+        <div className="radius-usage"><h4>{item.name}</h4><p>{item.usage}</p></div>
+        <div className="radius-example">{item.sample}</div>
+      </article>)}</div>
+      <div className="radius-composition"><h3>在一张部门信息卡片中组合使用</h3><div className="radius-composition-grid">
+        <div className="radius-composite-card"><header><h4>部门信息卡片</h4><span className="radius-caption">外框 · 8px</span></header>
+          <div className="radius-member"><Avatar aria-label="卡片内圆形成员头像示例" style={{ borderRadius: data.rounded.full, background: token.colorPrimary, color: token.colorTextLightSolid }}>林</Avatar><div><span>林晓 · 示例成员</span><p className="radius-caption">头像 · 圆形</p></div><div className="radius-member-tag"><Tag color="blue">研发部</Tag><p className="radius-caption">标签 · 4px</p></div></div>
+          <div className="radius-composite-controls"><label htmlFor="radius-member-name">姓名 · 6px<Input id="radius-member-name" placeholder="搜索姓名" /></label><label htmlFor="radius-member-department">部门 · 6px<Select id="radius-member-department" defaultValue="engineering" options={[{ value: 'engineering', label: '研发部' }, { value: 'product', label: '产品部' }]} /></label><div><span className="radius-field-label">按钮 · 6px</span><Button type="primary">查询成员</Button></div></div>
+          <div className="radius-composite-status"><Badge status="success" text="同步成功" /><span className="radius-caption">状态点 · 圆形</span></div>
+        </div>
+        <div className="radius-combination-rules"><h4>组合时这样选</h4><ul><li>同类控件保持一致，例如输入框、选择器与按钮均为 6px。</li><li>不同类别按用途组合：卡片 8px、控件 6px、标签 4px，头像与状态点为圆形。</li><li>全圆角仅用于头像、徽标和圆点；表格内部拼接使用 0px。</li></ul><div className="radius-bad-example"><span>不推荐 · 圆角关系不一致</span><div className="radius-bad-card"><span className="radius-caption">卡片 8px</span><Button style={{ borderRadius: data.rounded.xl }}>按钮 16px</Button></div></div></div>
+      </div></div>
+      <div className="radius-reference"><h3>完整圆角刻度</h3><p>七档刻度按数值从小到大排列。16px 当前未指定常规应用场景；日常界面优先按上方用途选择。</p><div className="shape-grid">{entries(data.rounded).sort(([, left], [, right]) => parseFloat(left) - parseFloat(right)).map(([name, value]) => <div className="shape-item" key={name}><div className="shape" style={{ borderRadius: value }} aria-hidden="true" /><code>{name}</code><code>{value}</code>{name === 'xl' && <span className="radius-caption">未指定常规场景</span>}</div>)}</div></div>
+    </div>
+  </ConfigProvider>;
 }
 
 function NoteVisual({ index }: { index: number }) {
@@ -154,7 +211,6 @@ function NoteVisual({ index }: { index: number }) {
   const [localColor, setLocalColor] = useState(colors.primary);
   const [playing, setPlaying] = useState(0);
   if (index === 4) return <><div className="mini-grid three">{['扁平表面 · 边框分层', 'boxShadowTertiary', 'boxShadow / boxShadowSecondary'].map((name, i) => <div key={name}><span className="mini-label">{name}</span><div className="shadow-stage"><div className="shadow-sample" style={{ boxShadow: [undefined, token.boxShadowTertiary, token.boxShadowSecondary][i] }}>{['平面容器', '轻型抬升', '浮动表面'][i]}</div></div></div>)}</div><div className="motion-box"><div className="motion-head"><h4>动效时长</h4><Button onClick={() => setPlaying(value => value + 1)}>播放动效</Button></div>{[100, 200, 300].map((ms, i) => <div className="motion-row" key={ms}><code>{['motionDurationFast', 'motionDurationMid', 'motionDurationSlow'][i]}</code><div className="motion-track"><div key={playing} className={`motion-dot${playing ? ' playing' : ''}`} style={{ animationDuration: `${ms * 2}ms` }} /></div><span>{ms / 1000} s</span></div>)}</div></>;
-  if (index === 5) return <><div className="mini-grid three"><div className="mini-card"><span className="mini-label">控件 · 6 px</span><Space><Button>按钮</Button><Select defaultValue="选择器" options={[{ value: '选择器' }]} /></Space></div><div className="mini-card"><span className="mini-label">标签与文字提示 · 4 px</span><Tag>分类标签</Tag></div><div className="mini-card"><span className="mini-label">圆形头像与圆点 · 9999 px</span><span className="avatar-demo">A</span></div></div><div className="shape-shell" style={{ marginTop: 16 }}><span>表面圆角 8 px · 内边距 24 px</span><Button>内部控件圆角 6 px</Button></div></>;
   if (index === 6) return <LivePreview />;
   if (index === 7) return <div className="rule-demo"><div className="rule-half"><h4><span className="verdict">✓</span>应该</h4><Space><Button type="primary">保存</Button><Button>取消</Button></Space><p className="visual-caption">一个决策保留一个主导操作。</p></div><div className="rule-half"><h4><span className="verdict no">×</span>不要</h4><Space><Button type="primary">保存</Button><Button type="primary">取消</Button></Space><p className="visual-caption">两个同等强调的操作争夺注意力。</p></div></div>;
   return <><div className="theme-controls"><span>局部主色示例</span><ColorPicker value={localColor} disabledAlpha onChange={color => setLocalColor(color.toHexString())} showText /><Button onClick={() => setLocalColor(colors.primary)}>恢复示例</Button></div><div className="theme-scope"><div className="scope-title">外层主题作用域</div><Button type="primary">主要操作</Button><ConfigProvider theme={{ token: { colorPrimary: localColor } }}><div className="theme-scope nested"><div className="scope-title">局部主题作用域</div><Button type="primary">局部操作</Button></div></ConfigProvider></div><p className="visual-caption">此处展示局部主题继承；全系统颜色请在上方「色彩职责」中调整。</p></>;
@@ -198,11 +254,12 @@ export default function DesignStandardsPage() {
       <div>斜体仅在长篇文档正文中可接受。选中/激活状态的视觉强调来自颜色和描边（边框、下划线），而不是字重。</div>
       <code>字体栈：{data.typography['body-md'].fontFamily}</code></div></div></Section>
     <Section id="layout" index="03" title="布局" caption="三层表面 · 使用位置与选择方法"><LayoutGuide /></Section>
-    <Section id="geometry" index="04" title="圆角与间距" caption="4 px 网格与形状体系"><div className="two-columns"><div className="panel"><div className="subhead"><h3>圆角</h3></div><div className="shape-grid">{entries(data.rounded).map(([name, value]) => <div className="shape-item" key={name}><div className="shape" style={{ borderRadius: value }} /><code>{name}</code><code>{value}</code></div>)}</div></div><div className="panel"><div className="subhead"><h3>间距</h3></div><div className="space-list">{entries(data.spacing).map(([name, value]) => <div className="space-row" key={name}><code>{name}</code><div className="space-track"><div className="space-bar" style={{ width: name === 'control-height' ? 64 : value, height: name === 'control-height' ? value : undefined }} /></div><code>{value}</code></div>)}</div></div></div></Section>
-    <Section id="components" index="05" title="组件样式" caption={`${componentOrder.length} 项 · 含状态样例`}><div className="component-grid">{componentOrder.map(name => <Specimen key={name} name={name} />)}</div></Section>
-    <Section id="notes" index="06" title="设计说明" caption="原文说明与视觉展示"><div className="notes-intro"><p>价值观见页首，色彩、字体与布局见上方对应模块。以下保留高度与深度、形状、组件、应该做与不要做、定制五章的样例与原文说明。</p><strong>完整原文可在页面末尾查看与下载</strong></div><div className="notes-jumps">{remainingNotes.map(chapter => <a href={`#note-${chapter.sourceIndex}`} key={chapter.title}>{chapter.title}</a>)}</div><div className="notes-list">{remainingNotes.map((chapter, index) => <article id={`note-${chapter.sourceIndex}`} className="panel note-module" key={chapter.title}><header><h3>{chapter.title}</h3><code>{String(index + 1).padStart(2, '0')} / {String(remainingNotes.length).padStart(2, '0')}</code></header><div className="note-visual"><NoteVisual index={chapter.sourceIndex} /></div><details className="note-reading" open><summary>完整原文说明 · {chapter.paragraphs.length} 段</summary><div className="note-paragraphs">{chapter.paragraphs.map((text, i) => <p key={i}>{text}</p>)}</div></details></article>)}</div></Section>
-    <Section id="custom" index="07" title="主题预览" caption="与全系统共享当前颜色"><div className="panel"><LivePreview /></div></Section>
-    <Section id="source" index="08" title="完整原文" caption="准则文件完整收录"><div className="panel source-panel"><details><summary>展开查看完整准则</summary><pre>{raw.original || raw.error || '正在读取原文…'}</pre></details><div className="integrity">原文版本：{data.version}　名称：{data.name}<br />SHA-256：<code>{reference.sha256}</code></div><a className="action" href="/design-standards/ant-design-original.yaml" download>下载准则原文 ↓</a><div className="attachment-source"><div className="attachment-actions"><h3>补充设计说明 · 完整附件</h3><a className="action" href="/design-standards/ant-design-design-notes.md" download>下载补充原文 ↓</a></div><details><summary>展开查看补充原文（完整保留）</summary><pre>{raw.notes || raw.error || '正在读取原文…'}</pre></details><div className="integrity">SHA-256：<code>{reference.notesSha256}</code></div></div></div></Section>
+    <Section id="geometry" index="04" title="圆角与形状" caption="数值标准 · 适用场景 · 组合示例"><RadiusGuide /></Section>
+    <Section id="spacing" index="05" title="间距应用" caption="4 px 网格与间距刻度"><div className="panel"><div className="subhead"><h3>间距</h3></div><div className="space-list">{entries(data.spacing).map(([name, value]) => <div className="space-row" key={name}><code>{name}</code><div className="space-track"><div className="space-bar" style={{ width: name === 'control-height' ? 64 : value, height: name === 'control-height' ? value : undefined }} /></div><code>{value}</code></div>)}</div></div></Section>
+    <Section id="components" index="06" title="组件样式" caption={`${componentOrder.length} 项 · 含状态样例`}><div className="component-grid">{componentOrder.map(name => <Specimen key={name} name={name} />)}</div></Section>
+    <Section id="notes" index="07" title="设计说明" caption="原文说明与视觉展示"><div className="notes-intro"><p>价值观见页首，色彩、字体、布局、圆角与形状及间距见上方对应模块。以下保留高度与深度、组件、应该做与不要做、定制四章的样例与原文说明。</p><strong>完整原文可在页面末尾查看与下载</strong></div><div className="notes-jumps">{remainingNotes.map(chapter => <a href={`#note-${chapter.sourceIndex}`} key={chapter.title}>{chapter.title}</a>)}</div><div className="notes-list">{remainingNotes.map((chapter, index) => <article id={`note-${chapter.sourceIndex}`} className="panel note-module" key={chapter.title}><header><h3>{chapter.title}</h3><code>{String(index + 1).padStart(2, '0')} / {String(remainingNotes.length).padStart(2, '0')}</code></header><div className="note-visual"><NoteVisual index={chapter.sourceIndex} /></div><details className="note-reading" open><summary>完整原文说明 · {chapter.paragraphs.length} 段</summary><div className="note-paragraphs">{chapter.paragraphs.map((text, i) => <p key={i}>{text}</p>)}</div></details></article>)}</div></Section>
+    <Section id="custom" index="08" title="主题预览" caption="与全系统共享当前颜色"><div className="panel"><LivePreview /></div></Section>
+    <Section id="source" index="09" title="完整原文" caption="准则文件完整收录"><div className="panel source-panel"><details><summary>展开查看完整准则</summary><pre>{raw.original || raw.error || '正在读取原文…'}</pre></details><div className="integrity">原文版本：{data.version}　名称：{data.name}<br />SHA-256：<code>{reference.sha256}</code></div><a className="action" href="/design-standards/ant-design-original.yaml" download>下载准则原文 ↓</a><div className="attachment-source"><div className="attachment-actions"><h3>补充设计说明 · 完整附件</h3><a className="action" href="/design-standards/ant-design-design-notes.md" download>下载补充原文 ↓</a></div><details><summary>展开查看补充原文（完整保留）</summary><pre>{raw.notes || raw.error || '正在读取原文…'}</pre></details><div className="integrity">SHA-256：<code>{reference.notesSha256}</code></div></div></div></Section>
     <footer className="page-foot"><span>Ant Design · 设计准则参考</span><span>Ant Design 默认准则与通用色彩职责</span></footer>
   </main></div>;
 }
