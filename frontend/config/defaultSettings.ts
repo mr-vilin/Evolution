@@ -11,6 +11,5 @@ const settings: ProLayoutProps = {
   fixSiderbar: true,
   siderWidth: 208,
   logo: '/branding/logo.svg',
-  colorPrimary: '#1677ff',
 };
 export default settings;

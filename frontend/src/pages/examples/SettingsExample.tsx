@@ -24,7 +24,7 @@ export default function SettingsExample() {
         <Form.Item name="phone" label="联系电话（演示）" rules={[{ pattern: /^1\d{10}$/, message: '请输入 11 位演示手机号' }]}><Input maxLength={11} placeholder="请勿输入真实电话" /></Form.Item>
         <Space><Button type="primary" htmlType="submit">保存演示资料</Button><Button onClick={() => { form.resetFields(); setProfile(sample); setSaved(false); }}>恢复演示资料</Button></Space>
       </Form>
-      <Descriptions className="block-gap" column={1} items={[{ key: 'name', label: '昵称', children: profile.name }, { key: 'email', label: '邮箱', children: profile.email }, { key: 'bio', label: '简介', children: profile.bio || '暂无简介' }]} />{saved && <Alert title="演示资料已保存，仅当前页面有效" type="success" showIcon />}</div><div className="demo-avatar-profile"><p>头像</p><Avatar size={128} style={{ background: avatar ? '#13c2c2' : '#1677ff' }}>{avatar ? '样本' : '演示'}</Avatar><p><Button onClick={() => setAvatar(value => !value)}>更换演示头像</Button></p></div></div>;
+      <Descriptions className="block-gap" column={1} items={[{ key: 'name', label: '昵称', children: profile.name }, { key: 'email', label: '邮箱', children: profile.email }, { key: 'bio', label: '简介', children: profile.bio || '暂无简介' }]} />{saved && <Alert title="演示资料已保存，仅当前页面有效" type="success" showIcon />}</div><div className="demo-avatar-profile"><p>头像</p><Avatar size={128} style={{ background: avatar ? 'var(--app-auxiliary)' : 'var(--app-primary)' }}>{avatar ? '样本' : '演示'}</Avatar><p><Button onClick={() => setAvatar(value => !value)}>更换演示头像</Button></p></div></div>;
   return <ExampleFrame title="个人设置" description="基本设置、安全设置、账户绑定和新消息通知均为页面内演示。">
     <Card><Tabs tabPlacement="start" className="demo-settings-tabs" items={[
       { key: 'base', label: '基本设置', children: base },

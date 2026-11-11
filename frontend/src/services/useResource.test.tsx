@@ -28,3 +28,21 @@ it('错误后重试成功会清除旧错误', async () => {
   await waitFor(() => expect(result.current.data).toEqual([1]));
   expect(result.current.error).toBeNull();
 });
+
+it('轮询保留上次结果，但切换资源立即清除旧数据', async () => {
+  let resolveReload!: (value: Response) => void;
+  let reads = 0;
+  vi.stubGlobal('fetch', async (path: string) => {
+    reads += 1;
+    if (reads > 1) return new Promise<Response>(resolve => { resolveReload = resolve; });
+    return Response.json({ data: path, meta: {} });
+  });
+  const { result, rerender } = renderHook(({ path }) => useResource<string>(path, true), { initialProps: { path: '/first' } });
+  await waitFor(() => expect(result.current.data).toBe('/first'));
+  act(() => result.current.reload());
+  expect(result.current.data).toBe('/first');
+  rerender({ path: '/second' });
+  expect(result.current.data).toBeNull();
+  await act(async () => resolveReload(Response.json({ data: '/second', meta: {} })));
+  expect(result.current.data).toBe('/second');
+});

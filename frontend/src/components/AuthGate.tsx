@@ -24,8 +24,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (session.loading || !session.error) return <div style={{ padding: '25vh 24px', textAlign: 'center' }}><Spin size="large" /><p>正在验证管理员身份…</p></div>;
   const needsLogin = session.error.status === 401;
   const forbidden = session.error.status === 403;
-  return <main className="login-page" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f5f7fa', padding: 24 }}>
-    <div style={{ width: 'min(560px, 100%)', background: '#fff', borderRadius: 12, padding: '24px 8px', border: '1px solid #e7eaf0' }}>
+  return <main className="login-page" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--app-canvas)', padding: 24 }}>
+    <div style={{ width: 'min(560px, 100%)', background: 'var(--app-surface)', borderRadius: 12, padding: '24px 8px', border: '1px solid var(--app-line)' }}>
       <Result
         icon={needsLogin ? <img src="/branding/logo.svg" alt="组织服务 Logo" width={64} height={64} /> : undefined}
         status={needsLogin ? 'info' : forbidden ? '403' : 'warning'}

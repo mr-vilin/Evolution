@@ -241,6 +241,12 @@ codex mcp add organization-directory-cloud -- powershell.exe -NoProfile -File "D
 
 前端采用 Umi Max 4.7.23、Utoopack 和 ProComponents 3.1.14-2（预发布），沿用 Node 24 多阶段构建及 Python 3.13 单应用镜像。Docker 在复制前端、版本脚本和版本声明后执行严格 `npm ci`，postinstall 生成 Umi 类型；不复制宿主机 `.umi` 和缓存。`ORG_BUILD_INFO_FILE` 继续把同一份元信息交给前后端。
 
+构建中的 npm 下载缓存由 BuildKit 的 cache mount 保存在构建器中（`organization-directory-npm`，挂载 `/root/.npm`）；源码改动或一次安装失败后可复用已完成的下载，不将缓存写入运行镜像。安装仍按锁文件执行严格 peer 检查和可选依赖安装，并保留 postinstall 与 Utoopack 原生模块加载检查。
+
+`scripts/install-frontend.mjs` 保留 npm 单请求下载重试，并在 npm 最终错误码明确为连接重置、超时或临时网络故障时，最多执行三次整次安装（间隔 5 秒、10 秒）。依赖冲突、生命周期脚本失败、进程信号中断不进行整次重试；耗尽后保留失败退出码。不会自动换包源、关闭 TLS 校验、升级 npm 或更新锁文件。持续报网络错误时需检查 Docker Desktop 的网络／代理链路；单次 `ECONNRESET` 不能据此确定具体断连方。
+
+遇到 `npm error code ECONNRESET`、`npm error network aborted` 时，说明依赖下载被中断；deprecated 警告不是本次退出原因。仅复核构建使用 `backend/.venv/Scripts/python.exe deploy/release.py build`，不会切换运行服务；部署仍使用既定流程和当前授权范围。重试与断连回归运行 `node --test scripts/install-frontend.test.mjs`。缓存机制参见 [Docker 官方构建缓存说明](https://docs.docker.com/build/cache/optimize/#use-cache-mounts)，npm 单请求重试配置参见 [npm 官方配置说明](https://docs.npmjs.com/cli/v11/using-npm/config/#fetch-retries)。
+
 静态入口支持根级与子目录 JS/CSS/chunk、字体、图片和 `build-info.json`，检查解析后的目录边界；入口和元信息使用 `no-cache`，缺失资源及保留 API/认证路径返回 404，业务导航回退到 index.html。回滚必须使用配套的完整镜像，同时回退入口、chunk 和元信息；无需数据库迁移。
 
 验证状态与 Docker Hub 网络限制见[迁移验收记录](../docs/architecture/ant-design-pro-migration-acceptance-2026-10-25.md)。

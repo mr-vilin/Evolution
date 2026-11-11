@@ -38,12 +38,13 @@ const accountOptions = [
   { label: '全部账号状态', value: 'all' }, { label: '已激活', value: 'activated' }, { label: '未激活', value: 'unactivated' },
   { label: '已暂停', value: 'frozen' }, { label: '未加入', value: 'unjoin' }, { label: '状态未知', value: 'unknown' },
 ];
-const accountBadgeColors: Record<string, string> = {
-  activated: '#52C41A', unactivated: '#FAAD14', frozen: '#FF4D4F', unjoin: '#F5F5F5', unknown: '#F5F5F5',
-};
 export function OrganizationPage() {
   const { message } = App.useApp();
   const { token } = theme.useToken();
+  const accountBadgeColors: Record<string, string> = {
+    activated: token.colorSuccess, unactivated: token.colorWarning, frozen: token.colorError,
+    unjoin: token.colorBgLayout, unknown: token.colorBgLayout,
+  };
   const compactColumns = Grid.useBreakpoint().xs === true;
   const navigate = useNavigate();
   const [employeeId, setEmployeeId] = useState<string>();
@@ -187,7 +188,7 @@ export function OrganizationPage() {
   async function subtreeSync() {
     if (!selected || selected === '0') return;
     setSyncing(true);
-    try { const result = await request<{ job_id: string; reused?: boolean }>('/admin/api/sync/jobs', { method: 'POST', body: { type: 'subtree', root_department_id: selected } }); message.success(result.data.reused ? `复用任务 #${result.data.job_id}` : `已创建任务 #${result.data.job_id}`); navigate(`/sync?job=${encodeURIComponent(result.data.job_id)}`); }
+    try { const result = await request<{ job_id: string; reused?: boolean }>('/admin/api/sync/jobs', { method: 'POST', body: { type: 'subtree', root_department_id: selected } }); message.success(result.data.reused ? '已打开相同范围的活动任务' : '局部同步任务已创建'); navigate(`/sync/jobs/${encodeURIComponent(result.data.job_id)}`); }
     catch (reason) { message.error(reason instanceof Error ? reason.message : '创建任务失败'); }
     finally { setSyncing(false); }
   }

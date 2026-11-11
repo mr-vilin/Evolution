@@ -1,4 +1,4 @@
-"""完整采集候选；分页异常向上抛出，绝不返回半轮结果。"""
+"""采集完整候选；普通同步可在采集中提交独立批次，分页异常仍向上抛出。"""
 from dataclasses import dataclass, field
 from datetime import datetime,timezone
 from urllib.parse import urlsplit
@@ -162,10 +162,19 @@ class Collector:
         self.custom_mappings = custom_mappings or {}
         self.employee_type_options = employee_type_options
         self.progress=progress
+        self.on_batch = None
+        self.discovered_employees = None
 
     def _progress(self,phase,result):
+        if self.on_batch:
+            self.on_batch(result)
         if self.progress:
-            self.progress(phase=phase,departments_processed=len(result.departments),employees_processed=len(result.employees),departments_total=None,employees_total=None)
+            departments = len(set(result.departments) | {key for kind, key in result.pending if kind == 'department'})
+            employees = len(set(result.employees) | {key for kind, key in result.pending if kind == 'employee'})
+            known = phase in ('employees', 'collected')
+            self.progress(phase=phase,departments_processed=departments,employees_processed=employees,
+                departments_total=departments if known else None,
+                employees_total=employees if phase == 'collected' else self.discovered_employees if known else None)
 
     def _department(self,identifier):
         raw=self.api.detail('department',identifier)
@@ -173,6 +182,7 @@ class Collector:
         return normalize_department(raw)
 
     def collect(self, root=None, previous_departments=(), previous_users=()):
+        self.discovered_employees = None
         result = Candidate(full=root is None,collection_started_at=datetime.now(timezone.utc).isoformat())
         result.departments["0"] = {"id": "0", "feishu_department_id": "0", "parent_id": None, "name": "组织", "status": "active", "sync_quality": "complete", "is_virtual_root": True}
         users, roots, groups = set(), [], []
@@ -205,6 +215,7 @@ class Collector:
                 result.departments[identifier]=self._department(identifier)
             except RuntimeError:
                 result.pending.append(('department',identifier))
+        self.discovered_employees = len(users)
         for identifier in sorted(users):
             self._user(result, identifier)
             self._progress('employees',result)

@@ -53,7 +53,7 @@ def test_full_collection_traverses_root_and_event_closes_virtual_root():
     assert Collector(API()).event('contact.user.updated_v3','u').departments['0']['parent_id'] is None
 
 
-def test_collection_reports_real_counts_with_unknown_totals():
+def test_collection_discovers_totals_only_after_discovery_finishes():
     from app.sync.collector import Collector
     class API:
         def pages(self,resource,**params):
@@ -63,7 +63,9 @@ def test_collection_reports_real_counts_with_unknown_totals():
     collector.collect()
     assert observations[-1]['departments_processed']==1
     assert observations[-1]['employees_processed']==0
-    assert observations[-1]['departments_total'] is None
+    assert observations[0]['departments_total'] is None
+    assert observations[-1]['departments_total'] == 1
+    assert observations[-1]['employees_total'] == 0
 
 
 def test_missing_department_field_is_unreadable_not_empty_membership():

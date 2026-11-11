@@ -51,12 +51,21 @@ def sync_preflight(identity=Depends(get_admin_identity), runtime=Depends(get_run
 
 
 @router.get('/sync/jobs')
-def list_sync_jobs(status: str | None = None, limit: int = Query(50, ge=1, le=200), identity=Depends(get_admin_identity), runtime=Depends(get_runtime)):
+def list_sync_jobs(status: str | None = None, limit: int = Query(50, ge=1, le=200), type: str | None = None, phase: str | None = None, cursor: str | None = None, identity=Depends(get_admin_identity), runtime=Depends(get_runtime)):
     with runtime.sessions() as db:
-        stmt = select(SyncJob).order_by(SyncJob.created_at.desc(), SyncJob.id.desc()).limit(limit)
+        stmt = select(SyncJob).order_by(SyncJob.created_at.desc(), SyncJob.id.desc()).limit(limit + 1)
         if status: stmt = stmt.where(SyncJob.status == status)
+        if type: stmt = stmt.where(SyncJob.type == type)
+        if phase: stmt = stmt.where(SyncJob.phase == phase)
+        if cursor:
+            boundary = db.get(SyncJob, cursor)
+            if boundary is None: raise HTTPException(422, {'code': 'INVALID_CURSOR', 'message': '任务分页位置已失效'})
+            from sqlalchemy import or_, and_
+            stmt = stmt.where(or_(SyncJob.created_at < boundary.created_at, and_(SyncJob.created_at == boundary.created_at, SyncJob.id < boundary.id)))
         rows = list(db.scalars(stmt))
-        return {'data': [_job_summary(row) for row in rows], 'meta': {}}
+        from app.admin.sync_views import add_job_context
+        page = rows[:limit]
+        return {'data': add_job_context(db, page, [_job_summary(row) for row in page]), 'meta': {'next_cursor': page[-1].id if len(rows) > limit else None}}
 
 
 def _job_summary(row):
@@ -68,9 +77,9 @@ def get_sync_job(job_id: str, identity=Depends(get_admin_identity), runtime=Depe
     with runtime.sessions() as db:
         row = db.get(SyncJob, job_id)
         if row is None: raise HTTPException(404, {'code': 'SYNC_JOB_NOT_FOUND', 'message': '同步任务不存在'})
-        details = list(db.scalars(select(SyncJobDetail).where(SyncJobDetail.job_id == job_id).order_by(SyncJobDetail.id)))
-        data = _job_summary(row)
-        data['details'] = [{'id': d.id, 'object_type': d.object_type, 'object_id': d.object_id, 'object_name': d.object_name, 'status': d.status, 'error_code': d.error_code, 'error_message': d.error_message, 'attempt': d.attempt, 'started_at': utc_datetime(d.started_at), 'finished_at': utc_datetime(d.finished_at), 'change_log_id': d.change_log_id} for d in details]
+        from app.admin.sync_views import add_job_context, job_details
+        data = add_job_context(db, [row], [_job_summary(row)])[0]
+        data['details'] = job_details(db, job_id)
         return {'data': data, 'meta': {}}
 
 
@@ -79,7 +88,8 @@ def sync_job_progress(job_id: str, identity=Depends(get_admin_identity), runtime
     with runtime.sessions() as db:
         row = db.get(SyncJob, job_id)
         if row is None: raise HTTPException(404, {'code': 'SYNC_JOB_NOT_FOUND', 'message': '同步任务不存在'})
-        return {'data': {'job_id': row.id, 'status': row.status, 'phase': row.phase, 'total_count': row.total_count, 'success_count': row.success_count, 'failure_count': row.failure_count, 'processed_count': (row.success_count or 0) + (row.failure_count or 0), 'progress_known': row.total_count is not None}, 'meta': {}}
+        from app.admin.sync_views import add_job_context
+        return {'data': add_job_context(db, [row], [_job_summary(row)])[0], 'meta': {}}
 
 
 @router.post('/sync/jobs/{job_id}/retry', status_code=202)
@@ -109,6 +119,8 @@ def admin_status(identity=Depends(get_admin_identity), runtime: Runtime = Depend
             data={'initialization_status':'pending','coverage_status':'unknown'}
             meta={'dataset_epoch':state.dataset_epoch if state else 'pending','data_version':state.data_version if state else 0}
     with runtime.sessions() as db:
+        from app.admin.sync_views import initialization_date
+        data['initialized_at'] = initialization_date(db)
         observation=db.get(SystemSetting,'feishu_connection_observation')
         processed=db.get(SystemSetting,'last_event_processed_at')
         data['connection']=connection_summary(settings,json.loads(observation.value) if observation else None)

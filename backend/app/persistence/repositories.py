@@ -204,7 +204,7 @@ class SqlSyncJobRepository:
             id=secrets.token_urlsafe(12), type=job_type, root_department_id=root_department_id,
             name=f"{job_type}同步", trigger_source=trigger_source if trigger_source is not None else ('manual' if requested_by.startswith('admin:') else requested_by),
             description=description or ('指定部门子树同步' if root_department_id else '全量组织同步'), requested_by=requested_by,
-            status="queued", attempt=1, lease_generation=0, execution_count=0, retry_count=0,
+            status="queued", phase="queued", attempt=1, lease_generation=0, execution_count=0, retry_count=0,
             created_at=now, updated_at=now,
         )
         db.add(job)

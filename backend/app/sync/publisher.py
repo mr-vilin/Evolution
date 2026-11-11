@@ -11,7 +11,9 @@ class Publisher:
     def __init__(self, sessions, initialization_settings=None):
         self.sessions, self.initialization_settings = sessions, initialization_settings
 
-    def publish(self, candidate, job_id=None, generation=None, event_id=None, owner=None, lease_generation=None):
+    def publish(self, candidate, job_id=None, generation=None, event_id=None, owner=None, lease_generation=None, *, final=True):
+        if not final and (candidate.full or event_id or not job_id):
+            raise ValueError('INVALID_PARTIAL_PUBLICATION')
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         with self.sessions.begin() as db:
             if owner:
@@ -41,9 +43,9 @@ class Publisher:
             candidate=self._defer_unresolved(db,candidate,now)
             if initializing:
                 validate_candidate(candidate)
-            if job:
+            if job and final:
                 job.total_count = len(candidate.departments) + len(candidate.employees) + len(candidate.pending)
-            if job:
+            if job and final:
                 for kind, records in [('department', candidate.departments), ('employee', candidate.employees)]:
                     for identifier, value in records.items():
                         db.merge(SyncStaging(job_id=job_id, object_type=kind, source_id=identifier, normalized_data=value))
@@ -123,11 +125,16 @@ class Publisher:
                 StoreAdminService._rebuild_projection(db)
                 state.data_version += 1
             if job:
-                job.status, job.phase, job.lease_expires_at, job.updated_at, job.finished_at = 'succeeded', 'published', None, now, now
+                job.updated_at = now
                 job.success_count = db.scalar(select(func.count()).select_from(SyncJobDetail).where(SyncJobDetail.job_id == job_id, SyncJobDetail.status == 'succeeded')) or 0
                 job.failure_count = db.scalar(select(func.count()).select_from(SyncJobDetail).where(SyncJobDetail.job_id == job_id, SyncJobDetail.status == 'failed')) or 0
-                db.execute(delete(SyncStaging).where(SyncStaging.job_id == job_id))
-                ReceiptRepository().finalize_job_in_session(db, job, now, changed_count=changes, allow_initial_epoch_transition=first_initialization)
+                if final:
+                    job.status, job.phase, job.lease_expires_at, job.finished_at = 'succeeded', 'published', None, now
+                    db.execute(delete(SyncStaging).where(SyncStaging.job_id == job_id))
+                    # 分批已提交的变更也计入最终回执。
+                    changed_count = db.scalar(select(func.count()).select_from(ChangeLog).where(
+                        ChangeLog.job_id == job_id, ChangeLog.source == 'feishu')) or 0
+                    ReceiptRepository().finalize_job_in_session(db, job, now, changed_count=changed_count, allow_initial_epoch_transition=first_initialization)
             if event_id:
                 event = db.get(EventInbox, event_id)
                 event.status = 'failed' if candidate.pending else 'succeeded'
@@ -248,17 +255,19 @@ class Publisher:
         if not job_id:
             return
         detail = db.scalar(select(SyncJobDetail).where(SyncJobDetail.job_id == job_id, SyncJobDetail.object_type == kind, SyncJobDetail.object_id == identifier).with_for_update())
+        attempt = db.get(SyncJob, job_id).attempt
         if detail is None:
-            detail = SyncJobDetail(job_id=job_id, object_type=kind, object_id=identifier, object_name=name, status=status, attempt=1)
+            detail = SyncJobDetail(job_id=job_id, object_type=kind, object_id=identifier, object_name=name, status=status, attempt=attempt)
             db.add(detail)
         else:
-            detail.attempt = (detail.attempt or 0) + 1
+            detail.attempt = attempt
             detail.status = status
             detail.object_name = name or detail.object_name
         detail.error_code, detail.error_message = error_code, error_message
         detail.started_at = detail.started_at or now
         detail.finished_at = now
-        detail.change_log_id = change_log_id
+        if change_log_id is not None:
+            detail.change_log_id = change_log_id
 
     @staticmethod
     def _log(db, kind, identifier, before, after, job_id, now):

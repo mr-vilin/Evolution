@@ -238,6 +238,33 @@ def changed_candidate():
     return Candidate(departments={'a': {'id':'a', 'feishu_department_id':'a', 'parent_id':None, 'name':'新门店', 'status':'active', 'sync_quality':'complete', 'is_virtual_root':False}}, employees={'u': {'id':'u', 'feishu_user_id':'u', 'name':'新员工', 'status':'active', 'primary_department_id':'a', 'sync_quality':'complete', 'department_ids':['a']}})
 
 
+@pytest.mark.parametrize('terminal', ['succeeded', 'failed'])
+def test_batch_keeps_receipt_accepted_until_terminal_and_freezes_committed_version(terminal):
+    sessions, engine = make_sessions()
+    try:
+        operation_id = running_receipt(sessions)
+        publisher = Publisher(sessions)
+        candidate = changed_candidate()
+        publisher.publish(candidate, 'job', 1, final=False)
+        with sessions() as db:
+            assert db.get(OperationReceipt, operation_id).status == 'accepted'
+            assert db.get(SyncJob, 'job').status == 'running'
+            version = db.get(DatasetState, 1).data_version
+            audits = list(db.scalars(select(ChangeLog.id).where(ChangeLog.job_id == 'job').order_by(ChangeLog.id)))
+        if terminal == 'succeeded':
+            publisher.publish(candidate, 'job', 1)
+        else:
+            SqlSyncJobRepository(sessions).mark_failed('job', 1, 'REMOTE_ERROR', 'injected failure', datetime.now())
+        with sessions() as db:
+            receipt = db.get(OperationReceipt, operation_id)
+            assert receipt.status == ('submitted' if terminal == 'succeeded' else 'failed')
+            assert receipt.committed_version == version
+            assert receipt.result_summary['audit_ids'] == audits
+            assert db.get(Employee, 'u') is not None
+    finally:
+        engine.dispose()
+
+
 @pytest.mark.parametrize('mode', ['changed', 'noop', 'partial'])
 def test_publisher_receipts_capture_real_version_and_all_job_audits(mode):
     sessions, engine = make_sessions()

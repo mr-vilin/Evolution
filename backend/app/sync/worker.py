@@ -87,6 +87,17 @@ class Worker:
                     return True
                 self._refresh_coverage()
                 if hasattr(self.collector,'progress'): self.collector.progress=self._progress
+                emitted_departments, emitted_employees = set(), set()
+                def publish_batch(result):
+                    departments = {key: value for key, value in result.departments.items() if key not in emitted_departments}
+                    employees = {key: value for key, value in result.employees.items() if key not in emitted_employees}
+                    if len(departments) + len(employees) < 50:
+                        return
+                    self.publisher.publish(Candidate(departments=departments, employees=employees),
+                        job.id, job.lease_generation, owner=self.owner, lease_generation=self.generation, final=False)
+                    emitted_departments.update(departments)
+                    emitted_employees.update(employees)
+                if hasattr(self.collector, 'on_batch'): self.collector.on_batch = publish_batch
                 root=job.root_department_id if job.type == 'subtree' else None
                 previous_departments,previous_users=self._previous_scope(root)
                 candidate = self._staged_candidate(job)
@@ -95,10 +106,15 @@ class Worker:
                     self._stage_candidate(job.id, candidate)
                 with self.sessions() as db:
                     if db.get(SystemSetting,'coverage_invalidated'): candidate.coverage_status='unknown'
+                self._progress(phase='publishing', departments_processed=len(candidate.departments),
+                    employees_processed=len(candidate.employees), departments_total=len(candidate.departments),
+                    employees_total=len(candidate.employees))
                 self.publisher.publish(candidate, job.id, job.lease_generation, owner=self.owner, lease_generation=self.generation)
             except Exception as exc:
                 self._fail_job(job, exc)
             finally:
+                if hasattr(self.collector, 'on_batch'): self.collector.on_batch = None
+                if hasattr(self.collector, 'progress'): self.collector.progress = None
                 self.current_job = None
             return True
         with self.sessions() as db:
@@ -203,6 +219,7 @@ class Worker:
             row=db.scalar(select(SyncJob).where(SyncJob.id==self.current_job[0]).with_for_update())
             if row.status!='running' or row.lease_generation!=self.current_job[1]: raise ValueError('STALE_LEASE')
             row.phase,row.updated_at=value['phase'],now
+            value['observed_at'] = now.isoformat()
             db.merge(SystemSetting(key='job_progress:'+row.id,value=json.dumps(value)))
 
     def _fail_event(self,event_id):

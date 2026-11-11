@@ -183,6 +183,7 @@ class ReceiptRepository:
                 if not isinstance(code, str) or not _ERROR_CODE.fullmatch(code):
                     code = 'SYNC_FAILED'
                 self._update(db, row, 'failed', {
+                    'committed_epoch': state.dataset_epoch, 'committed_version': state.data_version,
                     'error_code': code, 'result_summary': {**_sanitize(summary), 'audit_ids': _audit_ids(audit_ids)},
                 }, now)
                 continue

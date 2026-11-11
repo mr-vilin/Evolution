@@ -24,7 +24,7 @@ function DepartmentDetailResource({ departmentId }: { departmentId: string }) {
         style={{ background: token.colorFillSecondary, borderRadius: 9999 }}>
         <Avatar size={24} src={leader.avatar_url || undefined} icon={<UserOutlined />} alt={`${leader.name}的头像`} />
         <span style={{ overflowWrap: 'anywhere' }}>{leader.name}</span>
-        <Tag color={leader.leader_type === 1 ? 'blue' : 'default'}>{leader.leader_type === 1 ? '部门主负责人' : '部门副负责人'}</Tag>
+        <Tag color={leader.leader_type === 1 ? 'processing' : 'default'}>{leader.leader_type === 1 ? '部门主负责人' : '部门副负责人'}</Tag>
       </span>)}{!department.leaders.length && <EmployeeValue />}</div>
     </div>
     <Divider />

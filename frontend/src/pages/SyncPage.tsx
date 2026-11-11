@@ -1,29 +1,68 @@
-import { useSearchParams } from '@umijs/max';
-import { ResourceTable } from '../components/ResourceTable';
-import { useEffect, useRef, useState } from 'react';
-import { Alert, App, Button, Card, Col, Descriptions, Drawer, Row, Select, Space, Statistic, Tag } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
-import type { SyncJob, SyncJobDetail } from '../domain';
+import { Link, useNavigate, useSearchParams } from '@umijs/max';
+import { useEffect, useState } from 'react';
+import { App, Button, Card, Descriptions, Select, Space, Tooltip } from 'antd';
+import { QuestionCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import type { SyncJob } from '../domain';
 import { formatTime } from '../domain';
 import { request, query } from '../services/http';
 import { useResource } from '../services/useResource';
-import { useAllResource } from '../services/useAllResource';
 import { PageHeader } from '../components/PageHeader';
 import { ResourceState } from '../components/ResourceState';
-interface Status { initialization_status: string; coverage_status: string; connection: { status: string; checked_at: string | null; app_id_masked: string | null; tenant_key_masked: string | null; scopes: string[] }; last_event_processed_at: string | null; failed_event_count: number }
-interface SyncEvent { event_id: string; event_type: string; object_id: string | null; status: string; attempts: number; received_at: string; error_code: string | null }
-const labels: Record<string,string> = { pending:'待处理', queued:'排队中', running:'执行中', succeeded:'成功', failed:'失败', complete:'已完成', incomplete:'覆盖不完整', full:'全量', subtree:'部门及后代', reconcile:'每日核对', scopes:'权限范围', departments:'部门采集', employees:'员工采集', collected:'采集完成', published:'已发布', collection_failed:'采集失败', connected:'已连接', degraded:'连接待确认', unconfigured:'未配置', complete_coverage:'覆盖完整', unknown:'未知' };
-const zh = (value?: string | null) => value ? labels[value] ?? value : '—';
-export function SyncPage() {
-  const { message } = App.useApp(); const status = useResource<Status>('/admin/api/status'); const [jobFilter, setJobFilter] = useState<string>(); const [eventFilter, setEventFilter] = useState<string>('failed'); const jobs = useAllResource<SyncJob>('/admin/api/sync/jobs' + query({ status: jobFilter, limit: 100 })); const events = useAllResource<SyncEvent>('/admin/api/sync/events' + query({ status: eventFilter, limit: 100 })); const [params, setParams] = useSearchParams(); const detailId = params.get('job') ?? undefined; function setDetailId(id?: string) { const next = new URLSearchParams(params); if (id) next.set('job', id); else next.delete('job'); setParams(next); } const detail = useResource<SyncJob>(detailId ? `/admin/api/sync/jobs/${encodeURIComponent(detailId)}` : null); const [busy, setBusy] = useState(false);
-  const previousDetailStatus = useRef<{ id?: string; status?: string }>({});
-  useEffect(() => { if (!detailId || !detail.data || !['queued','running'].includes(detail.data.status)) return; const timer = window.setInterval(detail.reload, 3000); return () => clearInterval(timer); }, [detailId, detail.data?.status, detail.reload]);
-  useEffect(() => { const next=detail.data?.status; if(!detailId){previousDetailStatus.current={};return;} if(!next)return; const previous=previousDetailStatus.current; previousDetailStatus.current={id:detailId,status:next}; if(previous.id===detailId&&previous.status&&['queued','running'].includes(previous.status)&&!['queued','running'].includes(next)){jobs.reload();status.reload();events.reload();} }, [detailId, detail.data?.status, events.reload, jobs.reload, status.reload]);
-  async function create() { setBusy(true); try { const result = await request<{ job_id: string; reused?: boolean }>('/admin/api/sync/jobs', { method: 'POST', body: { type: current?.initialization_status === 'complete' ? 'full' : 'initialize' } }); message.success(result.data.reused ? '已打开相同范围的活动任务' : current?.initialization_status === 'complete' ? '全量任务已创建' : '初始化任务已创建'); setDetailId(result.data.job_id); jobs.reload(); } catch (error) { message.error(error instanceof Error ? error.message : '创建失败'); } finally { setBusy(false); } }
-  async function retryJob() { if (!detailId) return; setBusy(true); try { await request(`/admin/api/sync/jobs/${encodeURIComponent(detailId)}/retry`, { method: 'POST' }); message.success('重试任务已提交'); detail.reload(); jobs.reload(); } catch (error) { message.error(error instanceof Error ? error.message : '重试失败'); } finally { setBusy(false); } }
-  async function retryEvent(event: SyncEvent) { if (!event.object_id) { message.warning('事件缺少对象 ID，无法安全重试；每日核对仍会回查旧记录。'); return; } setBusy(true); try { await request(`/admin/api/sync/events/${encodeURIComponent(event.event_id)}/retry`, { method: 'POST' }); message.success('事件已重新排队'); events.reload(); status.reload(); } catch (error) { message.error(error instanceof Error ? error.message : '事件重试失败'); } finally { setBusy(false); } }
-  const current = status.data;
-  return <PageHeader area="系统管理" title="同步中心" description="查看同步健康、任务与失败事件；失败时保留最后成功数据。" extra={<Button type="primary" icon={<ReloadOutlined />} loading={busy} onClick={create}>{current?.initialization_status === 'complete' ? '一键全量更新' : '开始初始化'}</Button>}><ResourceState {...status}>{current && <><Row gutter={[16,16]}><Col xs={24} md={6}><Card><Statistic title="初始化状态" value={zh(current.initialization_status)} /></Card></Col><Col xs={24} md={6}><Card><Statistic title="覆盖状态" value={zh(current.coverage_status)} /></Card></Col><Col xs={24} md={6}><Card><Statistic title="飞书连接" value={zh(current.connection.status)} /></Card></Col><Col xs={24} md={6}><Card><Statistic title="失败事件" value={current.failed_event_count} /></Card></Col></Row><Card className="block-gap" title="连接摘要"><Descriptions items={[{ key:'full', label:'最后成功全量同步', children:formatTime(status.meta.last_full_sync_at) }, { key:'checked', label:'最近连接证据', children:formatTime(current.connection.checked_at) }, { key:'event', label:'最近事件处理', children:formatTime(current.last_event_processed_at) }, { key:'app', label:'应用', children:current.connection.app_id_masked ?? '—' }, { key:'tenant', label:'租户', children:current.connection.tenant_key_masked ?? '—' }, { key:'scopes', label:'声明权限', span:'filled', children:current.connection.scopes?.join('、') || '—' }]} /></Card></>}</ResourceState><Card className="block-gap" title="最近任务" extra={<Select allowClear placeholder="全部状态" value={jobFilter} onChange={setJobFilter} options={['queued','running','succeeded','failed'].map(value => ({ value, label:zh(value) }))} />}><ResourceState {...jobs} empty={!jobs.data?.length}><ResourceTable rowKey={row => row.job_id ?? row.id ?? ''} dataSource={jobs.data ?? []} pagination={{ pageSize:20 }} scroll={{ x:850 }} columns={[{ title:'任务', render:(_,row)=>`#${row.job_id ?? row.id}` }, { title:'类型', dataIndex:'type', render:zh }, { title:'范围', dataIndex:'root_department_id', render:value=>value || '全企业' }, { title:'阶段', dataIndex:'phase', render:zh }, { title:'状态', dataIndex:'status', render:value=><Tag>{zh(value)}</Tag> }, { title:'进度', render:(_,row)=>`${row.success_count ?? 0}/${row.total_count ?? '—'}` }, { title:'操作', render:(_,row)=><Button type="link" onClick={()=>setDetailId(row.job_id ?? row.id)}>详情</Button> }]} /></ResourceState></Card><Card className="block-gap" title="同步事件" extra={<Select value={eventFilter} onChange={setEventFilter} options={[{value:'failed',label:'失败事件'},{value:'queued',label:'待处理事件'},{value:'succeeded',label:'成功事件'}]} />}><ResourceState {...events} empty={!events.data?.length}><ResourceTable rowKey="event_id" dataSource={events.data ?? []} pagination={{pageSize:20}} scroll={{x:850}} columns={[{title:'事件',dataIndex:'event_id'},{title:'类型',dataIndex:'event_type'},{title:'对象',dataIndex:'object_id',render:value=>value??'缺少对象 ID'},{title:'状态',dataIndex:'status',render:zh},{title:'尝试',dataIndex:'attempts'},{title:'接收时间',dataIndex:'received_at',render:formatTime},{title:'错误',dataIndex:'error_code',render:value=>value??'—'},{title:'操作',render:(_,row)=><Button type="link" danger disabled={row.status!=='failed'} onClick={()=>retryEvent(row)}>{row.object_id?'重试':'不可重试'}</Button>}]} /></ResourceState></Card><Drawer title={`同步任务 #${detailId ?? ''}`} open={Boolean(detailId)} onClose={()=>setDetailId(undefined)} size={560} extra={detail.data?.status==='failed' && <Button danger loading={busy} onClick={retryJob}>重试</Button>}><ResourceState {...detail}>{detail.data && <><Descriptions column={1} bordered items={[{key:'type',label:'类型',children:zh(detail.data.type)},{key:'status',label:'状态',children:zh(detail.data.status)},{key:'phase',label:'阶段',children:zh(detail.data.phase as string)},{key:'attempt',label:'尝试次数',children:String(detail.data.attempt ?? '—')},{key:'progress',label:'对象进度',children:`成功 ${detail.data.success_count ?? 0} / 失败 ${detail.data.failure_count ?? 0} / 总数 ${detail.data.total_count ?? '—'}`},{key:'error',label:'错误码',children:String(detail.data.error_code ?? '—')}]} /><ResourceTable className="block-gap" size="small" rowKey="id" dataSource={(detail.data.details as SyncJobDetail[] | undefined) ?? []} pagination={{ pageSize: 8 }} columns={[{title:'对象',render:(_,row)=>`${row.object_type}:${row.object_name ?? row.object_id}`},{title:'状态',dataIndex:'status',render:zh},{title:'错误',dataIndex:'error_code',render:value=>value ?? '—'}]} /></>}</ResourceState></Drawer></PageHeader>;
-}
+import { ResourceTable } from '../components/ResourceTable';
+import { label, SyncProgress, SyncStatus, syncPhases, syncStatuses, syncTypes } from '../components/SyncPresentation';
 
+interface Status { initialized_at: string | null; coverage_status: string; connection: { status: string; checked_at: string | null } }
+export function SyncPage() {
+  const { message } = App.useApp();
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const status = useResource<Status>('/admin/api/status', true);
+  const [filters, setFilters] = useState<{ status?: string; type?: string; phase?: string }>({});
+  const jobs = useResource<SyncJob[]>('/admin/api/sync/jobs' + query({ ...filters, limit: 200 }), true);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { const job = params.get('job'); if (job) navigate(`/sync/jobs/${encodeURIComponent(job)}`, { replace: true }); }, [params, navigate]);
+  useEffect(() => { const timer = window.setInterval(() => { jobs.reload(); status.reload(); }, 3000); return () => clearInterval(timer); }, [jobs.reload, status.reload]);
+  async function create() {
+    setBusy(true);
+    try {
+      const result = await request<{ job_id: string; reused?: boolean }>('/admin/api/sync/jobs', { method: 'POST', body: { type: 'full' } });
+      message.success(result.data.reused ? '已打开相同范围的活动任务' : '全量同步任务已创建');
+      navigate(`/sync/jobs/${encodeURIComponent(result.data.job_id)}`);
+    } catch (error) { message.error(error instanceof Error ? error.message : '创建失败'); }
+    finally { setBusy(false); }
+  }
+  const current = status.data;
+  const options = (values: Record<string, string>) => Object.entries(values).map(([value, text]) => ({ value, label: text }));
+  const help = (text: string) => <Tooltip title={text}><QuestionCircleOutlined tabIndex={0} aria-label={text} /></Tooltip>;
+  return <PageHeader area="系统管理" title="同步中心" description="查看同步进度与结果；同步按批次入库，可在任务完成前查看已更新的数据。" extra={<Button type="primary" icon={<ReloadOutlined />} loading={busy} onClick={create}>一键全量更新</Button>}>
+    <Card><ResourceState {...status} loading={status.loading && !status.data}>{current && <Descriptions column={{ xs: 1, md: 2, xl: 4 }} items={[
+      { key: 'initialized', label: '初始化日期', children: current.initialized_at ? formatTime(current.initialized_at) : '暂无历史日期' },
+      { key: 'full', label: '最近全量完成', children: formatTime(status.meta.last_full_sync_at as string | null) },
+      { key: 'coverage', label: <Space>通讯录覆盖{help('确认应用能读取全部成员及无部门成员后，才可认定覆盖完整。待核验表示缺少有效覆盖证明或授权范围发生变化，不代表同步失败。')}</Space>, children: label({ complete: '覆盖完整', incomplete: '覆盖不完整', unknown: '待核验' }, current.coverage_status) },
+      { key: 'connection', label: <Space>飞书事件连接{help('根据最近重连或收到事件的时间判断。90 秒内有证据显示近期连接正常，超时仅表示暂无近期证据。可检查监听进程和飞书应用事件订阅，并通过一次真实通讯录变更确认事件收到及处理；同步成功只能证明读取接口可用。')}</Space>, children: <Tooltip title={`最近连接证据：${formatTime(current.connection.checked_at)}`}><span>{label({ connected: '近期连接正常', degraded: '暂无近期连接证据', unconfigured: '未配置' }, current.connection.status)}</span></Tooltip> },
+    ]} />}</ResourceState></Card>
+    <Card className="block-gap" title="同步任务" extra={<Button icon={<ReloadOutlined />} onClick={() => { jobs.reload(); status.reload(); }}>刷新</Button>}>
+      <Space wrap size="middle">
+        <label>类型 <Select aria-label="类型" allowClear placeholder="全部类型" style={{ width: 168 }} value={filters.type} onChange={type => setFilters(value => ({ ...value, type }))} options={options(syncTypes)} /></label>
+        <label>阶段 <Select aria-label="阶段" allowClear placeholder="全部阶段" style={{ width: 168 }} value={filters.phase} onChange={phase => setFilters(value => ({ ...value, phase }))} options={options(syncPhases)} /></label>
+        <label>状态 <Select aria-label="状态" allowClear placeholder="全部状态" style={{ width: 144 }} value={filters.status} onChange={state => setFilters(value => ({ ...value, status: state }))} options={options(syncStatuses)} /></label>
+        {help('阶段表示当前执行步骤。普通任务按批次入库，采集完成后汇总结果；初始化额外校验数据。失败或中断时保留已提交批次，可重试补齐。')}
+      </Space>
+      <ResourceState {...jobs} loading={jobs.loading && !jobs.data} empty={!jobs.loading && !jobs.data?.length}>
+        <ResourceTable<SyncJob> className="block-gap" rowKey={row => row.job_id ?? row.id ?? ''} dataSource={jobs.data ?? []} pagination={{ pageSize: 20 }} scroll={{ x: 1200 }} columns={[
+          { title: '类型', dataIndex: 'type', render: value => label(syncTypes, value) },
+          { title: '触发机制', dataIndex: 'trigger_label', render: value => value || '其他触发' },
+          { title: '执行人', dataIndex: 'executor_name', render: value => value || '—' },
+          { title: '范围', render: (_, row) => row.root_department_name ? `${row.root_department_name}及后代` : row.root_department_id ? `${row.root_department_id}及后代` : '全企业' },
+          { title: '阶段', dataIndex: 'phase', render: value => label(syncPhases, value) },
+          { title: '状态', dataIndex: 'status', render: value => <SyncStatus value={value} /> },
+          { title: '进度', width: 220, render: (_, row) => <SyncProgress job={row} /> },
+          { title: '创建时间', dataIndex: 'created_at', render: formatTime },
+          { title: '操作', fixed: 'right', width: 96, render: (_, row) => <Link to={`/sync/jobs/${encodeURIComponent(row.job_id ?? row.id ?? '')}`}>查看详情</Link> },
+        ]} />
+      </ResourceState>
+      {jobs.meta.next_cursor && <p>仅展示最近 200 个匹配任务，可使用筛选缩小范围。</p>}
+    </Card>
+  </PageHeader>;
+}
 export default SyncPage;
