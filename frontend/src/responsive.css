@@ -1,7 +1,9 @@
 .tree-trigger { display: none; }
 .tree-hit { color: var(--app-primary); font-weight: 600; }
 .store-change { padding: 16px 0; border-bottom: 1px solid var(--app-line); }
-html, body, #root { max-width: 100%; overflow-x: hidden; }
+html, body, #root { max-width: 100%; }
+/* 根节点保留默认溢出行为，让浮层的 body 滚动锁与滚动条补偿正常生效。 */
+body, #root { overflow-x: hidden; }
 .org-grid, .org-grid > *, .ant-card { min-width: 0; }
 .ant-table-wrapper { max-width: 100%; }
 @media (max-width: 900px) {
