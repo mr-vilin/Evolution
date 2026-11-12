@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Alert, App, Avatar, Badge, Button, Checkbox, ColorPicker, ConfigProvider, Input, Modal, Popover, Select, Space, Table, Tabs, Tag, Tooltip, theme } from 'antd';
 import { CheckOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, LineChartOutlined, SmileOutlined, SunOutlined, SyncOutlined, UndoOutlined } from '@ant-design/icons';
 import reference from '../design/reference.json';
+import SpacingGuide from '../design/SpacingGuide';
 import { useThemeColors } from '../theme/ThemeProvider';
 import { type ColorRole } from '../theme/colors';
 import '../design/standards.css';
@@ -255,7 +256,7 @@ export default function DesignStandardsPage() {
       <code>字体栈：{data.typography['body-md'].fontFamily}</code></div></div></Section>
     <Section id="layout" index="03" title="布局" caption="三层表面 · 使用位置与选择方法"><LayoutGuide /></Section>
     <Section id="geometry" index="04" title="圆角与形状" caption="数值标准 · 适用场景 · 组合示例"><RadiusGuide /></Section>
-    <Section id="spacing" index="05" title="间距应用" caption="4 px 网格与间距刻度"><div className="panel"><div className="subhead"><h3>间距</h3></div><div className="space-list">{entries(data.spacing).map(([name, value]) => <div className="space-row" key={name}><code>{name}</code><div className="space-track"><div className="space-bar" style={{ width: name === 'control-height' ? 64 : value, height: name === 'control-height' ? value : undefined }} /></div><code>{value}</code></div>)}</div></div></Section>
+    <Section id="spacing" index="05" title="间距应用" caption="4px 网格 · 适用场景 · 组合示例"><SpacingGuide /></Section>
     <Section id="components" index="06" title="组件样式" caption={`${componentOrder.length} 项 · 含状态样例`}><div className="component-grid">{componentOrder.map(name => <Specimen key={name} name={name} />)}</div></Section>
     <Section id="notes" index="07" title="设计说明" caption="原文说明与视觉展示"><div className="notes-intro"><p>价值观见页首，色彩、字体、布局、圆角与形状及间距见上方对应模块。以下保留高度与深度、组件、应该做与不要做、定制四章的样例与原文说明。</p><strong>完整原文可在页面末尾查看与下载</strong></div><div className="notes-jumps">{remainingNotes.map(chapter => <a href={`#note-${chapter.sourceIndex}`} key={chapter.title}>{chapter.title}</a>)}</div><div className="notes-list">{remainingNotes.map((chapter, index) => <article id={`note-${chapter.sourceIndex}`} className="panel note-module" key={chapter.title}><header><h3>{chapter.title}</h3><code>{String(index + 1).padStart(2, '0')} / {String(remainingNotes.length).padStart(2, '0')}</code></header><div className="note-visual"><NoteVisual index={chapter.sourceIndex} /></div><details className="note-reading" open><summary>完整原文说明 · {chapter.paragraphs.length} 段</summary><div className="note-paragraphs">{chapter.paragraphs.map((text, i) => <p key={i}>{text}</p>)}</div></details></article>)}</div></Section>
     <Section id="custom" index="08" title="主题预览" caption="与全系统共享当前颜色"><div className="panel"><LivePreview /></div></Section>

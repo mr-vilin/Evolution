@@ -111,7 +111,7 @@
 .design-standards .layout-rules li+li{margin-top:8px}
 @media(max-width:640px){.design-standards .layout-intro,.design-standards .layout-rules{padding:20px}.design-standards .layout-guide>.surface-stack{margin:0 20px 20px}.design-standards .layout-usage-grid{grid-template-columns:1fr;padding:0 20px 20px;gap:20px}}
 
-/* 圆角按用途展示标准与实例；间距面板沿用原有样式。 */
+/* 圆角按用途展示标准与实例。 */
 .design-standards .radius-guide h3{font-size:16px;line-height:24px;font-weight:600;margin:0 0 8px}
 .design-standards .radius-guide h4{font-size:14px;line-height:22px;font-weight:600;margin:0 0 8px}
 .design-standards .radius-guide p{margin:0;color:var(--muted);font-size:14px;line-height:22px}
