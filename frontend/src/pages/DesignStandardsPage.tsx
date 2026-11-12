@@ -4,17 +4,19 @@ import { CheckOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOut
 import reference from '../design/reference.json';
 import SpacingGuide from '../design/SpacingGuide';
 import ComponentGuide, { componentStyleCount } from '../design/ComponentGuide';
+import ShadowGuide from '../design/ShadowGuide';
+import MotionGuide from '../design/MotionGuide';
 import { useThemeColors } from '../theme/ThemeProvider';
 import { type ColorRole } from '../theme/colors';
 import '../design/standards.css';
 
 const { data, colors: colorReference, chapters } = reference;
 const valueIcons = [<SunOutlined />, <CheckOutlined />, <SmileOutlined />, <LineChartOutlined />];
-const sections = [['colors', '色彩体系'], ['typography', '字体层级'], ['layout', '布局'], ['geometry', '圆角与形状'], ['spacing', '间距应用'], ['components', '组件样式'], ['notes', '设计说明'], ['custom', '主题预览'], ['source', '完整原文']];
+const sections = [['colors', '色彩体系'], ['typography', '字体层级'], ['layout', '布局'], ['geometry', '圆角与形状'], ['spacing', '间距应用'], ['components', '组件样式'], ['shadows', '阴影'], ['motion', '动画'], ['notes', '设计说明'], ['custom', '主题预览'], ['source', '完整原文']];
 const statusTypes = ['success', 'warning', 'error', 'processing', 'default'] as const;
 const statusIcons = [<CheckCircleOutlined />, <ExclamationCircleOutlined />, <CloseCircleOutlined />, <SyncOutlined spin />, <ClockCircleOutlined />];
 const entries = Object.entries;
-const remainingNotes = chapters.map((chapter, sourceIndex) => ({ ...chapter, sourceIndex })).slice(4).filter(chapter => chapter.sourceIndex !== 5 && chapter.sourceIndex !== 6);
+const remainingNotes = chapters.map((chapter, sourceIndex) => ({ ...chapter, sourceIndex })).slice(7);
 const typographyStyles = [
   { name: 'page-title', sample: '页面标题 · 标识当前页面，如组织架构、同步中心。', fontSize: '24px', lineHeight: '32px', fontWeight: 600, color: 'colorTextHeading' },
   { name: 'section-title', sample: '模块标题 · 说明这一区域的内容，如同步任务、成员详情。', fontSize: '16px', lineHeight: '24px', fontWeight: 600, color: 'colorTextHeading' },
@@ -91,7 +93,7 @@ function LayoutGuide() {
       <article><h4>内容表面</h4><p><strong>用在哪里：</strong>卡片、面板、表格和表单。</p><p><strong>什么时候用：</strong>内容需要持续展示或编辑时使用。优先用边框与色调对比区分区域，不给每张卡片都加阴影。</p></article>
       <article><h4>浮动表面</h4><p><strong>用在哪里：</strong>模态框、下拉菜单与弹出层。</p><p><strong>什么时候用：</strong>操作需要临时覆盖当前内容时使用。默认浅色主题下它与内容表面同色，通过阴影表达悬浮关系。</p></article>
     </div>
-    <div className="layout-rules"><h3>落到页面时这样选</h3><ol><li>先画页面背景，再按任务划分内容容器；需要临时选择、补充信息或确认时，再使用浮动组件。</li><li>普通内容优先依靠边框与色调对比建立层级，真正悬浮的表面才使用相应阴影；具体效果见下方“高度与深度”。</li><li>容器内边距、模块间隔和控件间隙对齐 4px 网格，从 4、8、16、24、32px 中选择；例如卡片内边距 24px、内部控件间隔 16px。具体刻度见“间距应用”。</li><li>表面颜色读取主题中的对应角色，让它随主题联动；不要为了区分层级临时写死白色或浅灰色。浮层位置与交互交给对应组件处理。</li></ol></div>
+    <div className="layout-rules"><h3>落到页面时这样选</h3><ol><li>先画页面背景，再按任务划分内容容器；需要临时选择、补充信息或确认时，再使用浮动组件。</li><li>普通内容优先依靠边框与色调对比建立层级，真正悬浮的表面才使用相应阴影；具体效果见下方“阴影”模块。</li><li>容器内边距、模块间隔和控件间隙对齐 4px 网格，从 4、8、16、24、32px 中选择；例如卡片内边距 24px、内部控件间隔 16px。具体刻度见“间距应用”。</li><li>表面颜色读取主题中的对应角色，让它随主题联动；不要为了区分层级临时写死白色或浅灰色。浮层位置与交互交给对应组件处理。</li></ol></div>
     
   </div>;
 }
@@ -155,10 +157,7 @@ function RadiusGuide() {
 
 function NoteVisual({ index }: { index: number }) {
   const { colors } = useThemeColors();
-  const { token } = theme.useToken();
   const [localColor, setLocalColor] = useState(colors.primary);
-  const [playing, setPlaying] = useState(0);
-  if (index === 4) return <><div className="mini-grid three">{['扁平表面 · 边框分层', 'boxShadowTertiary', 'boxShadow / boxShadowSecondary'].map((name, i) => <div key={name}><span className="mini-label">{name}</span><div className="shadow-stage"><div className="shadow-sample" style={{ boxShadow: [undefined, token.boxShadowTertiary, token.boxShadowSecondary][i] }}>{['平面容器', '轻型抬升', '浮动表面'][i]}</div></div></div>)}</div><div className="motion-box"><div className="motion-head"><h4>动效时长</h4><Button onClick={() => setPlaying(value => value + 1)}>播放动效</Button></div>{[100, 200, 300].map((ms, i) => <div className="motion-row" key={ms}><code>{['motionDurationFast', 'motionDurationMid', 'motionDurationSlow'][i]}</code><div className="motion-track"><div key={playing} className={`motion-dot${playing ? ' playing' : ''}`} style={{ animationDuration: `${ms * 2}ms` }} /></div><span>{ms / 1000} s</span></div>)}</div></>;
   if (index === 7) return <div className="rule-demo"><div className="rule-half"><h4><span className="verdict">✓</span>应该</h4><Space><Button type="primary">保存</Button><Button>取消</Button></Space><p className="visual-caption">一个决策保留一个主导操作。</p></div><div className="rule-half"><h4><span className="verdict no">×</span>不要</h4><Space><Button type="primary">保存</Button><Button type="primary">取消</Button></Space><p className="visual-caption">两个同等强调的操作争夺注意力。</p></div></div>;
   return <><div className="theme-controls"><span>局部主色示例</span><ColorPicker value={localColor} disabledAlpha onChange={color => setLocalColor(color.toHexString())} showText /><Button onClick={() => setLocalColor(colors.primary)}>恢复示例</Button></div><div className="theme-scope"><div className="scope-title">外层主题作用域</div><Button type="primary">主要操作</Button><ConfigProvider theme={{ token: { colorPrimary: localColor } }}><div className="theme-scope nested"><div className="scope-title">局部主题作用域</div><Button type="primary">局部操作</Button></div></ConfigProvider></div><p className="visual-caption">此处展示局部主题继承；全系统颜色请在上方「色彩职责」中调整。</p></>;
 }
@@ -204,9 +203,11 @@ export default function DesignStandardsPage() {
     <Section id="geometry" index="04" title="圆角与形状" caption="数值标准 · 适用场景 · 组合示例"><RadiusGuide /></Section>
     <Section id="spacing" index="05" title="间距应用" caption="4px 网格 · 适用场景 · 组合示例"><SpacingGuide /></Section>
     <Section id="components" index="06" title="组件样式" caption={`${componentStyleCount} 项 · 用途、规范与交互`}><ComponentGuide /></Section>
-    <Section id="notes" index="07" title="设计说明" caption="原文说明与视觉展示"><div className="notes-intro"><p>价值观见页首，色彩、字体、布局、圆角与形状、间距及组件用法见上方对应模块。以下保留高度与深度、应该做与不要做、定制三章的样例与原文说明。</p><strong>完整原文可在页面末尾查看与下载</strong></div><div className="notes-jumps">{remainingNotes.map(chapter => <a href={`#note-${chapter.sourceIndex}`} key={chapter.title}>{chapter.title}</a>)}</div><div className="notes-list">{remainingNotes.map((chapter, index) => <article id={`note-${chapter.sourceIndex}`} className="panel note-module" key={chapter.title}><header><h3>{chapter.title}</h3><code>{String(index + 1).padStart(2, '0')} / {String(remainingNotes.length).padStart(2, '0')}</code></header><div className="note-visual"><NoteVisual index={chapter.sourceIndex} /></div><details className="note-reading" open><summary>完整原文说明 · {chapter.paragraphs.length} 段</summary><div className="note-paragraphs">{chapter.paragraphs.map((text, i) => <p key={i}>{text}</p>)}</div></details></article>)}</div></Section>
-    <Section id="custom" index="08" title="主题预览" caption="与全系统共享当前颜色"><div className="panel"><LivePreview /></div></Section>
-    <Section id="source" index="09" title="完整原文" caption="准则文件完整收录"><div className="panel source-panel"><details><summary>展开查看完整准则</summary><pre>{raw.original || raw.error || '正在读取原文…'}</pre></details><div className="integrity">原文版本：{data.version}　名称：{data.name}<br />SHA-256：<code>{reference.sha256}</code></div><a className="action" href="/design-standards/ant-design-original.yaml" download>下载准则原文 ↓</a><div className="attachment-source"><div className="attachment-actions"><h3>补充设计说明 · 完整附件</h3><a className="action" href="/design-standards/ant-design-design-notes.md" download>下载补充原文 ↓</a></div><details><summary>展开查看补充原文（完整保留）</summary><pre>{raw.notes || raw.error || '正在读取原文…'}</pre></details><div className="integrity">SHA-256：<code>{reference.notesSha256}</code></div></div></div></Section>
+    <Section id="shadows" index="07" title="阴影" caption="使用位置 · 层级选择 · 组合示例"><ShadowGuide /></Section>
+    <Section id="motion" index="08" title="动画" caption="三档时长 · 命名缓动 · 交互示例"><MotionGuide /></Section>
+    <Section id="notes" index="09" title="设计说明" caption="原文说明与视觉展示"><div className="notes-intro"><p>价值观见页首，色彩、字体、布局、圆角与形状、间距、组件、阴影及动画用法见上方对应模块。以下保留应该做与不要做、定制两章的样例与原文说明。</p><strong>完整原文可在页面末尾查看与下载</strong></div><div className="notes-jumps">{remainingNotes.map(chapter => <a href={`#note-${chapter.sourceIndex}`} key={chapter.title}>{chapter.title}</a>)}</div><div className="notes-list">{remainingNotes.map((chapter, index) => <article id={`note-${chapter.sourceIndex}`} className="panel note-module" key={chapter.title}><header><h3>{chapter.title}</h3><code>{String(index + 1).padStart(2, '0')} / {String(remainingNotes.length).padStart(2, '0')}</code></header><div className="note-visual"><NoteVisual index={chapter.sourceIndex} /></div><details className="note-reading" open><summary>完整原文说明 · {chapter.paragraphs.length} 段</summary><div className="note-paragraphs">{chapter.paragraphs.map((text, i) => <p key={i}>{text}</p>)}</div></details></article>)}</div></Section>
+    <Section id="custom" index="10" title="主题预览" caption="与全系统共享当前颜色"><div className="panel"><LivePreview /></div></Section>
+    <Section id="source" index="11" title="完整原文" caption="准则文件完整收录"><div className="panel source-panel"><details><summary>展开查看完整准则</summary><pre>{raw.original || raw.error || '正在读取原文…'}</pre></details><div className="integrity">原文版本：{data.version}　名称：{data.name}<br />SHA-256：<code>{reference.sha256}</code></div><a className="action" href="/design-standards/ant-design-original.yaml" download>下载准则原文 ↓</a><div className="attachment-source"><div className="attachment-actions"><h3>补充设计说明 · 完整附件</h3><a className="action" href="/design-standards/ant-design-design-notes.md" download>下载补充原文 ↓</a></div><details><summary>展开查看补充原文（完整保留）</summary><pre>{raw.notes || raw.error || '正在读取原文…'}</pre></details><div className="integrity">SHA-256：<code>{reference.notesSha256}</code></div></div></div></Section>
     <footer className="page-foot"><span>Ant Design · 设计准则参考</span><span>Ant Design 默认准则与通用色彩职责</span></footer>
   </main></div>;
 }
