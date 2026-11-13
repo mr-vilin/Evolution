@@ -4,6 +4,7 @@ import { EffectEntry, EffectGuide, MemberPreviewDrawer } from './EffectGuide';
 
 const durationNames = ['motionDurationFast', 'motionDurationMid', 'motionDurationSlow'] as const;
 const easingNames = ['motionEaseInOut', 'motionEaseOut', 'motionEaseOutCirc', 'motionEaseOutBack'] as const;
+export const motionStyleCount = durationNames.length + easingNames.length;
 const easingLabels = ['平缓开始与结束', '减速停下', '更明显地减速', '轻微越过后回弹'];
 
 function motionStyle(token: GlobalToken): CSSProperties {

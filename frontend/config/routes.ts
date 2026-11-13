@@ -12,6 +12,7 @@ export default [
   { path: '/settings', name: '管理设置', icon: 'SettingOutlined', component: './SettingsPage' },
   { path: '/system-info', name: '系统信息', icon: 'InfoCircleOutlined', component: './SystemInfoPage' },
   { path: '/ui-standards/design', name: '设计标准', icon: 'BgColorsOutlined', component: './DesignStandardsPage' },
+  { path: '/ui-standards/table', name: '表格规范', icon: 'TableOutlined', component: './TableStandardsPage' },
   { path: '/ui-standards', redirect: '/ui-standards/design', hideInMenu: true },
   { path: '/examples/ui-prototypes', name: 'UI 原型总览', icon: 'PictureOutlined', component: './UiPrototypesPage' },
   ...examplePages.map(page => ({ path: page.path, name: page.name, component: `./examples/${page.component}` })),

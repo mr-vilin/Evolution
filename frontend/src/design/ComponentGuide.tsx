@@ -43,7 +43,7 @@ const guidelines = [
   { id: 'tag', title: '分类标签', component: 'Tag',
     purpose: '用于标记部门、类别或分组，帮助快速识别内容归属。',
     rules: '4px 圆角、12px 字体，使用现有扩展色的浅色填充；同一类别保持一致配色。',
-    reminder: '关键状态使用提示反馈或状态点；分类颜色沿用扩展色体系。' },
+    reminder: '分类颜色沿用扩展色体系；表格状态列使用带中文文字的语义 Tag，页面级关键反馈使用提示反馈或状态点。' },
   { id: 'alert', title: '提示反馈', component: 'Alert',
     purpose: '用于明确反馈操作结果，或说明需要用户关注的信息。',
     rules: '成功、告警、错误、信息采用对应语义浅背景与图标，正文保持正常文字颜色。',
@@ -194,7 +194,14 @@ function componentCode(name: ComponentName, token: GlobalToken) {
       rule('.ant-dropdown-menu-item:hover', { background: color('colorFillAlter'), color: color('colorText') }),
     ]; break;
   }
-  return `/* 当前主题下的关键样式；交互由 Ant Design 组件负责。 */\n\n${rules.join('\n\n')}`;
+  return `/* 当前主题下的关键样式；交互由 Ant Design 组件负责。
+ * React 内通过 theme.useToken() 读取当前作用域的令牌；
+ * React 外通过 theme.getDesignToken() 读取，并传入一致的主题配置。
+ * 本项目将解析后的令牌输出为项目 CSS 变量；
+ * theme.cssVar 可配置官方 CSS 变量输出。
+ * theme.zeroRuntime 是可选的静态样式方案，需要配套预构建或提取的 CSS；
+ * 当前项目未启用零运行时模式。
+ */\n\n${rules.join('\n\n')}`;
 }
 
 function ComponentExample({ name }: { name: ComponentName }) {
@@ -235,7 +242,7 @@ function ComponentEntry({ guideline }: { guideline: typeof guidelines[number] })
 export default function ComponentGuide() {
   const { token } = theme.useToken();
   return <ConfigProvider theme={guideTheme(token)}><div className="panel component-guide">
-    <div className="component-guide-intro" id="note-6"><h3>把用途、规则和交互放在一起看</h3><p>每个组件集中展示完整用法。悬停、按下、聚焦或切换选项，体验同一组件的状态变化；右上角可查看当前主题下的样式规则。</p><p>主色及交互色随上方色彩规则联动，表面、文字和边框沿用各自职责；成功、告警、错误与分类颜色保持原有含义。</p></div>
+    <div className="component-guide-intro" id="note-6"><h3>把用途、规则和交互放在一起看</h3><p>每个组件集中展示完整用法。悬停、按下、聚焦或切换选项，体验同一组件的状态变化；右上角可查看当前主题下的样式规则。</p><p>主色及交互色随上方色彩规则联动，表面、文字和边框沿用各自职责；成功、告警、错误与分类颜色保持原有含义。</p><p>单类组件通过 theme.components 覆盖自身令牌及其使用的通用令牌，需要派生时配置该组件的 algorithm。嵌套 ConfigProvider 默认继承外层主题，只覆盖当前子树中的差异；动态修改 theme 时同步更新该作用域。</p><p>消息、通知与弹窗反馈使用 App 或基于 hook 的 API，并放在对应主题作用域中；直接调用 message.xxx、notification.xxx、Modal.xxx 等静态方法不会自动继承周围上下文。</p><p>调整主题时保留表单、表格、导航、浮层、聚焦与校验的交互语义。优先通过令牌与组件配置表达差异，超出官方主题能力时统一评估设计系统扩展。</p></div>
     {guidelines.map(guideline => <ComponentEntry key={guideline.id} guideline={guideline} />)}
   </div></ConfigProvider>;
 }

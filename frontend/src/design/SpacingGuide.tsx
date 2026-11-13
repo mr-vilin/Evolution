@@ -6,6 +6,7 @@ import './spacing-guide.css';
 const spacing = reference.data.spacing;
 const unit = parseFloat(spacing.unit);
 const sizes = { xs: parseFloat(spacing.xs), sm: parseFloat(spacing.sm), md: parseFloat(spacing.md), lg: parseFloat(spacing.lg), xl: parseFloat(spacing.xl) };
+export const spacingScaleCount = new Set(Object.values(sizes)).size;
 const exampleMembers = [
   { name: '林晓', department: 'engineering', departmentName: '研发部' },
   { name: '陈晨', department: 'engineering', departmentName: '研发部' },
@@ -81,7 +82,7 @@ export default function SpacingGuide() {
   ];
   const style = { '--spacing-unit': spacing.unit, '--spacing-sm': spacing.sm, '--spacing-md': spacing.md, '--spacing-lg': spacing.lg, '--spacing-control-height': spacing['control-height'] } as CSSProperties;
   return <div className="panel spacing-guide" style={style}>
-    <div className="spacing-intro"><h3>按内容关系选择间距</h3><p>以 4px 为基础单位，紧密信息、同组内容、独立区域逐级增加留白。下方同时展示尺寸、使用场景与实际案例；浅色区域表示正在测量的空白，每一小格为 4px。</p></div>
+    <div className="spacing-intro"><h3>按内容关系选择间距</h3><p>以 4px 为基础单位，紧密信息、同组内容、独立区域逐级增加留白。下方同时展示尺寸、使用场景与实际案例；浅色区域表示正在测量的空白，每一小格为 4px。</p><p>整体密度由主题的 sizeUnit、sizeStep 与控件尺寸共同协调。需要紧凑界面时，可评估 compactAlgorithm，也可与浅色或深色算法组合；本页仍按既定刻度展示，调整时需同步核对留白、控件高度与 4px 网格。</p></div>
     <div>{applications.map(item => <article className="spacing-application" key={item.size}>
       <div className="spacing-standard"><strong>{item.size}px</strong><code>{item.token}</code><div className="space-track" aria-hidden="true"><div className="space-bar" style={{ width: item.size }} /></div><span>{item.size / unit} 格 × 4px</span></div>
       <div className="spacing-usage"><h4>{item.name}</h4><p>{item.usage}</p></div>
