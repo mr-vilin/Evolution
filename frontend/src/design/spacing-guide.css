@@ -17,6 +17,7 @@
 .design-standards .spacing-example>p.spacing-caption{margin-top:8px}
 .design-standards .spacing-guide .spacing-caption{font-size:12px;line-height:20px;color:var(--muted)}
 .design-standards .spacing-inline{display:flex;align-items:center;min-width:0;font-size:14px;line-height:22px}
+.design-standards .spacing-person-avatar{flex-shrink:0;background:var(--color-primary-bg);color:var(--primary)}
 .design-standards .spacing-inline>h4,.design-standards .spacing-inline>strong,.design-standards .spacing-inline>.spacing-caption{white-space:nowrap}
 .design-standards .spacing-inline>.ant-btn{flex-shrink:0;height:var(--spacing-control-height)}
 .design-standards .spacing-gap{position:relative;display:block;flex-shrink:0;background:var(--color-primary-bg);color:var(--primary);pointer-events:none}

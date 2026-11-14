@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
-import { Button, Input, Select } from 'antd';
+import { Avatar, Button, Input, Select } from 'antd';
 import reference from './reference.json';
 import './spacing-guide.css';
 
@@ -58,7 +58,7 @@ function SpacingComposition() {
       </SpacingInset>
     </div>
     <div className="spacing-combination-rules"><h4>组合时这样选</h4><ul>
-      <li><strong>4px</strong>：标题与人数等紧密附属信息。</li>
+      <li><strong>4px</strong>：头像与姓名、标题与人数等紧密附属信息。</li>
       <li><strong>8px</strong>：同一组查询、重置按钮。</li>
       <li><strong>16px</strong>：并列统计卡、字段组、内容组与操作区之间。</li>
       <li><strong>24px</strong>：常规内容容器的四周内边距。</li>
@@ -69,8 +69,8 @@ function SpacingComposition() {
 
 export default function SpacingGuide() {
   const applications = [
-    { size: sizes.xs, token: 'unit / xs', name: '文字与紧密附属信息', usage: '标题与人数、名称与补充信息等紧密关联的内容。小间距让它们被读作同一组。', caption: '部门名称与人数之间留 4px。',
-      sample: <div className="spacing-inline"><strong>研发部</strong><SpacingGap size={sizes.xs} /><span className="spacing-caption">共 20 人</span></div> },
+    { size: sizes.xs, token: 'unit / xs', name: '头像与紧密附属信息', usage: '头像与姓名固定间隔 1 个 unit（4px）；标题与人数等紧密关联的信息也使用这一档。', caption: '圆形头像与姓名之间留 4px。',
+      sample: <div className="spacing-inline"><Avatar className="spacing-person-avatar" size={24}>林</Avatar><SpacingGap size={sizes.xs} /><span>林晓</span></div> },
     { size: sizes.sm, token: 'sm', name: '同行控件与轻量分组', usage: '同一操作组中的相邻按钮，例如查询与重置、保存与取消。组内保持紧凑，表达它们属于同一次操作。', caption: '同一组按钮之间留 8px。',
       sample: <div className="spacing-inline"><Button type="primary">查询</Button><SpacingGap size={sizes.sm} /><Button>重置</Button></div> },
     { size: sizes.md, token: 'md', name: '卡片栅格 / 内容间隔 / 小卡片内边距', usage: '并列的小型统计卡或摘要卡、同一模块中的内容组和字段组，以及紧凑小卡片内部。内容需要分组，同时仍属于同一阅读区域时使用。', caption: '统计卡之间、紧凑卡片四周内边距与内容组间隔均为 16px。',

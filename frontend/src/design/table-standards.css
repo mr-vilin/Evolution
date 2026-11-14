@@ -20,25 +20,21 @@
 .table-standards .table-demo-shell{min-width:0;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
 .table-standards .table-demo-top{padding:16px 16px 8px}
 .table-standards .table-demo-top h3{font-size:16px;line-height:24px;margin:0 0 16px}
-.table-standards .table-demo-toolbar{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
-.table-standards .table-toolbar-left,.table-standards .table-toolbar-right{display:flex;align-items:flex-end;gap:8px;min-width:0;flex-wrap:wrap}
+.table-standards .table-demo-toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.table-standards .table-toolbar-left,.table-standards .table-toolbar-right{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
 .table-standards .table-toolbar-right{margin-left:auto}
-.table-standards .table-main-filter{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);width:120px;min-width:0}
-.table-standards .table-main-filter .ant-select{width:100%}
-.table-standards .table-search{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;width:320px}
-.table-standards .table-search>.ant-select{width:96px;flex:none}
-.table-standards .table-search>.ant-input-search{min-width:0;flex:1}
-.table-standards .table-demo-shell .ant-table-wrapper{min-width:0;margin-top:0}
-.table-standards .table-demo-shell .ant-table-pagination{padding-inline:16px}
+.table-standards .table-main-filter{width:128px;min-width:0}
+.table-standards .table-search{min-width:0;max-width:100%;width:240px}
+.table-standards .table-demo-shell .ant-table-wrapper{min-width:0;margin:0 16px}
 .table-standards .table-record-name{display:flex;align-items:center;gap:4px;min-width:0}
 .table-standards .table-name-text{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .table-standards .table-record-name>.ant-btn{flex:none}
+.table-standards .table-person{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.table-standards .table-person .ant-avatar{flex:none;background:var(--color-primary-bg);color:var(--color-primary)}
 .table-standards .table-row-actions{display:flex;align-items:center;gap:4px;white-space:nowrap}
 .table-standards .is-narrow .table-row-actions{gap:0}
 .table-standards .is-narrow .table-row-actions .ant-btn{width:20px;min-width:20px;padding:0}
-.table-standards .table-state-controls{padding:16px 0}
 .table-standards .table-control-buttons{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.table-standards .table-state-controls p{margin:8px 0 0;color:var(--muted)}
 .table-standards .table-height-demo{padding:0 24px 24px}
 .table-standards .table-height-controls{display:flex;align-items:center;flex-wrap:wrap;gap:16px}
 .table-standards .table-height-controls>label:first-child{flex:1;min-width:200px}
@@ -51,8 +47,8 @@
 .table-standards .table-workspace-summary>div{height:calc(100% - 16px);overflow:auto;padding:16px;border:1px dashed var(--outline);border-radius:6px}
 .table-standards .table-workspace-summary p{color:var(--muted);margin:8px 0 0}
 .table-standards .table-height-sticky{position:sticky;z-index:3}
-.table-standards .table-workspace-after{min-height:640px;padding-top:32px;color:var(--muted)}
-.table-standards .table-workspace-after p{margin:8px 0 16px}
+.table-standards .table-workspace-after{min-height:192px;margin-top:16px;padding:32px 16px;border:1px dashed var(--outline);border-radius:6px;box-sizing:border-box}
+.table-standards .table-workspace-after p{color:var(--muted);margin:8px 0 16px}
 .table-standards .table-rule-diagram{margin-top:16px;padding:16px;border:1px solid var(--outline);border-radius:6px;background:var(--surface-container);font-size:12px;line-height:22px;overflow-wrap:anywhere}
 .table-manual-id{user-select:all;overflow-wrap:anywhere}
 @media(max-width:640px){
@@ -65,6 +61,6 @@
   .table-standards .table-search{width:100%}
   .table-standards .table-workspace-content{padding-inline:8px}
   .table-standards .table-workspace{min-height:640px}
-  .table-standards .table-demo-shell .ant-table-pagination{padding-inline:8px}
+  .table-standards .table-demo-shell .ant-table-wrapper{margin-inline:8px}
   .table-standards .table-row-actions{gap:0}
 }

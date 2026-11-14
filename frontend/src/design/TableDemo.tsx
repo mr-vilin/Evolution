@@ -1,9 +1,9 @@
 import { useEffect, useId, useMemo, useRef, useState, type Key } from 'react';
-import { App, Button, Dropdown, Form, Input, InputNumber, Modal, Progress, Select, Table, Tag, Tooltip } from 'antd';
+import { App, Avatar, Button, Dropdown, Form, Input, InputNumber, Modal, Progress, Select, Table, Tag, Tooltip } from 'antd';
 import type { TableColumnsType, TableProps } from 'antd';
 import type { FilterValue, SortOrder } from 'antd/es/table/interface';
 import { CopyOutlined, DeleteOutlined, EditOutlined, EyeOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SendOutlined } from '@ant-design/icons';
-import { compareNumbers, demoRecords, displayValue, filterFields, statusColors, type DemoRecord, type FilterField } from './tableStandardsModel';
+import { compareNumbers, compareTimes, demoRecords, displayValue, filterFields, personInitial, statusColors, type DemoRecord, type FilterField } from './tableStandardsModel';
 
 type Filters = Partial<Record<FilterField, FilterValue | null>>;
 type SortState = { key: string | null; order: SortOrder };
@@ -36,8 +36,8 @@ function useBodyHeight(ref: React.RefObject<HTMLDivElement | null>, maxHeight: n
   return height;
 }
 
-export default function TableDemo({ variant = 'filter', maxHeight = 520, controls = false, recordLimit, compact = false }: {
-  variant?: 'filter' | 'create'; maxHeight?: number; controls?: boolean; recordLimit?: number; compact?: boolean;
+export default function TableDemo({ variant = 'filter', maxHeight = 520, recordLimit, compact = false }: {
+  variant?: 'filter' | 'create'; maxHeight?: number; recordLimit?: number; compact?: boolean;
 }) {
   const { message, modal } = App.useApp();
   const instanceId = useId();
@@ -47,12 +47,10 @@ export default function TableDemo({ variant = 'filter', maxHeight = 520, control
   const [records, setRecords] = useState(demoRecords);
   const [filters, setFilters] = useState<Filters>({});
   const [sort, setSort] = useState<SortState>({ key: null, order: null });
-  const [searchField, setSearchField] = useState<'name' | 'owner'>('name');
   const [keyword, setKeyword] = useState('');
   const [draftKeyword, setDraftKeyword] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [refreshCount, setRefreshCount] = useState(0);
   const [editing, setEditing] = useState<DemoRecord | 'new' | null>(null);
   const [form] = Form.useForm<EditValues>();
   const bodyHeight = useBodyHeight(shellRef, maxHeight);
@@ -64,7 +62,7 @@ export default function TableDemo({ variant = 'filter', maxHeight = 520, control
     return () => observer.disconnect();
   }, [compact]);
   const base = useMemo(() => recordLimit == null ? records : records.slice(0, recordLimit), [records, recordLimit]);
-  const dataSource = base.filter(row => String(row[searchField]).toLocaleLowerCase().includes(keyword.toLocaleLowerCase()));
+  const dataSource = base.filter(row => [row.name, row.owner].some(value => value.toLocaleLowerCase().includes(keyword.toLocaleLowerCase())));
   const resultCount = dataSource.filter(row => filterFields.every(([key]) => !filters[key]?.length || filters[key]!.includes(row[key]))).length;
   const current = Math.min(page, Math.max(1, Math.ceil(resultCount / pageSize)));
 
@@ -73,10 +71,6 @@ export default function TableDemo({ variant = 'filter', maxHeight = 520, control
     setPage(1);
   }
   function search(value: string) { setKeyword(value.trim()); setPage(1); }
-  function resetAll() {
-    setFilters({}); setSort({ key: null, order: null }); setSearchField('name');
-    setKeyword(''); setDraftKeyword(''); setPage(1);
-  }
   async function copyId(row: DemoRecord) {
     try {
       await navigator.clipboard.writeText(row.id);
@@ -118,10 +112,12 @@ export default function TableDemo({ variant = 'filter', maxHeight = 520, control
       filters: [...new Set(demoRecords.map(row => row[key]))].map(value => ({ text: value, value })), filterOnClose: false,
     } : {}),
   });
-  const numericColumn = (key: 'quantity' | 'progress') => ({
+  const sortableColumn = (key: 'quantity' | 'progress' | 'createdAt' | 'updatedAt') => ({
     sortOrder: sort.key === key ? sort.order : null,
     sorter: (a: DemoRecord, b: DemoRecord, order?: SortOrder) => {
-      const comparison = compareNumbers(a[key], b[key], order);
+      const comparison = key === 'quantity' || key === 'progress'
+        ? compareNumbers(a[key], b[key], order)
+        : compareTimes(a[key], b[key], order);
       // 同值在升降序均按完整数据源中的基准顺序排列。
       return comparison || (base.indexOf(a) - base.indexOf(b)) * (order === 'descend' ? -1 : 1);
     },
@@ -130,11 +126,11 @@ export default function TableDemo({ variant = 'filter', maxHeight = 520, control
     { key: 'name', title: '名称', dataIndex: 'name', width: narrow ? 104 : 208, fixed: 'left',
       render: (_value, row) => <div className="table-record-name"><Tooltip title={row.name} trigger={['hover', 'focus']}><span tabIndex={0} className="table-name-text">{row.name}</span></Tooltip><Tooltip title="复制 ID" trigger={['hover', 'focus']}><Button type="text" size="small" aria-label={`复制 ID：${row.name}`} icon={<CopyOutlined />} onClick={() => void copyId(row)} /></Tooltip></div> },
     { key: 'status', title: '状态', dataIndex: 'status', width: 112, ...filterColumn('status'), render: (value: keyof typeof statusColors) => <Tag color={statusColors[value]}>{value}</Tag> },
-    ...filterFields.filter(([key]) => key !== 'status').map(([key, title]) => ({ key, title, dataIndex: key, width: 112, ...filterColumn(key), render: displayValue })),
-    { key: 'quantity', title: '数量', dataIndex: 'quantity', width: 100, ...numericColumn('quantity'), render: displayValue },
-    { key: 'progress', title: '进度', dataIndex: 'progress', width: 156, ...numericColumn('progress'), render: (value: number | null) => value == null ? '-' : <Progress percent={value} size="small" /> },
-    { key: 'createdAt', title: '创建时间', dataIndex: 'createdAt', width: 184, render: displayValue },
-    { key: 'updatedAt', title: '更新时间', dataIndex: 'updatedAt', width: 184, render: displayValue },
+    ...filterFields.filter(([key]) => key !== 'status').map(([key, title]) => ({ key, title, dataIndex: key, width: key === 'owner' ? 144 : 112, ...filterColumn(key), render: key === 'owner' ? (name: string, row: DemoRecord) => <span className="table-person"><Avatar size={24} src={row.ownerAvatar}>{personInitial(name)}</Avatar><span>{name}</span></span> : displayValue })),
+    { key: 'quantity', title: '数量', dataIndex: 'quantity', width: 100, ...sortableColumn('quantity'), render: displayValue },
+    { key: 'progress', title: '进度', dataIndex: 'progress', width: 156, ...sortableColumn('progress'), render: (value: number | null) => value == null ? '-' : <Progress percent={value} size="small" /> },
+    { key: 'createdAt', title: '创建时间', dataIndex: 'createdAt', width: 184, ...sortableColumn('createdAt'), render: displayValue },
+    { key: 'updatedAt', title: '更新时间', dataIndex: 'updatedAt', width: 184, ...sortableColumn('updatedAt'), render: displayValue },
     { key: 'actions', title: '操作', width: narrow ? 80 : 120, fixed: 'right', render: (_value, row) => <div className="table-row-actions">
       <Tooltip title="查看" trigger={['hover', 'focus']}><Button type="text" size="small" aria-label={`查看：${row.name}`} icon={<EyeOutlined />} onClick={() => modal.info({ title: row.name, content: <p>负责人：{row.owner}；状态：{row.status}；数量：{displayValue(row.quantity)}。本地演示记录，时间按北京时间展示。</p>, okText: '关闭' })} /></Tooltip>
       <Tooltip title="编辑" trigger={['hover', 'focus']}><Button type="text" size="small" aria-label={`编辑：${row.name}`} icon={<EditOutlined />} onClick={() => edit(row)} /></Tooltip>
@@ -154,13 +150,12 @@ export default function TableDemo({ variant = 'filter', maxHeight = 520, control
       setSort({ key: single.order ? String(single.columnKey) : null, order: single.order ?? null }); setPage(1);
     } else { setPage(pagination.current ?? 1); setPageSize(pagination.pageSize ?? 10); }
   };
-  const searchControl = <div className="table-search"><Select aria-label="搜索字段" value={searchField} options={[{ value: 'name', label: '名称' }, { value: 'owner', label: '负责人' }]} onChange={value => { setSearchField(value); setPage(1); }} /><Input.Search aria-label="搜索关键词" placeholder="输入关键词" value={draftKeyword} allowClear onChange={event => { setDraftKeyword(event.target.value); if (!event.target.value) search(''); }} onSearch={search} /></div>;
-  const refresh = <Tooltip title="刷新本地示例" trigger={['hover', 'focus']}><Button aria-label="刷新" icon={<ReloadOutlined />} onClick={() => { setRefreshCount(value => value + 1); setPage(current); message.success('已刷新本地示例，保留当前查询状态'); }} /></Tooltip>;
+  const searchControl = <Input.Search className="table-search" aria-label="搜索名称或负责人" placeholder="搜索名称或负责人" value={draftKeyword} allowClear onChange={event => { setDraftKeyword(event.target.value); if (!event.target.value) search(''); }} onSearch={search} />;
+  const refresh = <Tooltip title="刷新本地示例" trigger={['hover', 'focus']}><Button aria-label="刷新" icon={<ReloadOutlined />} onClick={() => { setPage(current); message.success('已刷新本地示例，保留当前查询状态'); }} /></Tooltip>;
   return <div className="table-demo" data-variant={variant}>
-    {controls && <div className="table-state-controls"><div className="table-control-buttons"><Button onClick={() => { setFilters({}); setPage(1); }}>清除筛选</Button><Button onClick={() => { setSort({ key: null, order: null }); setPage(1); }}>重置排序</Button><Button onClick={resetAll}>全部重置</Button></div><p role="status">有效筛选 {Object.values(filters).filter(value => value?.length).length} 项 · {sort.key ? `${sort.key === 'quantity' ? '数量' : '进度'}${sort.order === 'ascend' ? '升序' : '降序'}` : '无主动排序'} · 搜索：{keyword || '-'} · 刷新 {refreshCount} 次</p></div>}
     <div ref={shellRef} className={`table-demo-shell${narrow ? ' is-narrow' : ''}`} data-testid="table-demo-shell">
       <div className="table-demo-top"><h3>{variant === 'create' ? '可新增类 · 本地任务列表' : '无新增类 · 本地任务列表'}</h3><div className="table-demo-toolbar">
-        <div className="table-toolbar-left">{variant === 'create' ? searchControl : <>{filterFields.slice(0, 4).map(([key, label]) => <label className="table-main-filter" key={key} htmlFor={`${instanceId}-${key}`}><span>{label}</span><Select id={`${instanceId}-${key}`} aria-label={label} mode="multiple" maxTagCount="responsive" placeholder="全部" value={(filters[key] ?? []) as string[]} allowClear options={[...new Set(demoRecords.map(row => row[key]))].map(value => ({ value, label: value }))} onChange={values => updateFilter(key, values)} /></label>)}{refresh}</>}</div>
+        <div className="table-toolbar-left">{variant === 'create' ? searchControl : <>{filterFields.slice(0, 4).map(([key, label]) => <Select className="table-main-filter" key={key} id={`${instanceId}-${key}`} aria-label={label} mode="multiple" maxTagCount="responsive" placeholder={`全部${label}`} value={(filters[key] ?? []) as string[]} allowClear options={[...new Set(demoRecords.map(row => row[key]))].map(value => ({ value, label: value }))} onChange={values => updateFilter(key, values)} />)}{refresh}</>}</div>
         <div className="table-toolbar-right">{variant === 'create' ? <><Button type="primary" icon={<PlusOutlined />} onClick={() => edit('new')}>新增</Button>{refresh}</> : searchControl}</div>
       </div></div>
       <Table<DemoRecord> rowKey="id" size="small" columns={columns} dataSource={dataSource} onChange={onChange} scroll={{ x: narrow ? 1480 : 1624, y: bodyHeight }} pagination={{ current, pageSize, showSizeChanger: true, pageSizeOptions: [5, 10, 20], showTotal: total => `共 ${total} 条`, size: 'small' }} />
