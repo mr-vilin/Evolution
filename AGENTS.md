@@ -64,4 +64,4 @@
 - 报告时区分已实现、已验证、待接入和环境阻塞，不把历史验收记录当作当前环境证据。
 - Windows 下读取中文文本显式使用 UTF-8，Node.js 命令优先使用 `npm.cmd`；不输出数据库密码、应用密钥或会话凭据。
 - 技术选型变化时同步更新本文件及相关说明。
-- 版本决策只使用全局 `version-management-guidelines` Skill（`C:/Users/Vilin/.codex/skills/version-management-guidelines/SKILL.md`）；处理版本管理及主分支 PR 前读取其现行内容。项目文档不另行定义递增、PR 触发、首次稳定发布或日期规则。项目文件与校验入口见 `docs/versioning.md`。
+- 版本决策只使用全局 `version-management-guidelines` Skill（`C:/Users/Vilin/.codex/skills/version-management-guidelines/SKILL.md`）；处理版本管理及主分支 PR 前读取其现行内容。项目文档、脚本和 CI 仅维护版本来源、记录格式及构建一致性，不另行定义递增、PR 触发、首次稳定发布或日期决策规则。项目文件与校验入口见 `docs/versioning.md`。

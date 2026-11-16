@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { parseVersion, compareVersions, releaseRecords, checkIncrement, checkRepository, buildInfo } from './versioning.mjs';
+import { parseVersion, compareVersions, releaseRecords, checkRepository, buildInfo } from './versioning.mjs';
 
 function fixture(t, version = '0.1.0', entries = '') {
   const root = mkdtempSync(join(tmpdir(), 'organization-version-test-'));
@@ -26,20 +26,21 @@ test('拒绝前导零、v 前缀和无效标识，允许合法构建信息', () 
   for (const value of ['0.1.0', '0.1.0-alpha.1', '0.1.0-01a', '0.1.0+001']) assert.doesNotThrow(() => parseVersion(value));
 });
 
-test('同日可有多个版本，但拒绝重复版本、非法日期和日期乱序', () => {
+test('版本倒序排列，允许同日记录，但拒绝重复版本和非法日期', () => {
   const header = '## [Unreleased]\n\n';
   assert.equal(releaseRecords(header + '## [0.1.1] — 2026-10-24\n修复\n## [0.1.0] — 2026-10-24\n初始').length, 2);
   for (const entries of [
     '## [0.1.0] — 2026-10-24\n## [0.1.0] — 2026-10-23',
     '## [0.1.0] — 2026-02-30',
-    '## [0.1.1] — 2026-10-23\n## [0.1.0] — 2026-10-24',
+    '## [0.1.0] — 2026-10-23\n## [0.1.1] — 2026-10-24',
     '## [0.1.0] — 2026-10-24\n## [Unreleased]',
   ]) assert.throws(() => releaseRecords(header + entries));
 });
 
-test('升级必须清零低位，预发布可以晋升正式版本，禁止构建信息冒充新版本', () => {
-  for (const [a, b] of [['0.1.3', '0.2.0'], ['1.4.3', '2.0.0'], ['1.4.3', '1.5.0-rc.1'], ['1.5.0-rc.1', '1.5.0']]) assert.doesNotThrow(() => checkIncrement(a, b));
-  for (const [a, b] of [['1.4.3', '1.5.4'], ['1.4.3', '2.1.0'], ['1.4.3', '1.4.2'], ['1.4.3', '1.4.5'], ['1.4.3', '1.4.3+build.2']]) assert.throws(() => checkIncrement(a, b));
+test('历史台账仅校验版本顺序，不按当前递增策略追溯判定旧记录', t => {
+  const root = fixture(t, '1.4.5', '## [1.4.5] — 2026-10-25\n现有交付\n## [1.4.3] — 2026-10-24\n历史记录');
+  assert.doesNotThrow(() => checkRepository(root));
+  assert.throws(() => releaseRecords('## [Unreleased]\n## [1.4.5+new]\n## [1.4.5+old]'), /版本倒序/);
 });
 
 test('开发基线和已准备的发布记录都不会把普通构建误标为已发布', t => {
@@ -65,7 +66,7 @@ test('发行产物要求 tag、版本记录、提交和干净源码状态一致'
   assert.throws(() => buildInfo(root, { ...env, ORG_COMMIT_SHA: 'unknown' }), /真实提交/);
 });
 
-test('PR 基准检查拒绝改写已有发行说明或降低版本', t => {
+test('PR 基准检查允许补正既有说明和日期，保留版本历史与发行制品检查', t => {
   const root = fixture(t, '0.1.0', '## [0.1.0] — 2026-10-24\n原始说明\n');
   const run = args => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   run(['init', '--quiet']);
@@ -75,11 +76,24 @@ test('PR 基准检查拒绝改写已有发行说明或降低版本', t => {
   assert.doesNotThrow(() => checkRepository(root, { baseRef }));
   run(['tag', 'v0.1.0']);
   assert.doesNotThrow(() => checkRepository(root, { tag: 'v0.1.0' }));
-  writeFileSync(join(root, 'CHANGELOG.md'), '## [Unreleased]\n## [0.1.0] — 2026-10-24\n改写说明\n');
-  assert.throws(() => checkRepository(root, { baseRef }), /不得修改/);
+  writeFileSync(join(root, 'CHANGELOG.md'), '## [Unreleased]\n## [0.1.0] — 2026-10-25\n补正说明及遗漏\n');
+  assert.doesNotThrow(() => checkRepository(root, { baseRef }));
   assert.throws(() => checkRepository(root, { tag: 'v0.1.0' }), /干净/);
+  writeFileSync(join(root, 'CHANGELOG.md'), '## [Unreleased]\n');
+  assert.throws(() => checkRepository(root, { baseRef }), /不得移除/);
+  writeFileSync(join(root, 'CHANGELOG.md'), '## [Unreleased]\n## [0.1.0] — 2026-10-25\n补正说明及遗漏\n');
+  writeFileSync(join(root, 'version.json'), JSON.stringify({ version: '0.2.0' }));
+  assert.doesNotThrow(() => checkRepository(root, { baseRef }));
+  writeFileSync(join(root, 'version.json'), JSON.stringify({ version: '0.1.1' }));
+  assert.doesNotThrow(() => checkRepository(root, { baseRef }));
   writeFileSync(join(root, 'version.json'), JSON.stringify({ version: '0.0.9' }));
   assert.throws(() => checkRepository(root, { baseRef }), /低于/);
+  writeFileSync(join(root, 'version.json'), JSON.stringify({ version: '0.1.0' }));
+  writeFileSync(join(root, 'CHANGELOG.md'), '## [Unreleased]\n');
+  run(['add', '.']);
+  run(['-c', 'user.name=Version Test', '-c', 'user.email=version-test@example.invalid', 'commit', '--quiet', '-m', 'baseline without numbered entries']);
+  writeFileSync(join(root, 'version.json'), JSON.stringify({ version: '0.0.9' }));
+  assert.throws(() => checkRepository(root, { baseRef: run(['rev-parse', 'HEAD']) }), /低于基准/);
 });
 
 test('首次引入版本台账允许空基准体系，但拒绝无效基准和部分缺失', t => {
@@ -100,5 +114,6 @@ test('候选版本暂缺日期仍可开发校验，但不能用于发行构建',
   assert.equal(checkRepository(root).version, '0.2.0');
   assert.equal(buildInfo(root, {}).releaseDate, null);
   assert.throws(() => checkRepository(root, { release: true }), /已确认版本日期/);
-  assert.throws(() => releaseRecords('## [Unreleased]\n## [0.2.0] — 2026-11-16\n## [0.1.0]\n旧候选'), /只有最新版本/);
+  assert.doesNotThrow(() => releaseRecords('## [Unreleased]\n## [0.2.0] — 2026-11-16\n## [0.1.0]\n日期待补正'));
+  assert.doesNotThrow(() => releaseRecords('## [Unreleased]\n## [0.2.0] — 2026-11-15\n## [0.1.0] — 2026-11-16\n补正历史日期'));
 });

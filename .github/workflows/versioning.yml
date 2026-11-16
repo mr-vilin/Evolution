@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: 校验版本与既有发行记录
+      - name: 校验版本文件与构建一致性
         env:
           BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
           REF_TYPE: ${{ github.ref_type }}

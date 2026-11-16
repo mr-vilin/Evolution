@@ -12,7 +12,7 @@
 
 - `version.json`：产品版本的唯一手工声明。
 - `CHANGELOG.md`：产品变更及版本记录。
-- `scripts/versioning.mjs`：版本文件、记录、基准与 tag 校验，以及构建元信息生成。
+- `scripts/versioning.mjs`：版本格式、记录顺序、基准历史保留与 tag 一致性校验，以及构建元信息生成。
 - `scripts/versioning.test.mjs`：版本工具回归测试。
 - `.github/workflows/versioning.yml`：CI 校验、相关测试及构建入口。
 - `build-info.json`：构建生成的版本、提交、工作区状态、构建时间和发行元信息，不手工编辑或提交。前后端使用同一份元信息，系统信息页核对运行版本。
@@ -32,7 +32,7 @@ node scripts/versioning.mjs check --release
 node scripts/versioning.mjs build-info --output build-info.json
 ```
 
-脚本检查文件格式及一致性；版本级别和交付阶段由现行全局 Skill 判断。
+脚本和 CI 仅检查文件格式与构建一致性；版本级别、PR 触发、首次稳定发布及日期口径由现行全局 Skill 判断。基准检查保留已有版本条目，允许补正说明和日期；不按当前递增策略追溯判定历史编号，也不要求历史日期倒序或全部齐备。发行构建仍需取得当前版本日期，以生成运行元信息。
 
 ## 历史依据
 

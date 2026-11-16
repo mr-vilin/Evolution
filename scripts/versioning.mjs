@@ -51,25 +51,13 @@ export function releaseRecords(markdown) {
     parseVersion(version);
     const parsed = date ? new Date(`${date}T00:00:00Z`) : null;
     if (date && (Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== date)) throw new Error(`发布日期无效：${date}`);
-    if (!date && records.length) throw new Error('只有最新版本可以暂缺合并日期');
     if (seen.has(version)) throw new Error(`重复版本：${version}`);
-    if (records.length && records.at(-1).date && date && records.at(-1).date < date) throw new Error('发布记录必须按日期倒序排列');
+    if (records.length && compareVersions(records.at(-1).version, version) <= 0) throw new Error('版本记录必须按版本倒序排列');
     seen.add(version);
     records.push({ version, date, text: section.trimEnd() });
   }
   if (unreleased !== 1) throw new Error('必须保留一个 Unreleased 开发记录区');
   return records;
-}
-
-export function checkIncrement(previous, next) {
-  if (compareVersions(next, previous) <= 0) throw new Error('新发布版本必须高于前一个版本，构建信息不计入优先级');
-  const a = parseVersion(previous), b = parseVersion(next);
-  const [x, y, z] = a.core, [nx, ny, nz] = b.core;
-  if (x === nx && y === ny && z === nz && a.pre.length) return;
-  if (nx === x + 1n && ny === 0n && nz === 0n) return;
-  if (nx === x && ny === y + 1n && nz === 0n) return;
-  if (nx === x && ny === y && nz === z + 1n) return;
-  throw new Error('版本递增不符合规则：major/minor 必须清零低位，且每批只递增一级');
 }
 
 function git(root, args) {
@@ -83,7 +71,6 @@ export function checkRepository(root = repositoryRoot, { release = false, tag, b
   const { version } = manifest;
   parseVersion(version);
   const records = releaseRecords(readFileSync(resolve(root, 'CHANGELOG.md'), 'utf8'));
-  for (let i = 0; i < records.length - 1; i++) checkIncrement(records[i + 1].version, records[i].version);
   if (records[0] && compareVersions(version, records[0].version) < 0) throw new Error('当前版本低于最新记录');
   if (baseRef) {
     if (!/^[0-9a-f]{40}$/.test(baseRef)) throw new Error('base-ref 必须是完整提交 SHA');
@@ -96,12 +83,12 @@ export function checkRepository(root = repositoryRoot, { release = false, tag, b
     // 旧规则台账没有方括号标题；首次重编号经 ADR 0003 明确授权。
     if (oldChangelog?.includes('## [Unreleased]')) {
       for (const record of releaseRecords(oldChangelog)) {
-        if (!records.some(item => item.version === record.version && item.text === record.text)) throw new Error(`不得修改或移除既有版本记录：${record.version}`);
+        if (!records.some(item => item.version === record.version)) throw new Error(`不得移除既有版本记录：${record.version}`);
       }
       const oldManifest = git(root, ['show', `${baseRef}:version.json`]);
       if (oldManifest === null) throw new Error('无法读取基准提交的 version.json');
       const oldVersion = JSON.parse(oldManifest).version;
-      if (oldVersion !== version) checkIncrement(oldVersion, version);
+      if (compareVersions(version, oldVersion) < 0) throw new Error('当前版本低于基准版本');
     }
   }
   if (release || tag) {
