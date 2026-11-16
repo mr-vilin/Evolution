@@ -2,16 +2,12 @@
 
 <!-- 用一句话说明用户可见的变化，并补充影响范围。 -->
 
-## 版本台账
+## 版本处理
 
-- [ ] 已遵循 `docs/versioning.md`，普通提交维护 Unreleased；面向 main 的 PR 归档本次交付记录，或说明无需编号的理由
-- [ ] 若为面向 main 的功能/修复 PR，已从最新主分支计算候选版本，更新 `version.json` 和对应记录；主分支前进后需复算
-- [ ] 已评估 HTTP API、MCP、稳定 ID、数据语义和部署契约的兼容性
-- [ ] 已运行 `node scripts/versioning.mjs check`；发布 PR 还需 `--release`
+- [ ] 已读取并执行全局 `version-management-guidelines` Skill 的现行规则
+- [ ] 已运行适用的项目版本校验（入口见 `docs/versioning.md`）
 
-版本影响：修复 / 兼容新增或弃用 / 破坏性变化 / 无产品行为变化
-
-理由、迁移及升级影响：
+<!-- 按 Skill 记录本次版本结论与依据；模板不另行定义版本规则。 -->
 
 ## 验证
 

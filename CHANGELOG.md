@@ -1,6 +1,6 @@
 # 产品版本记录
 
-产品版本遵循 [版本规范](docs/versioning.md)，唯一声明为根目录 [version.json](version.json)。本台账以版本为单位，允许同日多个版本；日期使用北京时间。已发布版本内容不得覆盖，开发改动先收集到 Unreleased。
+版本处理统一使用全局 `version-management-guidelines` Skill；项目实现入口见 [版本实现说明](docs/versioning.md)，产品版本声明见 [version.json](version.json)。
 
 ## [Unreleased]
 
@@ -10,7 +10,7 @@
 
 ### 版本治理
 
-- 普通提交只维护 Unreleased；面向 main 的交付 PR 准备候选版本，合并后确认。统一项目规则、版本声明及更新日志，并支持尚未填写合并日期的候选条目。
+- 移除项目内独立的版本决策规则，AGENTS.md 与 PR 模板统一指向全局 `version-management-guidelines` Skill；项目文档仅保留文件与校验入口，旧 ADR 明确归档。版本工具支持尚未填写合并日期的候选条目。
 
 ### 调整
 
