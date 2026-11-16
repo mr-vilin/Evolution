@@ -20,7 +20,11 @@
 .table-standards .table-status-samples{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
 .table-standards .table-status-samples .ant-tag{margin:0}
 .table-standards .table-demo{min-width:0;container-type:inline-size}
-.table-standards .table-demo-shell{min-width:0;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.table-standards .table-demo-shell{position:relative;min-width:0;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.table-standards .table-pagination-probe{position:absolute;left:16px;right:16px;visibility:hidden;pointer-events:none}
+/* 对齐当前 antd Table 的分页换行布局；零样本时也测量相同的高度。 */
+.table-standards .table-pagination-probe .ant-pagination{margin:16px 0;flex-wrap:wrap;row-gap:8px;justify-content:flex-end}
+.table-standards .table-pagination-probe .ant-pagination>*{flex:none}
 .table-standards .table-demo-top{padding:16px}
 .table-standards .table-demo-top h3{font-size:16px;line-height:24px;margin:0 0 16px}
 .table-standards .table-demo-toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
@@ -45,6 +49,7 @@
 .table-standards .table-height-controls{display:flex;align-items:center;flex-wrap:wrap;gap:16px}
 .table-standards .table-height-controls>label:first-child{flex:1;min-width:200px}
 .table-standards .table-height-controls>label:last-child{display:flex;align-items:center;gap:8px}
+.table-standards .table-height-help{margin:8px 0 0;color:var(--muted);font-size:14px;line-height:22px}
 .table-standards .table-height-readout{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:16px 0;font-size:12px;line-height:20px;color:var(--muted)}
 .table-standards .table-workspace{height:clamp(560px,75vh,720px);position:relative;overflow:auto;resize:vertical;min-height:560px;max-height:900px;border:1px solid var(--outline);border-radius:8px;background:var(--layout);isolation:isolate;scrollbar-width:thin}
 .table-standards .table-workspace-header{height:48px;display:flex;align-items:center;padding:0 16px;position:sticky;top:0;z-index:4;border-bottom:1px solid var(--line);background:var(--surface);font-weight:600}

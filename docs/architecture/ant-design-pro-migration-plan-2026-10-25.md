@@ -297,7 +297,7 @@ Utoopack 按官方快照配置作为第一阶段候选，须验证 Windows Node 
 - [认证门禁](../../frontend/src/components/AuthGate.tsx)、[HTTP 协议](../../frontend/src/services/http.ts)、[完整游标读取](../../frontend/src/services/readAll.ts)。
 - [门店预览与提交](../../frontend/src/components/StoreEditor.tsx)、[同步中心](../../frontend/src/pages/SyncPage.tsx)、[系统信息](../../frontend/src/pages/SystemInfoPage.tsx)。
 - [静态服务](../../deploy/web.py)、[静态服务测试](../../deploy/tests/test_web.py)、[Dockerfile](../../Dockerfile)。
-- [版本规则](../versioning.md)、[版本脚本](../../scripts/versioning.mjs)、[版本 CI](../../.github/workflows/versioning.yml)。
+- [版本实现说明](../versioning.md)、[版本脚本](../../scripts/versioning.mjs)、[版本 CI](../../.github/workflows/versioning.yml)。
 - [既有 UI 原型与截图的说明](../ui/README.md)：其中截图为历史夹具验证，本次不视为新界面或真实企业证据。
 
 ### 官方一手来源

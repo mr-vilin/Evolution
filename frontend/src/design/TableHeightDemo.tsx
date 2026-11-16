@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Select, Slider, Tag } from 'antd';
 import TableDemo from './TableDemo';
-import { tableCapacity } from './tableStandardsModel';
+import { tableCapacity, type TableMeasurements } from './tableStandardsModel';
 
 export default function TableHeightDemo() {
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -10,6 +10,7 @@ export default function TableHeightDemo() {
   const markerRef = useRef<HTMLDivElement>(null);
   const [summaryPercent, setSummaryPercent] = useState(20);
   const [recordLimit, setRecordLimit] = useState(36);
+  const [measurements, setMeasurements] = useState<TableMeasurements>({ chromeHeight: 0, rowHeight: 41 });
   const [capacity, setCapacity] = useState({ ...tableCapacity(640, 48, 16, 16, 176), viewport: 640, top: 48 });
 
   useEffect(() => {
@@ -23,21 +24,27 @@ export default function TableHeightDemo() {
       summary.style.height = `${full * summaryPercent / 100}px`;
       // 加回 scrollTop，保持初始位置口径，模式不随滚动来回切换。
       const initialY = marker.getBoundingClientRect().top - viewport.getBoundingClientRect().top - viewport.clientTop + viewport.scrollTop;
-      const next = { ...tableCapacity(viewport.clientHeight, header.offsetHeight, 16, 16, initialY), viewport: viewport.clientHeight, top: header.offsetHeight };
+      const next = { ...tableCapacity(viewport.clientHeight, header.offsetHeight, 16, 16, initialY, measurements), viewport: viewport.clientHeight, top: header.offsetHeight };
       setCapacity(previous => Object.keys(next).every(key => next[key as keyof typeof next] === previous[key as keyof typeof next]) ? previous : next);
     };
     const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(measure); };
     const observer = new ResizeObserver(schedule);
     observer.observe(viewport); observer.observe(header); observer.observe(summary);
     window.addEventListener('resize', schedule);
-    viewport.scrollTop = 0;
     measure();
     return () => { observer.disconnect(); cancelAnimationFrame(frame); window.removeEventListener('resize', schedule); };
-  }, [summaryPercent]);
+  }, [summaryPercent, measurements]);
+
+  useEffect(() => { if (viewportRef.current) viewportRef.current.scrollTop = 0; }, [summaryPercent]);
+
+  const modeLabel = capacity.mode === 'natural' ? '自然滚动 · 一屏不足以容纳最小表格'
+    : capacity.reason === 'body' ? '例外模式 · 表体不足三行，整块表格再吸顶'
+      : capacity.exceptional ? '例外模式 · 不足 60%，整块表格再吸顶' : '默认模式 · 首屏容纳';
 
   return <div className="table-height-demo">
-    <div className="table-height-controls"><label htmlFor="table-summary-height">上方摘要占一屏容量：{summaryPercent}%<Slider id="table-summary-height" min={0} max={70} step={1} value={summaryPercent} onChange={setSummaryPercent} /></label><div className="table-control-buttons"><Button onClick={() => setSummaryPercent(20)}>常规 80%</Button><Button onClick={() => setSummaryPercent(40)}>临界 60%</Button><Button onClick={() => setSummaryPercent(41)}>不足 60%</Button><Button onClick={() => setSummaryPercent(70)}>较长摘要</Button></div><label>记录数量<Select aria-label="高度示例记录数量" value={recordLimit} options={[{ value: 36, label: '36 条' }, { value: 2, label: '2 条' }, { value: 0, label: '0 条' }]} onChange={setRecordLimit} /></label></div>
-    <div className="table-height-readout" role="status"><Tag color={capacity.exceptional ? 'warning' : 'processing'}>{capacity.exceptional ? '例外模式 · 页面先滚动，整块表格再吸顶' : '默认模式 · 首屏容纳'}</Tag><span>V {capacity.viewport}px · H {Math.round(capacity.full)}px · A {Math.round(capacity.available)}px · A/H {(capacity.ratio * 100).toFixed(1)}%</span></div>
+    <div className="table-height-controls"><label htmlFor="table-summary-height">上方摘要占一屏容量：{summaryPercent}%<Slider id="table-summary-height" min={0} max={70} step={1} value={summaryPercent} onChange={setSummaryPercent} /></label><div className="table-control-buttons"><Button onClick={() => setSummaryPercent(20)}>常规 80%</Button><Button onClick={() => setSummaryPercent(40)}>临界 60%</Button><Button onClick={() => setSummaryPercent(41)}>不足 60%</Button><Button onClick={() => setSummaryPercent(70)}>较长摘要</Button></div><label>基础示例数量<Select aria-label="高度示例基础数量" value={recordLimit} options={[{ value: 36, label: '36 条' }, { value: 2, label: '2 条' }, { value: 0, label: '0 条' }]} onChange={setRecordLimit} /></label></div>
+    <p className="table-height-help">基础数量只控制原始样本；本次新增记录额外计入列表，切换数量保留新增、编辑和删除结果。</p>
+    <div className="table-height-readout" role="status"><Tag color={capacity.mode === 'default' ? 'processing' : 'warning'}>{modeLabel}</Tag><span>V {capacity.viewport}px · H {Math.round(capacity.full)}px · A {Math.round(capacity.available)}px · A/H {(capacity.ratio * 100).toFixed(1)}% · 最小预算 {capacity.minimum}px</span></div>
     <div ref={viewportRef} className="table-workspace" tabIndex={0} aria-label="可滚动的模拟工作区">
       <div ref={headerRef} className="table-workspace-header">模拟工作区 · 固定顶栏</div>
       <div className="table-workspace-content">
@@ -45,7 +52,7 @@ export default function TableHeightDemo() {
         <div ref={markerRef} className="table-height-marker" />
         <div className="table-height-track">
           <div className={capacity.exceptional ? 'table-height-sticky' : ''} style={{ top: capacity.top + 16 }}>
-            <TableDemo maxHeight={capacity.maxHeight} recordLimit={recordLimit} compact />
+            <TableDemo maxHeight={capacity.maxHeight} recordLimit={recordLimit} compact onMeasure={setMeasurements} />
           </div>
           {capacity.exceptional && <div aria-hidden style={{ height: capacity.full * 0.6 }} />}
         </div>

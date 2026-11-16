@@ -10,7 +10,7 @@
 
 ## 产品版本与构建
 
-产品版本从根目录 `version.json` 读取，规范见 [版本规范](../docs/versioning.md)。当前重设的开发初始基线为 0.1.0，尚未正式上线。普通开发构建不显示发布日期；旧容器不会因文件修改自动更新版本，需另行构建并部署镜像后核对系统信息页。
+产品版本从根目录 `version.json` 读取，版本规则统一使用全局 `version-management-guidelines` Skill，项目实现见 [版本实现说明](../docs/versioning.md)。当前重设的开发初始基线为 0.1.0，尚未正式上线。普通开发构建不显示发布日期；旧容器不会因文件修改自动更新版本，需另行构建并部署镜像后核对系统信息页。
 
 Docker 构建时生成同一份 `build-info.json`，分别注入前端和 Python 包；通过 `/admin/api/system/version`（管理员认证）读取服务端版本，不查询业务数据库。开发镜像可用 `--build-arg ORG_COMMIT_SHA=<完整SHA> --build-arg ORG_SOURCE_DIRTY=true` 标识未提交代码。发行构建由干净 tag 提交进行，同时传入 `ORG_RELEASE_TAG`、`ORG_COMMIT_SHA` 和 `ORG_SOURCE_DIRTY=false`；应用、迁移和 MCP 继续复用同一镜像。不得将未知提交或脏代码构建标记为已发行。
 

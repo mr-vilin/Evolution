@@ -33,7 +33,7 @@ MCP 接入示例使用新目录；已有客户端需重新加载配置。本地 
 - [Agent Evaluation 安全命令与六场景验收](./docs/运行与验收.md#agent-evaluation-测试迁移与命令)
 - [Agent 能力、观察与评测 ADR 及完整实施裁决](./docs/adr/0002-agent-native-capability-evaluation.md)
 - [分任务进度与审查](./docs/superpowers/progress.md)
-- [产品版本规范（SemVer）](./docs/versioning.md)
+- [产品版本实现说明](./docs/versioning.md)
 - [产品版本声明](./version.json)
 - [产品版本记录](./CHANGELOG.md)
 
