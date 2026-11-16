@@ -2,6 +2,7 @@ import { createContext, type ReactNode, useContext, useEffect, useLayoutEffect, 
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { colorVariables, createTheme, defaultColors, isHexColor, readColors, themeStorageKey, type ColorRole, type ThemeColors } from './colors';
+import { themeLogoUrl } from '../branding/logo';
 
 function loadColors() {
   try { return readColors(JSON.parse(localStorage.getItem(themeStorageKey) ?? 'null')); }
@@ -17,6 +18,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [storageError, setStorageError] = useState('');
   const config = useMemo(() => createTheme(colors), [colors]);
   const variables = useMemo(() => colorVariables(colors), [colors]);
+  useEffect(() => {
+    const icons = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]'));
+    const previous = icons.map(icon => icon.getAttribute('href'));
+    for (const icon of icons) icon.href = themeLogoUrl(colors.primary);
+    return () => icons.forEach((icon, index) => {
+      const href = previous[index];
+      if (href === null) icon.removeAttribute('href');
+      else icon.setAttribute('href', href);
+    });
+  }, [colors.primary]);
   useLayoutEffect(() => {
     const style = document.documentElement.style;
     const previous = Object.fromEntries(Object.keys(variables).map(key => [key, style.getPropertyValue(key)]));

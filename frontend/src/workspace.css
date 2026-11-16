@@ -3,6 +3,9 @@
 .ant-pro-layout .page-heading { margin-bottom: 0; }
 .ant-pro-layout .ant-pro-page-container-children-container { padding-inline: 0; }
 .workspace-actions { white-space: nowrap; }
+.workspace-menu-leaf { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.workspace-menu-leaf-icon { display: inline-flex; flex: none; align-items: center; }
+.workspace-menu-leaf > div { min-width: 0; }
 .ui-prototypes-frame { display: block; width: 100%; height: calc(100dvh - 240px); min-height: 480px; border: 0; }
 .employee-sections { display: flex; flex-direction: column; gap: 24px; }
 .ant-pro-layout .ant-pro-page-container-warp-page-header { padding-inline: 0; }
