@@ -7,6 +7,7 @@ import ComponentGuide, { componentStyleCount } from '../design/ComponentGuide';
 import ShadowGuide, { shadowStyleCount } from '../design/ShadowGuide';
 import MotionGuide, { motionStyleCount } from '../design/MotionGuide';
 import DesignSectionNav from '../design/DesignSectionNav';
+import DesignMember from '../design/DesignMember';
 import { useThemeColors } from '../theme/ThemeProvider';
 import { type ColorRole } from '../theme/colors';
 import '../design/standards.css';
@@ -30,7 +31,7 @@ const typographyStyles = [
   { name: 'section-title', sample: '模块标题 · 说明这一区域的内容，如同步任务、成员详情。', fontSize: '16px', lineHeight: '24px', fontWeight: 600, color: 'colorTextHeading' },
   { name: 'body-text', sample: '主要内容 · 展示姓名、部门、手机号码等业务数据，以及表单输入与普通控件文字。', fontSize: '14px', lineHeight: '22px', fontWeight: 400, color: 'colorText' },
   { name: 'secondary-text', sample: '次要信息 · 解释主要内容，用于页面说明、详情字段名称和需要读懂的表单帮助。', fontSize: '14px', lineHeight: '22px', fontWeight: 400, color: 'colorTextSecondary' },
-  { name: 'caption-text', sample: '附属注释 · 补充人数、单位与非关键更新时间，如部门名称旁的“共 20 人”。', fontSize: '12px', lineHeight: '20px', fontWeight: 400, color: 'colorTextTertiary' },
+  { name: 'caption-text', sample: '附属注释 · 补充人数、单位与非关键更新时间，如部门名称旁的“共 20 人”。', fontSize: '12px', lineHeight: '20px', fontWeight: 400, color: 'colorTextSecondary' },
 ] as const;
 
 function Section({ id, index, title, caption, children }: { id: string; index: string; title: string; caption?: string; children: ReactNode }) {
@@ -77,7 +78,8 @@ function TypographyRow({ name, sample, value }: { name: string; sample: string; 
 }
 
 function LayoutGuide() {
-  return <div className="panel layout-guide">
+  const { token } = theme.useToken();
+  return <div className="panel layout-guide" style={{ '--shadow-popup': token.boxShadowSecondary } as CSSProperties}>
     <div className="layout-intro"><h3>先分清表面，再安排内容和间距</h3><p>原文用三层表面组织界面：页面背景包围内容，内容容器承载日常工作，浮动表面承载临时操作。搭建列表页、表单页或工作台时，先判断内容属于哪一层，再选择相应表面。</p><p>表面与文字通过主题统一配置。扩展深色主题时，由 theme.algorithm 中的 darkAlgorithm 协调颜色、表面与阴影，不手工反转颜色；当前项目使用 defaultAlgorithm 浅色主题。</p></div>
     <div className="surface-stack" aria-label="页面背景、内容容器与浮动表面示意">
       <span className="mini-label">页面背景 · bg-layout</span><p className="surface-description">整个工作台的底板，留白与模块之间的空隙属于这一层。</p>
@@ -115,7 +117,7 @@ function RadiusGuide() {
   const avatarStyle: CSSProperties = { borderRadius: data.rounded.full, background: token.colorPrimary, color: token.colorTextLightSolid };
   const applications = [
     { name: '内部拼接', rounded: 'none' as const, usage: '表格内部、分段控件的相邻边缘。连续内容的接缝使用直角，外部容器可按所属类别保留圆角。',
-      sample: <><div className="radius-table-shell"><table className="radius-table" aria-label="表格内部直角拼接示例"><thead><tr><th scope="col">成员</th><th scope="col">部门</th></tr></thead><tbody><tr><td>林晓</td><td>研发部</td></tr></tbody></table></div><p className="radius-caption">内部单元格接缝 0px · 外部容器 8px</p></> },
+      sample: <><div className="radius-table-shell"><table className="radius-table" aria-label="表格内部直角拼接示例"><thead><tr><th scope="col">成员</th><th scope="col">部门</th></tr></thead><tbody><tr><td><DesignMember name="林晓" /></td><td>研发部</td></tr></tbody></table></div><p className="radius-caption">内部单元格接缝 0px · 外部容器 8px</p></> },
     { name: '复选框', rounded: 'sm' as const, usage: '复选框的方框使用 2px 圆角。用于勾选筛选条件或选择多项内容，选中和未选中时保持一致的轮廓。',
       sample: <div className="radius-checkbox-examples"><Checkbox defaultChecked>包含子部门</Checkbox><Checkbox>仅显示负责人</Checkbox></div> },
     { name: '小型元素', rounded: 'md' as const, usage: '分类标签、小 chip、文字提示（Tooltip）和气泡卡片（Popover）。用于分类和补充说明；标签与浮层的外框使用 4px 圆角。',
@@ -124,7 +126,7 @@ function RadiusGuide() {
       sample: <><div className="radius-controls"><Input aria-label="圆角示例姓名搜索" placeholder="搜索姓名" /><Select aria-label="圆角示例部门选择" defaultValue="all" options={[{ value: 'all', label: '全部部门' }, { value: 'engineering', label: '研发部' }]} /><Button>查询成员</Button></div><div className="radius-multiple-example"><label htmlFor="radius-selected-members" className="radius-field-label">多选成员 · 已选项 6px</label><Select id="radius-selected-members" mode="multiple" defaultValue={['lin', 'chen', 'zhou']} options={[{ value: 'lin', label: '林晓' }, { value: 'chen', label: '陈晨' }, { value: 'zhou', label: '周宁' }, { value: 'wang', label: '王悦' }]} /></div></> },
     { name: '内容表面', rounded: 'lg' as const, usage: '卡片、弹窗、抽屉和通知。用于承载一组相关内容，或提供临时确认与反馈。',
       sample: <div className="radius-surface-example"><h4>部门信息卡片</h4><p>研发部 · 成员与组织资料</p></div> },
-    { name: '圆形元素', rounded: 'full' as const, usage: '圆形头像、徽标和状态圆点。头像与姓名间隔 1 个 unit（4px）；全圆角不用于普通按钮或分类标签。',
+    { name: '圆形元素', rounded: 'full' as const, usage: '圆形头像、徽标和状态圆点。头像内文字统一为 14px，头像与姓名间隔 1 个 unit（4px）；全圆角不用于普通按钮或分类标签。',
       sample: <div className="radius-round-examples">
         <div className="radius-round-member"><Avatar aria-label="圆形成员头像示例" style={avatarStyle}>林</Avatar><span>林晓</span></div>
         <div role="group" aria-label="成员头像叠加示例：林晓、陈晨、周宁"><Avatar.Group>{['林晓', '陈晨', '周宁'].map(name => <Avatar key={name} aria-label={name} style={avatarStyle}>{name[0]}</Avatar>)}</Avatar.Group></div>
@@ -165,10 +167,14 @@ function DoOrNotDoGuide() {
 }
 
 export default function DesignStandardsPage() {
-  const { colors, reset, storageError } = useThemeColors();
+  const { reset, storageError } = useThemeColors();
   const { token } = theme.useToken();
   const supplements = [token.colorPrimaryHover, token.colorPrimaryActive, token.colorPrimaryBg, token.colorFillAlter, token.colorTextDisabled, token.colorBorder];
-  return <div className="design-standards"><main className="design-main">
+  return <ConfigProvider avatar={{ style: { fontSize: 14 } }} theme={{ components: {
+    Checkbox: { borderRadiusSM: 2 },
+    Select: { optionSelectedFontWeight: 400 },
+    Tabs: { itemColor: token.colorTextSecondary, itemHoverColor: token.colorPrimaryHover, itemSelectedColor: token.colorPrimary, itemActiveColor: token.colorPrimaryActive },
+  } }}><div className="design-standards"><main className="design-main">
     <header className="hero"><div><div className="eyebrow">DESIGN REFERENCE / ALPHA</div><h1>让设计准则，清晰可见。</h1><p>{data.description}</p></div></header>
     <div className="value-grid" role="list" aria-label="设计价值观">{[['自然', 'Nature'], ['确定', 'Certainty'], ['有意义', 'Meaningfulness'], ['成长', 'Growth']].map(([name, english], index) => <article className="value-card" key={name} tabIndex={0} role="listitem"><span className="value-english" lang="en">{english}</span><h3><span className="value-title-icon" aria-hidden="true">{valueIcons[index]}</span>{name}</h3><p>{chapters[0].paragraphs.find(text => text.startsWith(`${name}。`))?.slice(name.length + 1).trim()}</p></article>)}</div>
     <div className="overview" aria-label="准则概览">{[[String(Object.values(colorReference).flat().length), '色彩'], [String(typographyStyles.length), '字体层级'], [String(entries(data.rounded).length), '圆角'], [String(spacingScaleCount), '间距'], [String(componentStyleCount), '组件样式'], [String(shadowStyleCount), '阴影'], [String(motionStyleCount), '动画']].map(([count, label]) => <div className="metric" key={label}><strong>{count.padStart(2, '0')}</strong><span>{label}</span></div>)}</div>
@@ -179,18 +185,22 @@ export default function DesignStandardsPage() {
         <div className="swatches color-role-grid">{colorReference.roles.map(item => <RoleCard key={item.key} role={item.key as ColorRole} name={item.name} usage={item.usage} />)}</div>
         <div className="palette-supplement"><h4>交互与界面补充</h4><div className="swatches color-supplement-grid">{colorReference.supplements.map((item, i) => <article key={item.key} className="swatch color-role-card"><ColorCopy value={supplements[i].toUpperCase()} label={item.name} className="color-block" style={{ background: supplements[i] }} /><h4 className="color-role-name">{item.name}</h4><div className="color-details"><code className="color-hex">{supplements[i].toUpperCase()}</code><p className="color-usage">{item.usage}</p></div></article>)}</div></div>
       </div>
-      <div className="palette-group"><div className="palette-title"><h3>语义色</h3></div><p className="palette-description">小圆点、浅色填充标签和带状态图标的标签共同表达状态。</p><div className="swatches color-example-grid color-semantic-grid">{colorReference.semantic.map((item, i) => {
-        const hex = [token.colorSuccess, token.colorWarning, token.colorError, token.colorInfo, colors.canvas][i].toUpperCase();
-        return <article className="swatch color-example-card" key={item.key}><div className="color-samples"><ColorCopy value={hex} label={item.name}><Badge color={hex} text={item.name} /></ColorCopy><ColorCopy value={hex} label={item.filled}><Tag color={statusTypes[i]}>{item.filled}</Tag></ColorCopy><ColorCopy value={hex} label={`${item.filled} Status (filled)`}><Tag color={statusTypes[i]} icon={statusIcons[i]}>{item.filled}</Tag></ColorCopy></div><code className="color-hex">{hex}</code></article>;
+      <div className="palette-group"><div className="palette-title"><h3>语义色</h3></div><p className="palette-description">小圆点、浅色填充标签和带状态图标的标签共同表达状态。中性示例统一展示“未开始”；业务中的无效、未知状态保留各自文案，不互相替代。</p><div className="swatches color-example-grid color-semantic-grid">{colorReference.semantic.map((item, i) => {
+        const neutral = item.key === 'invalid';
+        // 原始附件保持不变；中性展示统一为「未开始」，不把不同业务状态当作同义词。
+        const name = neutral ? item.filled : item.name;
+        const hex = (neutral ? item.hex : [token.colorSuccess, token.colorWarning, token.colorError, token.colorInfo][i]).toUpperCase();
+        const neutralStyle: CSSProperties | undefined = neutral ? { background: hex, color: token.colorText, borderColor: 'transparent' } : undefined;
+        return <article className={`swatch color-example-card${neutral ? ' color-neutral-example' : ''}`} key={item.key}><div className="color-samples"><ColorCopy value={hex} label={name}><Badge color={hex} text={name} /></ColorCopy><ColorCopy value={hex} label={item.filled}><Tag color={statusTypes[i]} style={neutralStyle}>{item.filled}</Tag></ColorCopy><ColorCopy value={hex} label={`${item.filled} Status (filled)`}><Tag color={statusTypes[i]} style={neutralStyle} icon={statusIcons[i]}>{item.filled}</Tag></ColorCopy></div><code className="color-hex">{hex}</code></article>;
       })}</div></div>
       <div className="palette-group"><div className="palette-title"><h3>扩展色</h3></div><p className="palette-description">12 种预设色用于分类、标签和图表，保留统一的分类含义。</p><div className="swatches color-example-grid">{colorReference.presets.map(item => <article className="swatch color-example-card" key={item.key}><div className="color-samples"><ColorCopy value={item.hex} label={item.name}><Tag color={item.key}>{item.name}</Tag></ColorCopy></div><code className="color-hex">{item.hex}</code></article>)}</div></div>
       
     </div></Section>
-    <Section id="typography" index="02" title="字体层级" caption="5 类常用文字 · 明确作用与使用位置"><div className="panel">{typographyStyles.map(({ name, sample, color, ...style }) => <TypographyRow key={name} name={name} sample={sample} value={{ ...style, fontFamily: data.typography['body-md'].fontFamily, color: token[color] }} />)}<div className="family">使用规则：表头沿用 14px 正文并加重至 600；日志提交时间等关键数据使用主要内容样式。占位与禁用文字使用 {token.colorTextDisabled.toUpperCase()}，字号继承所在控件。链接与选中项使用主题色，成功、告警与失败使用对应语义色。
+    <Section id="typography" index="02" title="字体层级" caption="5 类常用文字 · 明确作用与使用位置"><div className="panel">{typographyStyles.map(({ name, sample, color, ...style }) => <TypographyRow key={name} name={name} sample={sample} value={{ ...style, fontFamily: data.typography['body-md'].fontFamily, color: token[color] }} />)}<div className="family">使用规则：表头沿用 14px 正文并加重至 600；时间统一使用说明灰；日志提交时间等关键数据保留 14px／22px，附属时间、单位与人数使用 12px／20px。尺寸标注使用三级文字色。占位与禁用文字使用 {token.colorTextDisabled.toUpperCase()}，字号继承所在控件。链接与选中项使用主题色，成功、告警与失败使用对应语义色。
       <div>产品 UI 中只出现两种字重：400（正文、控件、菜单项、标签页标签）和 600（fontWeightStrong——标题、表头以及任何标题级排版）。</div>
       <div>细体（100–300）、粗体（700+）和斜体不用于界面 chrome——它们会与系统追求的平静、确定基调相冲突。</div>
       <div>斜体仅在长篇文档正文中可接受。选中/激活状态的视觉强调来自颜色和描边（边框、下划线），而不是字重。</div>
-      <div>字体与基础字号通过主题的 fontFamily、fontSize 统一调整；维持标题、正文和附属信息的层级关系，以及既定的 400／600 字重。</div>
+      <div>字体与基础字号通过主题的 fontFamily、fontSize 统一调整；维持标题、正文和附属信息的层级关系，以及既定的 400／600 字重。规范页自身的展示标题与章节标题允许特殊层级，业务页面仍采用以上五类常用文字。</div>
       <code>字体栈：{data.typography['body-md'].fontFamily}</code></div></div></Section>
     <Section id="layout" index="03" title="布局" caption="三层表面 · 使用位置与选择方法"><LayoutGuide /></Section>
     <Section id="geometry" index="04" title="圆角与形状" caption="数值标准 · 适用场景 · 组合示例"><RadiusGuide /></Section>
@@ -200,5 +210,5 @@ export default function DesignStandardsPage() {
     <Section id="motion" index="08" title="动画" caption="三档时长 · 命名缓动 · 交互示例"><MotionGuide /></Section>
     <Section id="notes" index="09" title="Do Or Not Do" caption="设计判断 · 六组对照"><DoOrNotDoGuide /></Section>
     <footer className="page-foot"><span>Ant Design · 设计准则参考</span><span>Ant Design 默认准则与通用色彩职责</span></footer>
-  </main></div>;
+  </main></div></ConfigProvider>;
 }

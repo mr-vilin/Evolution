@@ -2,65 +2,75 @@
 .table-standards{min-width:0}
 .table-standards .table-guide-copy{padding:24px}
 .table-standards .table-guide-copy h3{font-size:16px;line-height:24px;margin:0 0 8px}
-.table-standards .table-guide-copy p,.table-standards .table-section-intro p{margin:0;color:var(--muted);line-height:24px}
+.table-standards .table-guide-copy p,.table-standards .table-section-intro p{margin:0;color:var(--muted);font-size:14px;line-height:22px}
 .table-standards .table-guide-copy p+p{margin-top:8px}
 .table-standards .table-guide-copy ul{padding-left:24px;margin:16px 0;color:var(--muted)}
 .table-standards .table-guide-copy li+li{margin-top:8px}
 .table-standards .table-section-intro{margin-bottom:16px}
-.table-standards .table-formulas{display:grid;gap:8px;margin:16px 0;padding:16px;background:var(--surface-container);border-radius:6px}
+.table-standards .table-section-intro p+p{margin-top:8px}
+.table-standards #table-filter{position:relative}
+.table-standards .table-section-alias{position:absolute;top:0;scroll-margin-top:var(--design-anchor-offset,80px)}
+.table-standards .table-formulas{display:grid;gap:8px;margin:16px 0;padding:16px;background:var(--surface-container);border-radius:var(--radius-surface)}
 .table-standards .table-formulas div{display:flex;flex-wrap:wrap;gap:8px 16px}
 .table-standards .table-formulas dt{font-weight:600;min-width:96px}
 .table-standards .table-formulas dd{margin:0;color:var(--muted)}
 .table-standards .table-column-map{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
-.table-standards .table-column-map span{flex:1;padding:16px;border:1px solid var(--outline);border-radius:6px;min-width:128px}
+.table-standards .table-column-map span{flex:1;padding:16px;border:1px solid var(--outline);border-radius:var(--radius-surface);min-width:128px}
 .table-standards .table-column-map span:first-child,.table-standards .table-column-map span:last-child{background:var(--color-primary-bg)}
 .table-standards .table-status-samples{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
 .table-standards .table-status-samples .ant-tag{margin:0}
-.table-standards .table-demo{min-width:0}
+.table-standards .table-demo{min-width:0;container-type:inline-size}
 .table-standards .table-demo-shell{min-width:0;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
-.table-standards .table-demo-top{padding:16px 16px 8px}
+.table-standards .table-demo-top{padding:16px}
 .table-standards .table-demo-top h3{font-size:16px;line-height:24px;margin:0 0 16px}
 .table-standards .table-demo-toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
 .table-standards .table-toolbar-left,.table-standards .table-toolbar-right{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
-.table-standards .table-toolbar-right{margin-left:auto}
-.table-standards .table-main-filter{width:128px;min-width:0}
+.table-standards .table-toolbar-left{flex:1 1 664px}
+.table-standards .table-toolbar-right{margin-left:auto;flex:0 1 240px}
+.table-standards .table-toolbar-filters{display:grid;grid-template-columns:repeat(4,minmax(0,128px));gap:8px;flex:0 1 536px;min-width:0}
+.table-standards .table-toolbar-actions{display:flex;align-items:center;gap:8px;flex:none;white-space:nowrap}
+.table-standards .table-main-filter{width:100%;min-width:0}
 .table-standards .table-search{min-width:0;max-width:100%;width:240px}
 .table-standards .table-demo-shell .ant-table-wrapper{min-width:0;margin:0 16px}
 .table-standards .table-record-name{display:flex;align-items:center;gap:4px;min-width:0}
 .table-standards .table-name-text{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.table-standards .table-record-name>.ant-btn{flex:none}
+.table-standards .table-record-name>.ant-btn{flex:none;color:var(--outline)}
+.table-standards .table-record-name>.ant-btn:not(:disabled):hover,.table-standards .table-record-name>.ant-btn:not(:disabled):focus-visible{color:var(--primary)}
 .table-standards .table-person{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
 .table-standards .table-person .ant-avatar{flex:none;background:var(--color-primary-bg);color:var(--color-primary)}
-.table-standards .table-row-actions{display:flex;align-items:center;gap:4px;white-space:nowrap}
-.table-standards .is-narrow .table-row-actions{gap:0}
+.table-standards .table-row-actions{display:flex;align-items:center;gap:8px;white-space:nowrap}
 .table-standards .is-narrow .table-row-actions .ant-btn{width:20px;min-width:20px;padding:0}
 .table-standards .table-control-buttons{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .table-standards .table-height-demo{padding:0 24px 24px}
 .table-standards .table-height-controls{display:flex;align-items:center;flex-wrap:wrap;gap:16px}
 .table-standards .table-height-controls>label:first-child{flex:1;min-width:200px}
 .table-standards .table-height-controls>label:last-child{display:flex;align-items:center;gap:8px}
-.table-standards .table-height-readout{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:16px 0;font-size:12px;color:var(--muted)}
+.table-standards .table-height-readout{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:16px 0;font-size:12px;line-height:20px;color:var(--muted)}
 .table-standards .table-workspace{height:clamp(560px,75vh,720px);position:relative;overflow:auto;resize:vertical;min-height:560px;max-height:900px;border:1px solid var(--outline);border-radius:8px;background:var(--layout);isolation:isolate;scrollbar-width:thin}
 .table-standards .table-workspace-header{height:48px;display:flex;align-items:center;padding:0 16px;position:sticky;top:0;z-index:4;border-bottom:1px solid var(--line);background:var(--surface);font-weight:600}
 .table-standards .table-workspace-content{padding:16px;position:relative}
 .table-standards .table-workspace-summary{box-sizing:border-box;overflow:hidden}
-.table-standards .table-workspace-summary>div{height:calc(100% - 16px);overflow:auto;padding:16px;border:1px dashed var(--outline);border-radius:6px}
+.table-standards .table-workspace-summary>div{height:calc(100% - 16px);overflow:auto;padding:16px;border:1px dashed var(--outline);border-radius:var(--radius-surface)}
 .table-standards .table-workspace-summary p{color:var(--muted);margin:8px 0 0}
 .table-standards .table-height-sticky{position:sticky;z-index:3}
-.table-standards .table-workspace-after{min-height:192px;margin-top:16px;padding:32px 16px;border:1px dashed var(--outline);border-radius:6px;box-sizing:border-box}
+.table-standards .table-workspace-after{min-height:192px;margin-top:16px;padding:32px 16px;border:1px dashed var(--outline);border-radius:var(--radius-surface);box-sizing:border-box}
 .table-standards .table-workspace-after p{color:var(--muted);margin:8px 0 16px}
-.table-standards .table-rule-diagram{margin-top:16px;padding:16px;border:1px solid var(--outline);border-radius:6px;background:var(--surface-container);font-size:12px;line-height:22px;overflow-wrap:anywhere}
+.table-standards .table-rule-diagram{margin-top:16px;padding:16px;border:1px solid var(--outline);border-radius:var(--radius-surface);background:var(--surface-container);font-size:12px;line-height:20px;color:var(--muted);overflow-wrap:anywhere}
 .table-manual-id{user-select:all;overflow-wrap:anywhere}
 @media(max-width:640px){
   .table-standards .table-guide-copy{padding:16px}
   .table-standards .table-height-demo{padding:0 16px 16px}
-  .table-standards .table-demo-top{padding:12px 8px 8px}
-  .table-standards .table-main-filter{width:calc(50% - 4px)}
-  .table-standards .table-toolbar-left,.table-standards .table-toolbar-right{width:100%}
-  .table-standards .table-toolbar-right{justify-content:flex-end}
-  .table-standards .table-search{width:100%}
-  .table-standards .table-workspace-content{padding-inline:8px}
-  .table-standards .table-workspace{min-height:640px}
-  .table-standards .table-demo-shell .ant-table-wrapper{margin-inline:8px}
-  .table-standards .table-row-actions{gap:0}
+  .table-standards .table-workspace{min-height:720px}
 }
+@container(max-width:640px){
+  .table-standards .table-toolbar-left,.table-standards .table-toolbar-right{flex-basis:100%;width:100%}
+  .table-standards .table-toolbar-filters{flex-basis:100%;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .table-standards .table-search{width:100%}
+}
+
+/* 时间与附属说明区分主要业务内容；浮层由本页局部主题继承组件约定。 */
+.table-standards td.table-time{color:var(--muted);font-size:12px;line-height:20px}
+.table-standards .table-height-controls>label{color:var(--muted);font-size:14px;line-height:22px}
+.table-standards .table-workspace strong{font-weight:600}
+.table-demo-modal .ant-form-item-label>label,.table-demo-modal .table-form-help{font-size:14px;line-height:22px}
+.table-demo-modal .table-form-help{color:var(--app-muted)}

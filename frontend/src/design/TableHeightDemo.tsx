@@ -45,7 +45,7 @@ export default function TableHeightDemo() {
         <div ref={markerRef} className="table-height-marker" />
         <div className="table-height-track">
           <div className={capacity.exceptional ? 'table-height-sticky' : ''} style={{ top: capacity.top + 16 }}>
-            <TableDemo variant="create" maxHeight={capacity.maxHeight} recordLimit={recordLimit} compact />
+            <TableDemo maxHeight={capacity.maxHeight} recordLimit={recordLimit} compact />
           </div>
           {capacity.exceptional && <div aria-hidden style={{ height: capacity.full * 0.6 }} />}
         </div>

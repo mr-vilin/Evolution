@@ -40,7 +40,8 @@ export function EffectEntry({ id, title, tokens, usage, rule, code, children }: 
 export function MemberPreviewDrawer({ open, onClose, placement = 'right', name = '林晓', title = '成员详情 · 示例' }: {
   open: boolean; onClose: () => void; placement?: DrawerProps['placement']; name?: string; title?: string;
 }) {
+  const { token } = theme.useToken();
   return <Drawer title={title} open={open} onClose={onClose} placement={placement} size={320} mask={{ blur: false, closable: true }} styles={{ section: { borderRadius: 8 }, body: { padding: 24 } }}>
-    <div style={{ display: 'grid', gap: 16 }}><strong>{name}</strong><span>所属部门：研发部</span><span>职责：协同维护组织与成员资料</span><Badge status="success" text="在职" /><p style={{ margin: 0 }}>查看完成后可关闭抽屉，或按 Esc 返回原来的列表。</p></div>
+    <div style={{ display: 'grid', gap: 16, fontSize: token.fontSize, lineHeight: token.lineHeight }}><strong style={{ fontWeight: token.fontWeightStrong }}>{name}</strong><span>所属部门：研发部</span><span>职责：协同维护组织与成员资料</span><Badge status="success" text="在职" /><p style={{ margin: 0 }}>查看完成后可关闭抽屉，或按 Esc 返回原来的列表。</p></div>
   </Drawer>;
 }

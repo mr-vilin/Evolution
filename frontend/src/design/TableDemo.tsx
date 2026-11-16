@@ -36,8 +36,8 @@ function useBodyHeight(ref: React.RefObject<HTMLDivElement | null>, maxHeight: n
   return height;
 }
 
-export default function TableDemo({ variant = 'filter', maxHeight = 520, recordLimit, compact = false }: {
-  variant?: 'filter' | 'create'; maxHeight?: number; recordLimit?: number; compact?: boolean;
+export default function TableDemo({ showCreate = true, maxHeight = 520, recordLimit, compact = false }: {
+  showCreate?: boolean; maxHeight?: number; recordLimit?: number; compact?: boolean;
 }) {
   const { message, modal } = App.useApp();
   const instanceId = useId();
@@ -62,8 +62,10 @@ export default function TableDemo({ variant = 'filter', maxHeight = 520, recordL
     return () => observer.disconnect();
   }, [compact]);
   const base = useMemo(() => recordLimit == null ? records : records.slice(0, recordLimit), [records, recordLimit]);
-  const dataSource = base.filter(row => [row.name, row.owner].some(value => value.toLocaleLowerCase().includes(keyword.toLocaleLowerCase())));
-  const resultCount = dataSource.filter(row => filterFields.every(([key]) => !filters[key]?.length || filters[key]!.includes(row[key]))).length;
+  const matchesKeyword = (row: DemoRecord) => [row.name, row.owner].some(value => value.toLocaleLowerCase().includes(keyword.toLocaleLowerCase()));
+  const matchesFilters = (row: DemoRecord) => filterFields.every(([key]) => !filters[key]?.length || filters[key]!.includes(row[key]));
+  const dataSource = base.filter(matchesKeyword);
+  const resultCount = dataSource.filter(matchesFilters).length;
   const current = Math.min(page, Math.max(1, Math.ceil(resultCount / pageSize)));
 
   function updateFilter(key: FilterField, values: string[]) {
@@ -92,7 +94,9 @@ export default function TableDemo({ variant = 'filter', maxHeight = 520, recordL
       };
       setRecords(previous => [row, ...previous]);
       setPage(1);
-      message.success('已新增本地示例记录；当前查询条件仍然保留');
+      message.success(matchesKeyword(row) && matchesFilters(row)
+        ? '已新增本地示例记录；当前查询条件仍然保留'
+        : '已新增本地示例记录；记录不符合当前查询条件，暂不显示');
     } else if (editing) {
       setRecords(previous => previous.map(row => row.id === editing.id ? { ...row, name: values.name.trim(), quantity: values.quantity ?? null } : row));
       message.success('已更新本地示例记录');
@@ -107,8 +111,8 @@ export default function TableDemo({ variant = 'filter', maxHeight = 520, recordL
   const filterColumn = (key: FilterField) => ({
     filteredValue: filters[key]?.length ? filters[key]! : null,
     onFilter: (value: Key | boolean, row: DemoRecord) => row[key] === value,
-    // 主要四项只在工具栏出现；可新增类全部使用各自表头。
-    ...(variant === 'create' || key === 'department' || key === 'priority' ? {
+    // 主要四项只在工具栏出现，其余条件使用对应表头。
+    ...(key === 'department' || key === 'priority' ? {
       filters: [...new Set(demoRecords.map(row => row[key]))].map(value => ({ text: value, value })), filterOnClose: false,
     } : {}),
   });
@@ -129,9 +133,9 @@ export default function TableDemo({ variant = 'filter', maxHeight = 520, recordL
     ...filterFields.filter(([key]) => key !== 'status').map(([key, title]) => ({ key, title, dataIndex: key, width: key === 'owner' ? 144 : 112, ...filterColumn(key), render: key === 'owner' ? (name: string, row: DemoRecord) => <span className="table-person"><Avatar size={24} src={row.ownerAvatar}>{personInitial(name)}</Avatar><span>{name}</span></span> : displayValue })),
     { key: 'quantity', title: '数量', dataIndex: 'quantity', width: 100, ...sortableColumn('quantity'), render: displayValue },
     { key: 'progress', title: '进度', dataIndex: 'progress', width: 156, ...sortableColumn('progress'), render: (value: number | null) => value == null ? '-' : <Progress percent={value} size="small" /> },
-    { key: 'createdAt', title: '创建时间', dataIndex: 'createdAt', width: 184, ...sortableColumn('createdAt'), render: displayValue },
-    { key: 'updatedAt', title: '更新时间', dataIndex: 'updatedAt', width: 184, ...sortableColumn('updatedAt'), render: displayValue },
-    { key: 'actions', title: '操作', width: narrow ? 80 : 120, fixed: 'right', render: (_value, row) => <div className="table-row-actions">
+    { key: 'createdAt', className: 'table-time', title: '创建时间', dataIndex: 'createdAt', width: 184, ...sortableColumn('createdAt'), render: displayValue },
+    { key: 'updatedAt', className: 'table-time', title: '更新时间', dataIndex: 'updatedAt', width: 184, ...sortableColumn('updatedAt'), render: displayValue },
+    { key: 'actions', title: '操作', width: narrow ? 96 : 120, fixed: 'right', render: (_value, row) => <div className="table-row-actions">
       <Tooltip title="查看" trigger={['hover', 'focus']}><Button type="text" size="small" aria-label={`查看：${row.name}`} icon={<EyeOutlined />} onClick={() => modal.info({ title: row.name, content: <p>负责人：{row.owner}；状态：{row.status}；数量：{displayValue(row.quantity)}。本地演示记录，时间按北京时间展示。</p>, okText: '关闭' })} /></Tooltip>
       <Tooltip title="编辑" trigger={['hover', 'focus']}><Button type="text" size="small" aria-label={`编辑：${row.name}`} icon={<EditOutlined />} onClick={() => edit(row)} /></Tooltip>
       <Dropdown trigger={['click']} menu={{ items: [
@@ -143,7 +147,7 @@ export default function TableDemo({ variant = 'filter', maxHeight = 520, recordL
     if (extra.action === 'filter') {
       // antd 回传无 filters 菜单列时会给出空数组；工具栏字段仍以同源状态为准。
       setFilters(previous => ({ ...previous, ...Object.fromEntries(filterFields
-        .filter(([key]) => variant === 'create' || key === 'department' || key === 'priority')
+        .filter(([key]) => key === 'department' || key === 'priority')
         .map(([key]) => [key, nextFilters[key]?.length ? nextFilters[key] : null])) })); setPage(1);
     } else if (extra.action === 'sort') {
       const single = Array.isArray(sorter) ? sorter[0] : sorter;
@@ -152,16 +156,19 @@ export default function TableDemo({ variant = 'filter', maxHeight = 520, recordL
   };
   const searchControl = <Input.Search className="table-search" aria-label="搜索名称或负责人" placeholder="搜索名称或负责人" value={draftKeyword} allowClear onChange={event => { setDraftKeyword(event.target.value); if (!event.target.value) search(''); }} onSearch={search} />;
   const refresh = <Tooltip title="刷新本地示例" trigger={['hover', 'focus']}><Button aria-label="刷新" icon={<ReloadOutlined />} onClick={() => { setPage(current); message.success('已刷新本地示例，保留当前查询状态'); }} /></Tooltip>;
-  return <div className="table-demo" data-variant={variant}>
+  return <div className="table-demo">
     <div ref={shellRef} className={`table-demo-shell${narrow ? ' is-narrow' : ''}`} data-testid="table-demo-shell">
-      <div className="table-demo-top"><h3>{variant === 'create' ? '可新增类 · 本地任务列表' : '无新增类 · 本地任务列表'}</h3><div className="table-demo-toolbar">
-        <div className="table-toolbar-left">{variant === 'create' ? searchControl : <>{filterFields.slice(0, 4).map(([key, label]) => <Select className="table-main-filter" key={key} id={`${instanceId}-${key}`} aria-label={label} mode="multiple" maxTagCount="responsive" placeholder={`全部${label}`} value={(filters[key] ?? []) as string[]} allowClear options={[...new Set(demoRecords.map(row => row[key]))].map(value => ({ value, label: value }))} onChange={values => updateFilter(key, values)} />)}{refresh}</>}</div>
-        <div className="table-toolbar-right">{variant === 'create' ? <><Button type="primary" icon={<PlusOutlined />} onClick={() => edit('new')}>新增</Button>{refresh}</> : searchControl}</div>
+      <div className="table-demo-top"><h3>本地任务列表</h3><div className="table-demo-toolbar">
+        <div className="table-toolbar-left">
+          <div className="table-toolbar-filters">{filterFields.slice(0, 4).map(([key, label]) => <Select className="table-main-filter" key={key} id={`${instanceId}-${key}`} aria-label={label} mode="multiple" maxTagCount="responsive" placeholder={`全部${label}`} value={(filters[key] ?? []) as string[]} allowClear options={[...new Set(demoRecords.map(row => row[key]))].map(value => ({ value, label: value }))} onChange={values => updateFilter(key, values)} />)}</div>
+          <div className="table-toolbar-actions">{showCreate && <Button type="primary" icon={<PlusOutlined />} onClick={() => edit('new')}>新增</Button>}{refresh}</div>
+        </div>
+        <div className="table-toolbar-right">{searchControl}</div>
       </div></div>
       <Table<DemoRecord> rowKey="id" size="small" columns={columns} dataSource={dataSource} onChange={onChange} scroll={{ x: narrow ? 1480 : 1624, y: bodyHeight }} pagination={{ current, pageSize, showSizeChanger: true, pageSizeOptions: [5, 10, 20], showTotal: total => `共 ${total} 条`, size: 'small' }} />
     </div>
-    <Modal title={editing === 'new' ? '新增本地示例记录' : '编辑本地示例记录'} open={editing !== null} onCancel={() => setEditing(null)} onOk={() => form.submit()} okText="保存" cancelText="取消">
-      <Form form={form} layout="vertical" onFinish={save}><Form.Item name="name" label="名称" rules={[{ required: true, whitespace: true, message: '请输入名称' }, { max: 100, message: '名称最多 100 个字符' }]}><Input maxLength={100} /></Form.Item><Form.Item name="quantity" label="数量" rules={[{ type: 'number', min: 0, message: '数量应为非负数' }]}><InputNumber min={0} precision={0} /></Form.Item><p>仅操作本地示例，不写入业务系统。未产生的业务时间显示 -。</p></Form>
+    <Modal className="table-demo-modal" title={editing === 'new' ? '新增本地示例记录' : '编辑本地示例记录'} open={editing !== null} onCancel={() => setEditing(null)} onOk={() => form.submit()} okText="保存" cancelText="取消">
+      <Form form={form} layout="vertical" onFinish={save}><Form.Item name="name" label="名称" rules={[{ required: true, whitespace: true, message: '请输入名称' }, { max: 100, message: '名称最多 100 个字符' }]}><Input maxLength={100} /></Form.Item><Form.Item name="quantity" label="数量" rules={[{ type: 'number', min: 0, message: '数量应为非负数' }]}><InputNumber min={0} precision={0} /></Form.Item><p className="table-form-help">仅操作本地示例，不写入业务系统。未产生的业务时间显示 -。</p></Form>
     </Modal>
   </div>;
 }

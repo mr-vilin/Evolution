@@ -54,7 +54,7 @@ function SpacingComposition() {
           <div className="spacing-inline"><Button htmlType="submit" type="primary">查询</Button><SpacingGap size={sizes.sm} /><Button onClick={reset}>重置</Button></div>
         </form>
         <SpacingGap size={sizes.md} vertical />
-        <div className="spacing-results" role="status" aria-live="polite"><span className="spacing-caption">显示 {members.length} 位示例成员</span>{members.length ? <ul>{members.map(member => <li key={member.name}><span>{member.name}</span><span className="spacing-caption">{member.departmentName}</span></li>)}</ul> : <p>暂无匹配的示例成员</p>}</div>
+        <div className="spacing-results" role="status" aria-live="polite"><span className="spacing-caption">显示 {members.length} 位示例成员</span>{members.length ? <ul>{members.map(member => <li key={member.name}><span>{member.name}</span><span className="spacing-member-department">{member.departmentName}</span></li>)}</ul> : <p>暂无匹配的示例成员</p>}</div>
       </SpacingInset>
     </div>
     <div className="spacing-combination-rules"><h4>组合时这样选</h4><ul>
@@ -63,7 +63,7 @@ function SpacingComposition() {
       <li><strong>16px</strong>：并列统计卡、字段组、内容组与操作区之间。</li>
       <li><strong>24px</strong>：常规内容容器的四周内边距。</li>
       <li><strong>32px</strong>：概览与查询两个独立区域之间。</li>
-    </ul><p>关系紧密的内容靠近，同一组内容保持一致的节奏；独立区域使用更大的留白。</p><p className="spacing-caption">此处为本地示例数据，可输入「林晓」或按部门查询，体验实际控件之间的间距。</p></div>
+    </ul><p>关系紧密的内容靠近，同一组内容保持一致的节奏；独立区域使用更大的留白。</p><p className="spacing-caption">此处仅演示间距，可输入「林晓」或按部门查询本地成员；业务列表的筛选与搜索布局以「表格规范」为准。</p></div>
   </div>;
 }
 

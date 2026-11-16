@@ -24,7 +24,7 @@ function BatchToolbar() {
   const [selected, setSelected] = useState(['林晓', '陈晨']);
   return <div className="shadow-batch-scene">
     <span className="effect-caption">成员列表</span>
-    {['林晓', '陈晨'].map(name => <div className="shadow-member-line" key={name}><Checkbox checked={selected.includes(name)} onChange={event => setSelected(previous => event.target.checked ? [...previous, name] : previous.filter(item => item !== name))}>{name}</Checkbox><span className="effect-caption">研发部</span></div>)}
+    {['林晓', '陈晨'].map(name => <div className="shadow-member-line" key={name}><Checkbox checked={selected.includes(name)} onChange={event => setSelected(previous => event.target.checked ? [...previous, name] : previous.filter(item => item !== name))}>{name}</Checkbox><span className="effect-member-department">研发部</span></div>)}
     {!!selected.length && <div className="shadow-batch-toolbar" style={{ boxShadow: token.boxShadowTertiary }}><span role="status">已选 {selected.length} 人</span><Button type="text" size="small" onClick={() => setSelected([])}>取消选择</Button></div>}
     <p className="effect-caption">勾选成员后，操作条轻微浮在列表之上。</p>
   </div>;

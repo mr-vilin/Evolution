@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Badge, Button, Card, ConfigProvider, Dropdown, Input, Menu, Modal, Select, Table, Tabs, Tag, Tooltip, theme, type GlobalToken, type ThemeConfig } from 'antd';
 import { ApartmentOutlined, DownOutlined, TeamOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import './component-guide.css';
+import DesignMember from './DesignMember';
 
 const guidelines = [
   { id: 'button-primary', title: '主要按钮', component: 'Button · primary',
@@ -38,7 +39,7 @@ const guidelines = [
     reminder: '各状态都不填充背景，通过文字和下划线表达当前位置。' },
   { id: 'table', title: '表格', component: 'Table',
     purpose: '用于并列呈现需要比较、查阅的成员和部门等结构化数据。',
-    rules: '表头使用浅表面色与 14px／600 排版；正文使用 14px／400，悬停时只高亮当前行。',
+    rules: '表头使用浅表面色与 14px／600 排版；正文使用 14px／400，人员列使用圆形头像加姓名、间距 4px；悬停时只高亮当前行。',
     reminder: '默认不使用斑马纹，依靠对齐、间距和表头组织密集数据。' },
   { id: 'tag', title: '分类标签', component: 'Tag',
     purpose: '用于标记部门、类别或分组，帮助快速识别内容归属。',
@@ -217,7 +218,7 @@ function ComponentExample({ name }: { name: ComponentName }) {
     case 'modal': return <div className="component-demo-stack"><Button onClick={() => setOpen(true)}>打开确认弹窗</Button><p className="component-demo-caption" role="status">{value || '打开后可确认、取消，或按 Esc 返回。'}</p><Modal title="调整示例成员部门" centered open={open} onCancel={() => setOpen(false)} onOk={() => { setOpen(false); setValue('已确认本次示例调整'); }} okText="确认调整" cancelText="取消" mask={{ blur: false, closable: true }} styles={modalStyles(token)}><p style={{ margin: 0 }}>确认将示例成员林晓移至产品部？</p></Modal></div>;
     case 'menu': return <div className="component-demo-stack"><Menu className="component-menu" aria-label="组件样式导航示例" mode="inline" selectedKeys={[value || 'overview']} onClick={({ key }) => setValue(key)} items={menuItems} /><p className="component-demo-caption" role="status">当前位置：{menuItems.find(item => item.key === (value || 'overview'))?.label}</p></div>;
     case 'tabs': return <Tabs className="component-tabs" defaultActiveKey="overview" items={[{ key: 'overview', label: '部门概况', children: <p className="component-demo-caption">研发部 · 共 12 位成员，按职责协同工作。</p> }, { key: 'members', label: '成员信息', children: <p className="component-demo-caption">林晓、陈晨、周宁 · 示例成员。</p> }]} />;
-    case 'table': return <Table className="component-table" aria-label="组件样式成员表格" size="small" pagination={false} rowKey="name" tableLayout="fixed" dataSource={members} columns={[{ title: '成员姓名', dataIndex: 'name' }, { title: '所属部门', dataIndex: 'department' }]} />;
+    case 'table': return <Table className="component-table" aria-label="组件样式成员表格" size="small" pagination={false} rowKey="name" tableLayout="fixed" dataSource={members} columns={[{ title: '成员姓名', dataIndex: 'name', render: (name: string) => <DesignMember name={name} /> }, { title: '所属部门', dataIndex: 'department' }]} />;
     case 'tag': return <div className="component-demo-stack"><div className="component-demo-tags"><Tag color="blue" variant="filled">研发部</Tag><Tag color="purple" variant="filled">产品部</Tag><Tag color="cyan" variant="filled">运营部</Tag></div><p className="component-demo-caption">浅色分类标签，颜色来自上方扩展色。</p></div>;
     case 'alert': return <div className="component-demo-alerts">{alerts.map(item => <Alert key={item.type} className={`component-alert-${item.type}`} showIcon type={item.type} title={item.title} styles={{ title: { color: token.colorText, fontWeight: 400 } }} />)}</div>;
     case 'badge': return <div className="component-demo-statuses"><Badge status="success" text="同步完成" /><Badge status="warning" text="部分完成" /><Badge status="error" text="同步失败" /><Badge status="processing" text="正在同步" /></div>;
