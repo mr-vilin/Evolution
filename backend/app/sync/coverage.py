@@ -39,7 +39,7 @@ class CoverageService:
             db.execute(delete(SystemSetting).where(SystemSetting.key=='coverage_invalidated'))
             state.coverage_status='unknown'
             # 不复用正在执行的旧采集；始终保存一个验收后的全量核对。
-            job=SyncJob(id=secrets.token_urlsafe(12),type='reconcile',requested_by=actor.strip(),status='queued',created_at=now,updated_at=now)
+            job=SyncJob(id=secrets.token_urlsafe(12),type='reconcile',trigger_source='coverage',requested_by=actor.strip(),status='queued',phase='queued',created_at=now,updated_at=now)
             db.add(job)
             db.add(ChangeLog(object_type='settings',object_id='coverage_acceptance',source='cli',actor=actor.strip(),job_id=job.id,before_data=before,after_data=after,committed_at=now))
             return {'job_id':job.id,**after}

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, type Meta, request } from './http';
 
-export function useResource<T>(path: string | null) {
+export function useResource<T>(path: string | null, retainOnReload = false) {
+  const previousPath = useRef<string | null>(null);
   const [data, setData] = useState<T | null>(null);
   const [meta, setMeta] = useState<Meta>({});
   const [error, setError] = useState<ApiError | null>(null);
@@ -12,8 +13,11 @@ export function useResource<T>(path: string | null) {
   useEffect(() => {
     const controller = new AbortController();
     let current = true;
-    setData(null);
-    setMeta({});
+    if (!retainOnReload || previousPath.current !== path) {
+      setData(null);
+      setMeta({});
+    }
+    previousPath.current = path;
     setError(null);
     setLoading(Boolean(path));
     if (path) {
@@ -25,7 +29,7 @@ export function useResource<T>(path: string | null) {
         .finally(() => { if (current) setLoading(false); });
     }
     return () => { current = false; controller.abort(); };
-  }, [path, revision]);
+  }, [path, revision, retainOnReload]);
 
   return { data, meta, error, loading, reload };
 }

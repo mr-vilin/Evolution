@@ -1,6 +1,7 @@
-"""完整采集候选；分页异常向上抛出，绝不返回半轮结果。"""
+"""采集完整候选；普通同步可在采集中提交独立批次，分页异常仍向上抛出。"""
 from dataclasses import dataclass, field
 from datetime import datetime,timezone
+from urllib.parse import urlsplit
 
 
 @dataclass
@@ -11,9 +12,114 @@ class Candidate:
     coverage_status: str = "unknown"
     full: bool = False
     collection_started_at: str | None = None
+    initialization_proof: dict | None = None
 
 
-def normalize_user(raw):
+def _custom_value(raw, field_id, allow_text=False):
+    """读取飞书 custom_attrs 的单选值，保留未知选项而不静默清空。"""
+    if not field_id:
+        return None, None, False
+    values = raw.get('custom_attrs') or raw.get('custom_fields') or []
+    if isinstance(values, dict):
+        values = [{'id': key, 'value': value} for key, value in values.items()]
+    for item in values if isinstance(values, list) else []:
+        if not isinstance(item, dict) or str(item.get('id') or item.get('field_id')) != str(field_id):
+            continue
+        value = item.get('value')
+        if allow_text and item.get('type') == 'TEXT':
+            if not isinstance(value, dict) or 'text' not in value:
+                raise RuntimeError('FEISHU_CUSTOM_TEXT_UNREADABLE')
+            text = value['text']
+            if text is not None and (not isinstance(text, str) or len(text) > 255):
+                raise RuntimeError('FEISHU_CUSTOM_TEXT_VALUE_UNSUPPORTED')
+            return None, text, True
+        if isinstance(value, dict):
+            return value.get('id') or value.get('option_id'), value.get('option_value') or value.get('name') or value.get('text'), True
+        if isinstance(value, list):
+            if len(value) > 1:
+                raise RuntimeError('FEISHU_CUSTOM_ENUM_VALUE_UNSUPPORTED')
+            value = value[0] if value else None
+        if isinstance(value, dict):
+            return value.get('id') or value.get('option_id'), value.get('name') or value.get('text'), True
+        return (str(value) if value not in (None, '') else None), None, True
+    return None, None, False
+
+
+ACCOUNT_FLAGS = ('is_frozen', 'is_resigned', 'is_activated', 'is_exited', 'is_unjoin')
+
+
+def _employee_type(raw, mappings, known_options):
+    """飞书 employee_type 是数字 code；保留旧适配格式并使用配置中的显示名。"""
+    value = raw.get('employee_type')
+    if isinstance(value, dict):
+        identifier, name = value.get('id'), value.get('name')
+    elif 'employee_type' in raw:
+        identifier, name = value, None
+    else:
+        identifier, name = raw.get('employee_type_id'), raw.get('employee_type_name')
+    if identifier is not None and type(identifier) not in (str, int):
+        raise RuntimeError('FEISHU_EMPLOYEE_TYPE_UNREADABLE')
+    identifier = str(identifier) if identifier not in (None, '') else None
+    if identifier is not None and (not identifier.strip() or len(identifier) > 191):
+        raise RuntimeError('FEISHU_EMPLOYEE_TYPE_UNREADABLE')
+    if name is not None and (not isinstance(name, str) or len(name) > 255):
+        raise RuntimeError('FEISHU_EMPLOYEE_TYPE_UNREADABLE')
+    options = mappings.get('employee_type_options')
+    if options is not None:
+        return identifier, options.get(identifier), bool(identifier and identifier not in options)
+    return identifier, name if identifier else None, bool(identifier and known_options is not None and identifier not in known_options)
+
+
+def optional_user_facts(raw):
+    """保留原始字段的缺省、可读空值和不可读，不从 SDK 类型推定权限。"""
+    status = raw.get('status') if isinstance(raw.get('status'), dict) else {}
+    facts, readability = {}, {}
+    for key in ACCOUNT_FLAGS:
+        value = status.get(key)
+        facts[key] = value if type(value) is bool else None
+        readability[key] = 'not_collected' if key not in status else 'readable' if type(value) is bool else 'unreadable'
+    mobile = raw.get('mobile')
+    if 'mobile' not in raw:
+        readability['mobile'] = 'not_collected'
+    elif raw.get('mobile_visible') is False or (mobile is not None and (not isinstance(mobile, str) or len(mobile) > 128)):
+        readability['mobile'] = 'unreadable'
+    else:
+        readability['mobile'] = 'readable'
+    facts['mobile'] = mobile.strip() if isinstance(mobile, str) and readability['mobile'] == 'readable' else None
+    email = raw.get('email')
+    if 'email' not in raw:
+        readability['email'] = 'not_collected'
+    elif email is not None and (not isinstance(email, str) or len(email) > 254):
+        readability['email'] = 'unreadable'
+    else:
+        readability['email'] = 'readable'
+    facts['email'] = email.strip() if isinstance(email, str) and readability['email'] == 'readable' else None
+    avatar = raw.get('avatar')
+    avatar_url = None
+    if isinstance(avatar, dict):
+        for size in ('avatar_240', 'avatar_72', 'avatar_640', 'avatar_origin'):
+            value = avatar.get(size)
+            if isinstance(value, str) and 0 < len(value) <= 2048:
+                try:
+                    url = urlsplit(value)
+                    if url.scheme == 'https' and url.hostname and not url.username and not url.password:
+                        avatar_url = value
+                        break
+                except ValueError:
+                    pass
+    empty_avatar = avatar is None or (isinstance(avatar, dict) and all(value in (None, '') for value in avatar.values()))
+    readability['avatar_url'] = 'not_collected' if 'avatar' not in raw else 'readable' if avatar_url or empty_avatar else 'unreadable'
+    facts['avatar_url'] = avatar_url
+    joined = raw.get('join_time')
+    # 保留飞书原始 Unix 秒（包括 0），拒绝布尔、毫秒及超出日期范围的值。
+    valid_joined = type(joined) is int and 0 <= joined <= 253402271999
+    readability['join_time'] = 'not_collected' if 'join_time' not in raw else 'readable' if joined is None or valid_joined else 'unreadable'
+    facts['join_time'] = joined if valid_joined else None
+    facts['field_readability'] = readability
+    return facts
+
+
+def normalize_user(raw, custom_mappings=None, employee_type_options=None):
     status=raw.get('status')
     if not isinstance(status,dict) or not any(type(status.get(key)) is bool for key in ('is_resigned','is_exited')):
         raise RuntimeError('FEISHU_STATUS_UNREADABLE')
@@ -27,7 +133,14 @@ def normalize_user(raw):
     primaries = {order["department_id"] for order in (raw.get("orders") or []) if isinstance(order,dict) and order.get("is_primary_dept") is True and order.get("department_id")} if relations_readable else set()
     primary = next(iter(primaries)) if len(primaries) == 1 else None
     inconsistent = len(primaries) > 1 or (primary is not None and primary not in departments)
-    return {"id": identifier, "feishu_user_id": identifier, "open_id": raw.get("open_id"), "name": raw["name"], "employee_no": raw.get("employee_no"), "status": "inactive" if inactive else "active", "primary_department_id": primary if not inconsistent else None, "sync_quality": "pending_verification" if not relations_readable else "inconsistent" if inconsistent else "complete", "department_ids": departments}
+    mappings = custom_mappings or {}
+    type_id, type_name, type_quality = _employee_type(raw, mappings, employee_type_options)
+    role_id, role_name, role_present = _custom_value(raw, mappings.get('permission_role'))
+    store_id, store_name, store_present = _custom_value(raw, mappings.get('store_attribute'), allow_text=True)
+    quality = 'pending_verification' if not relations_readable else 'inconsistent' if inconsistent else 'complete'
+    if type_quality or (mappings.get('permission_role') and not role_present) or (mappings.get('store_attribute') and not store_present):
+        quality = 'pending_verification'
+    return {**optional_user_facts(raw), "id": identifier, "feishu_user_id": identifier, "open_id": raw.get("open_id"), "name": raw["name"], "employee_no": raw.get("employee_no"), "employee_type_id": type_id, "employee_type_name": type_name, "job_title": raw.get('job_title'), "leader_user_id": raw.get('leader_user_id'), "permission_role_id": role_id, "permission_role_name": role_name, "store_attribute_id": store_id, "store_attribute_name": store_name, "status": "inactive" if inactive else "active", "primary_department_id": primary if not inconsistent else None, "sync_quality": quality, "department_ids": departments}
 
 
 def normalize_department(raw):
@@ -38,19 +151,30 @@ def normalize_department(raw):
     parent_readable=isinstance(raw.get('parent_department_id'),str) and bool(raw['parent_department_id'])
     inactive=raw['status']['is_deleted']
     if not parent_readable and not inactive: raise RuntimeError('FEISHU_PARENT_UNREADABLE')
-    value={"id": identifier, "feishu_department_id": identifier, "parent_id": raw['parent_department_id'] if parent_readable else None, "name": raw["name"], "status": "inactive" if inactive else "active", "sync_quality": "complete" if parent_readable else 'pending_verification', "is_virtual_root": False}
+    value={"id": identifier, "feishu_department_id": identifier, "parent_id": raw['parent_department_id'] if parent_readable else None, "name": raw["name"], "leader_user_id": raw.get('leader_user_id'), "status": "inactive" if inactive else "active", "sync_quality": "complete" if parent_readable else 'pending_verification', "is_virtual_root": False}
     if not parent_readable:value['parent_unreadable']=True
     return value
 
 
 class Collector:
-    def __init__(self, api, coverage_verified=False, progress=None):
+    def __init__(self, api, coverage_verified=False, progress=None, custom_mappings=None, employee_type_options=None):
         self.api, self.coverage_verified = api, coverage_verified
+        self.custom_mappings = custom_mappings or {}
+        self.employee_type_options = employee_type_options
         self.progress=progress
+        self.on_batch = None
+        self.discovered_employees = None
 
     def _progress(self,phase,result):
+        if self.on_batch:
+            self.on_batch(result)
         if self.progress:
-            self.progress(phase=phase,departments_processed=len(result.departments),employees_processed=len(result.employees),departments_total=None,employees_total=None)
+            departments = len(set(result.departments) | {key for kind, key in result.pending if kind == 'department'})
+            employees = len(set(result.employees) | {key for kind, key in result.pending if kind == 'employee'})
+            known = phase in ('employees', 'collected')
+            self.progress(phase=phase,departments_processed=departments,employees_processed=employees,
+                departments_total=departments if known else None,
+                employees_total=employees if phase == 'collected' else self.discovered_employees if known else None)
 
     def _department(self,identifier):
         raw=self.api.detail('department',identifier)
@@ -58,6 +182,7 @@ class Collector:
         return normalize_department(raw)
 
     def collect(self, root=None, previous_departments=(), previous_users=()):
+        self.discovered_employees = None
         result = Candidate(full=root is None,collection_started_at=datetime.now(timezone.utc).isoformat())
         result.departments["0"] = {"id": "0", "feishu_department_id": "0", "parent_id": None, "name": "组织", "status": "active", "sync_quality": "complete", "is_virtual_root": True}
         users, roots, groups = set(), [], []
@@ -90,6 +215,7 @@ class Collector:
                 result.departments[identifier]=self._department(identifier)
             except RuntimeError:
                 result.pending.append(('department',identifier))
+        self.discovered_employees = len(users)
         for identifier in sorted(users):
             self._user(result, identifier)
             self._progress('employees',result)
@@ -102,7 +228,7 @@ class Collector:
         try:
             raw=self.api.detail('user',identifier)
             if raw.get('user_id')!=identifier: raise RuntimeError('FEISHU_ID_MISMATCH')
-            result.employees[identifier] = normalize_user(raw)
+            result.employees[identifier] = normalize_user(raw, self.custom_mappings, self.employee_type_options)
         except RuntimeError:
             result.pending.append(("employee", identifier))
 

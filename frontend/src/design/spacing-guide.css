@@ -1,0 +1,76 @@
+/* 间距案例沿用 4px 网格，测量标注不占用实际间隙。 */
+.design-standards .spacing-guide h3{margin:0 0 8px;font-size:16px;line-height:24px;font-weight:600}
+.design-standards .spacing-guide h4,.design-standards .spacing-guide h5{margin:0;font-size:14px;line-height:22px;font-weight:600}
+.design-standards .spacing-guide p{margin:0;color:var(--muted);font-size:14px;line-height:22px}
+.design-standards .spacing-guide strong{font-weight:600}
+.design-standards .spacing-intro,.design-standards .spacing-composition{padding:24px}
+.design-standards .spacing-application{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.3fr);gap:24px;align-items:center;padding:24px;border-top:1px solid var(--line)}
+.design-standards .spacing-application>*{min-width:0}
+.design-standards .spacing-standard{display:flex;flex-direction:column;gap:4px}
+.design-standards .spacing-standard>strong{font-size:20px;line-height:28px}
+.design-standards .spacing-standard>code,.design-standards .spacing-standard>span{font-size:12px;line-height:20px;color:var(--dimension)}
+.design-standards .spacing-standard .space-track{width:100%;margin-top:8px}
+.design-standards .spacing-usage h4{margin-bottom:8px}
+.design-standards .spacing-grid{background-color:var(--surface-container);background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:4px 4px;border:1px solid var(--line);border-radius:var(--radius-surface)}
+.design-standards .spacing-example-stage{padding:32px 32px 24px 24px;min-height:120px;display:flex;align-items:center}
+.design-standards .spacing-example-stage>*{width:100%;min-width:0}
+.design-standards .spacing-example>p.spacing-caption{margin-top:8px;color:var(--dimension)}
+.design-standards .spacing-guide .spacing-caption{font-size:12px;line-height:20px;color:var(--caption)}
+.design-standards .spacing-inline{display:flex;align-items:center;min-width:0;font-size:14px;line-height:22px}
+.design-standards .spacing-person-avatar{flex-shrink:0;background:var(--color-primary-bg);color:var(--primary)}
+.design-standards .spacing-inline>h4,.design-standards .spacing-inline>strong,.design-standards .spacing-inline>.spacing-caption{white-space:nowrap}
+.design-standards .spacing-inline>.ant-btn{flex-shrink:0;height:var(--spacing-control-height)}
+.design-standards .spacing-gap{position:relative;display:block;flex-shrink:0;background:var(--color-primary-bg);color:var(--primary);pointer-events:none}
+.design-standards .spacing-gap.is-horizontal{width:var(--measured-space);align-self:stretch}
+.design-standards .spacing-gap.is-vertical{height:var(--measured-space);width:100%}
+.design-standards .spacing-dimension{position:absolute;display:block;color:var(--primary)}
+.design-standards .spacing-dimension>span{position:absolute;font:12px/20px Consolas,monospace;white-space:nowrap;background:var(--surface)}
+.design-standards .spacing-gap.is-horizontal>.spacing-dimension{inset:-8px 0 auto;height:6px;border-top:1px solid currentColor}
+.design-standards .spacing-gap.is-horizontal>.spacing-dimension::before,.design-standards .spacing-gap.is-horizontal>.spacing-dimension::after{content:'';position:absolute;top:-3px;width:1px;height:5px;background:currentColor}
+.design-standards .spacing-gap.is-horizontal>.spacing-dimension::before{left:0}
+.design-standards .spacing-gap.is-horizontal>.spacing-dimension::after{right:0}
+.design-standards .spacing-gap.is-horizontal>.spacing-dimension>span{bottom:8px;left:50%;transform:translateX(-50%)}
+.design-standards .spacing-gap.is-vertical>.spacing-dimension{inset:0 -12px 0 auto;width:6px;border-left:1px solid currentColor}
+.design-standards .spacing-gap.is-vertical>.spacing-dimension::before,.design-standards .spacing-gap.is-vertical>.spacing-dimension::after{content:'';position:absolute;left:-3px;width:5px;height:1px;background:currentColor}
+.design-standards .spacing-gap.is-vertical>.spacing-dimension::before{top:0}
+.design-standards .spacing-gap.is-vertical>.spacing-dimension::after{bottom:0}
+.design-standards .spacing-gap.is-vertical>.spacing-dimension>span{left:4px;top:50%;transform:translateY(-50%)}
+.design-standards .spacing-stat{flex:1;min-width:0;padding:var(--spacing-md);border:1px solid var(--outline);border-radius:var(--radius-surface);background:var(--surface)}
+.design-standards .spacing-stat>span{display:block;font-size:12px;line-height:20px;color:var(--caption)}
+.design-standards .spacing-stat>strong{display:block;font-size:20px;line-height:28px}
+.design-standards .spacing-inset{position:relative;min-width:0;border:1px solid var(--outline);border-radius:var(--radius-surface);background:var(--color-primary-bg)}
+.design-standards .spacing-paper{min-width:0;background:var(--surface)}
+.design-standards .spacing-inset-ruler{position:absolute;top:0;left:50%;border-left:1px solid var(--primary);color:var(--primary)}
+.design-standards .spacing-inset-ruler::before,.design-standards .spacing-inset-ruler::after{content:'';position:absolute;left:-3px;width:5px;height:1px;background:currentColor}
+.design-standards .spacing-inset-ruler::before{top:0}
+.design-standards .spacing-inset-ruler::after{bottom:0}
+.design-standards .spacing-inset-ruler>span{position:absolute;left:6px;top:50%;transform:translateY(-50%);font:12px/20px Consolas,monospace;white-space:nowrap}
+.design-standards .spacing-region{padding:8px 16px;border:1px solid var(--outline);border-radius:var(--radius-control);background:var(--surface)}
+.design-standards .spacing-composition{border-top:1px solid var(--line)}
+.design-standards .spacing-composition-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:24px;margin-top:16px;align-items:start}
+.design-standards .spacing-composition-stage{padding:32px 32px 24px 24px;min-width:0}
+.design-standards .spacing-composition-stage .spacing-gap.is-horizontal>.spacing-dimension{top:0;height:4px}
+.design-standards .spacing-composition-stage .spacing-gap.is-horizontal>.spacing-dimension>span{bottom:4px}
+.design-standards .spacing-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--spacing-md)}
+.design-standards .spacing-fields>label{display:flex;flex-direction:column;gap:var(--spacing-unit);min-width:0;font-size:14px;line-height:22px;color:var(--muted)}
+.design-standards .spacing-fields .ant-select{width:100%}
+.design-standards .spacing-fields .ant-input,.design-standards .spacing-fields .ant-select{height:var(--spacing-control-height)}
+.design-standards .spacing-member-department{font-size:14px;line-height:22px;color:var(--ink)}
+.design-standards .spacing-results ul{margin:0;padding:0;list-style:none}
+.design-standards .spacing-results li{display:flex;align-items:center;justify-content:space-between;gap:var(--spacing-sm);padding:8px 0;border-bottom:1px solid var(--line);font-size:14px;line-height:22px}
+.design-standards .spacing-results li:last-child{border-bottom:0}
+.design-standards .spacing-combination-rules>ul{margin:8px 0 16px;padding-inline-start:16px;color:var(--muted);font-size:14px;line-height:22px}
+.design-standards .spacing-combination-rules li+li{margin-top:8px}
+.design-standards .spacing-combination-rules strong{color:var(--ink)}
+.design-standards .spacing-combination-rules p+p{margin-top:16px}
+.design-standards .spacing-samples{display:flex;flex-direction:column;gap:24px}
+.design-standards .spacing-height-example>.spacing-caption{color:var(--dimension)}
+.design-standards .spacing-height-example{display:flex;flex-direction:column;align-items:center;gap:8px}
+.design-standards .spacing-height-control{position:relative}
+.design-standards .spacing-height-ruler{position:absolute;top:0;bottom:0;right:-16px;width:8px;border-left:1px solid var(--primary);color:var(--primary)}
+.design-standards .spacing-height-ruler::before,.design-standards .spacing-height-ruler::after{content:'';position:absolute;left:-3px;width:5px;height:1px;background:currentColor}
+.design-standards .spacing-height-ruler::before{top:0}
+.design-standards .spacing-height-ruler::after{bottom:0}
+.design-standards .spacing-height-ruler>span{position:absolute;left:6px;top:50%;transform:translateY(-50%);font:12px/20px Consolas,monospace;white-space:nowrap}
+@media(max-width:1100px){.design-standards .spacing-application{grid-template-columns:120px minmax(0,1fr);gap:16px 24px}.design-standards .spacing-example{grid-column:2}.design-standards .spacing-composition-grid{grid-template-columns:1fr}}
+@media(max-width:640px){.design-standards .spacing-intro,.design-standards .spacing-application,.design-standards .spacing-composition{padding:16px}.design-standards .spacing-application{grid-template-columns:1fr;gap:16px}.design-standards .spacing-example{grid-column:1}.design-standards .spacing-standard{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 16px;align-items:center}.design-standards .spacing-standard .space-track{grid-column:2;grid-row:1 / span 2;margin:0}.design-standards .spacing-standard>span{grid-column:1 / -1}.design-standards .spacing-example-stage{padding:32px 32px 24px 16px}.design-standards .spacing-composition-stage{padding:24px 24px 24px 16px}.design-standards .spacing-fields{grid-template-columns:1fr}}

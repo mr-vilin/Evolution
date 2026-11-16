@@ -11,15 +11,23 @@ class Listener:
 
     def starting(self):
         observe(self.sessions,'degraded')
-        self._reconcile('listener:startup')
+        if self.settings.feishu_reconcile_on_startup:
+            self._reconcile('listener:startup')
 
     def _reconcile(self,reason):
-        SqlSyncJobRepository(self.sessions).submit('reconcile',None,reason,datetime.now(timezone.utc).replace(tzinfo=None))
+        try:
+            SqlSyncJobRepository(self.sessions).submit('reconcile',None,reason,datetime.now(timezone.utc).replace(tzinfo=None))
+        except RuntimeError as exc:
+            # 初始化前不提交普通核对，但保持监听以接收授权范围变化等事件。
+            # 由仓储在锁内判断状态，避免先查状态再提交的竞态。
+            if str(exc) != 'INITIALIZATION_INCOMPLETE':
+                raise
 
     def reconnecting(self): observe(self.sessions,'degraded')
 
     def reconnected(self):
-        self._reconcile('listener:reconnected')
+        if self.settings.feishu_reconcile_on_reconnect:
+            self._reconcile('listener:reconnected')
         observe(self.sessions,'connected')
 
     def receive(self,payload):

@@ -5,14 +5,102 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, update
 
 from app.dependencies import Runtime, get_admin_identity, get_runtime, require_admin_write
-from app.persistence.models import AdminAllowlist, AdminSession, ApiClient, ChangeLog, StoreProfile
+from app.persistence.models import AdminAllowlist, AdminSession, ApiClient, ChangeLog, StoreProfile, SyncJob, SyncJobDetail
 from app.stores.domain import UNSET, InvalidStoreChanges, StorePatch
 from app.stores.service import StoreAdminService
 from app.web import utc_datetime
 from app.config import get_settings
+from app.admin.organization import router as organization_router
 
 
 router = APIRouter(prefix="/admin/api")
+router.include_router(organization_router)
+
+
+class SyncJobCreate(BaseModel):
+    type: str = Field(pattern=r'^(initialize|reconcile|full|subtree)$')
+    root_department_id: str | None = Field(default=None, max_length=191)
+    note: str | None = Field(default=None, max_length=1000)
+
+
+@router.post('/sync/jobs', status_code=202)
+def create_sync_job(body: SyncJobCreate, authorization=Depends(require_admin_write), runtime=Depends(get_runtime)):
+    identity, _ = authorization
+    from datetime import datetime, timezone
+    try:
+        job, reused = runtime.jobs.submit(body.type, body.root_department_id, f'admin:{identity.open_id}', datetime.now(timezone.utc).replace(tzinfo=None), body.note)
+    except RuntimeError as exc:
+        raise HTTPException(409, {'code': str(exc), 'message': '同步任务暂不可创建'})
+    return {'data': {'job_id': job.id, 'status': job.status, 'reused': reused}, 'meta': {}}
+
+
+@router.get('/sync/preflight')
+def sync_preflight(identity=Depends(get_admin_identity), runtime=Depends(get_runtime)):
+    """返回人工初始化前必须确认的本地门槛，不会触发远程同步。"""
+    from app.persistence.models import DatasetState, FeishuConnection, SystemSetting
+    with runtime.sessions() as db:
+        state = db.get(DatasetState, 1)
+        connection = db.get(FeishuConnection, 1)
+        checks = {
+            'database_schema': db.get(SystemSetting, 'task_queue_lock') is not None,
+            'feishu_binding': connection is not None and connection.status != 'unconfigured',
+            'initialization_complete': state is not None and state.initialization_status == 'complete',
+            'coverage_accepted': state is not None and state.coverage_status == 'complete',
+        }
+        return {'data': {'ready': all(checks.values()), 'checks': checks, 'next_action': '可人工触发初始化任务' if not checks['initialization_complete'] else '可执行增量或全量核对'}, 'meta': {}}
+
+
+@router.get('/sync/jobs')
+def list_sync_jobs(status: str | None = None, limit: int = Query(50, ge=1, le=200), type: str | None = None, phase: str | None = None, cursor: str | None = None, identity=Depends(get_admin_identity), runtime=Depends(get_runtime)):
+    with runtime.sessions() as db:
+        stmt = select(SyncJob).order_by(SyncJob.created_at.desc(), SyncJob.id.desc()).limit(limit + 1)
+        if status: stmt = stmt.where(SyncJob.status == status)
+        if type: stmt = stmt.where(SyncJob.type == type)
+        if phase: stmt = stmt.where(SyncJob.phase == phase)
+        if cursor:
+            boundary = db.get(SyncJob, cursor)
+            if boundary is None: raise HTTPException(422, {'code': 'INVALID_CURSOR', 'message': '任务分页位置已失效'})
+            from sqlalchemy import or_, and_
+            stmt = stmt.where(or_(SyncJob.created_at < boundary.created_at, and_(SyncJob.created_at == boundary.created_at, SyncJob.id < boundary.id)))
+        rows = list(db.scalars(stmt))
+        from app.admin.sync_views import add_job_context
+        page = rows[:limit]
+        return {'data': add_job_context(db, page, [_job_summary(row) for row in page]), 'meta': {'next_cursor': page[-1].id if len(rows) > limit else None}}
+
+
+def _job_summary(row):
+    return {'job_id': row.id, 'name': row.name, 'type': row.type, 'trigger_source': row.trigger_source, 'description': row.description, 'status': row.status, 'attempt': row.attempt, 'execution_count': row.execution_count, 'retry_count': row.retry_count, 'total_count': row.total_count, 'success_count': row.success_count, 'failure_count': row.failure_count, 'phase': row.phase, 'error_code': row.error_code, 'error_detail': row.error_detail, 'created_at': utc_datetime(row.created_at), 'updated_at': utc_datetime(row.updated_at), 'started_at': utc_datetime(row.started_at), 'finished_at': utc_datetime(row.finished_at)}
+
+
+@router.get('/sync/jobs/{job_id}')
+def get_sync_job(job_id: str, identity=Depends(get_admin_identity), runtime=Depends(get_runtime)):
+    with runtime.sessions() as db:
+        row = db.get(SyncJob, job_id)
+        if row is None: raise HTTPException(404, {'code': 'SYNC_JOB_NOT_FOUND', 'message': '同步任务不存在'})
+        from app.admin.sync_views import add_job_context, job_details
+        data = add_job_context(db, [row], [_job_summary(row)])[0]
+        data['details'] = job_details(db, job_id)
+        return {'data': data, 'meta': {}}
+
+
+@router.get('/sync/jobs/{job_id}/progress')
+def sync_job_progress(job_id: str, identity=Depends(get_admin_identity), runtime=Depends(get_runtime)):
+    with runtime.sessions() as db:
+        row = db.get(SyncJob, job_id)
+        if row is None: raise HTTPException(404, {'code': 'SYNC_JOB_NOT_FOUND', 'message': '同步任务不存在'})
+        from app.admin.sync_views import add_job_context
+        return {'data': add_job_context(db, [row], [_job_summary(row)])[0], 'meta': {}}
+
+
+@router.post('/sync/jobs/{job_id}/retry', status_code=202)
+def retry_sync_job(job_id: str, authorization=Depends(require_admin_write), runtime=Depends(get_runtime)):
+    identity, _ = authorization
+    from datetime import datetime, timezone
+    try:
+        job = runtime.jobs.retry(job_id, f'admin:{identity.open_id}', datetime.now(timezone.utc).replace(tzinfo=None))
+    except ValueError as exc:
+        raise HTTPException(409, {'code': 'SYNC_JOB_NOT_RETRYABLE', 'message': str(exc)})
+    return {'data': _job_summary(job), 'meta': {}}
 
 
 @router.get("/status")
@@ -31,6 +119,8 @@ def admin_status(identity=Depends(get_admin_identity), runtime: Runtime = Depend
             data={'initialization_status':'pending','coverage_status':'unknown'}
             meta={'dataset_epoch':state.dataset_epoch if state else 'pending','data_version':state.data_version if state else 0}
     with runtime.sessions() as db:
+        from app.admin.sync_views import initialization_date
+        data['initialized_at'] = initialization_date(db)
         observation=db.get(SystemSetting,'feishu_connection_observation')
         processed=db.get(SystemSetting,'last_event_processed_at')
         data['connection']=connection_summary(settings,json.loads(observation.value) if observation else None)
@@ -49,6 +139,28 @@ class ReconcileSchedule(BaseModel):
     timezone: str = Field(pattern=r'^Asia/Shanghai$')
 
 
+class CustomAttrs(BaseModel):
+    permission_role: str | None = Field(default=None, max_length=191)
+    store_attribute: str | None = Field(default=None, max_length=191)
+    employee_type_options: dict[str, str] | None = None
+
+
+@router.get('/settings/custom-attrs')
+def get_custom_attrs(identity=Depends(get_admin_identity), runtime=Depends(get_runtime)):
+    from app.feishu.binding import custom_attrs
+    return {'data': custom_attrs(runtime.sessions), 'meta': {}}
+
+
+@router.put('/settings/custom-attrs')
+def put_custom_attrs(body: CustomAttrs, authorization=Depends(require_admin_write), runtime=Depends(get_runtime)):
+    from app.feishu.binding import put_custom_attrs
+    try:
+        value = put_custom_attrs(runtime.sessions, body.model_dump(exclude_none=True))
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(422, {'code': str(exc), 'message': '自定义字段映射无效'})
+    return {'data': value, 'meta': {}}
+
+
 @router.get('/settings/reconcile-schedule')
 def get_schedule(identity=Depends(get_admin_identity),runtime=Depends(get_runtime)):
     from app.sync.settings import ScheduleService
@@ -59,7 +171,12 @@ def get_schedule(identity=Depends(get_admin_identity),runtime=Depends(get_runtim
 def put_schedule(body: ReconcileSchedule,authorization=Depends(require_admin_write),runtime=Depends(get_runtime)):
     from app.sync.settings import ScheduleService
     identity,_=authorization
-    return {'data':ScheduleService(runtime.sessions).put(body.model_dump(),f'admin:{identity.open_id}'),'meta':{}}
+    try:
+        value = ScheduleService(runtime.sessions).put(body.model_dump(),f'admin:{identity.open_id}')
+    except ValueError as exc:
+        code = str(exc)
+        raise HTTPException(409 if code == 'INITIALIZATION_INCOMPLETE' else 422, {'code': code, 'message': '定时同步暂不可启用' if code == 'INITIALIZATION_INCOMPLETE' else '定时同步配置无效'})
+    return {'data':value,'meta':{}}
 
 
 @router.get("/departments")
@@ -74,6 +191,19 @@ def admin_department(department_id: str, identity=Depends(get_admin_identity), r
     if data is None:
         raise HTTPException(404, {"code": "DEPARTMENT_NOT_FOUND", "message": "部门不存在"})
     return {"data": data, "meta": meta}
+
+
+@router.get('/departments/{department_id}/details')
+def admin_department_details(department_id: str, identity=Depends(get_admin_identity), runtime: Runtime = Depends(get_runtime), settings=Depends(get_settings)):
+    import httpx
+    from app.directory.details import department_details
+    from app.feishu.client import FeishuClient
+    data, meta = runtime.reads.get_department(department_id)
+    if data is None:
+        raise HTTPException(404, {'code': 'DEPARTMENT_NOT_FOUND', 'message': '部门不存在'})
+    with httpx.Client(timeout=5, follow_redirects=False) as http:
+        api = FeishuClient(settings.feishu_app_id, settings.feishu_app_secret.get_secret_value(), http=http) if settings.feishu_app_id and settings.feishu_app_secret else None
+        return {'data': department_details(data, runtime.sessions, api), 'meta': meta}
 
 
 @router.get("/employees")

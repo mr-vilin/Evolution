@@ -1,0 +1,5 @@
+from test_sync_center import assert_batches_survive_later_collection_failure
+
+
+def test_batches_remain_visible_after_later_failure_on_mysql(mysql_sessions):
+    assert_batches_survive_later_collection_failure(mysql_sessions)

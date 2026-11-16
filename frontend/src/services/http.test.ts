@@ -28,6 +28,13 @@ describe('后端请求契约', () => {
     await expect(request('/admin/api/stores')).rejects.toBeInstanceOf(ApiError);
   });
 
+  it('保留逐部门字段错误供表单定位', async () => {
+    const fields = [{ department_id: 'dept-2', code: 'STORE_CODE_DUPLICATE', message: '门店编码已存在' }];
+    vi.stubGlobal('fetch', async () => Response.json({ error: { code: 'VALIDATION_ERROR', message: '请检查门店设置', fields } }, { status: 422 }));
+    await expect(request('/admin/api/organization/stores', { method: 'POST', body: {} }))
+      .rejects.toMatchObject({ status: 422, fields });
+  });
+
   it('拒绝缺少 data 字段的成功响应', async () => {
     vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ unexpected: true }), { status: 200 }));
     await expect(request('/admin/api/stores')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });

@@ -1,0 +1,15 @@
+import { useState } from 'react';
+import { Alert, Badge, Button, Card, Descriptions, Empty, Space, Statistic, Steps, Table, Tabs, Timeline } from 'antd';
+import { ExampleFrame } from './ExampleFrame';
+
+export default function AdvancedProfileExample() {
+  const [status, setStatus] = useState('待审批');
+  const [log, setLog] = useState('');
+  return <ExampleFrame title="高级详情" description="单据编号 DEMO-234231029431 · 分层详情、审批进度与多组操作日志。">
+    <Card><div className="demo-detail-header"><Descriptions column={{ xs: 1, md: 2 }} items={[{ key: 'creator', label: '创建人', children: '演示成员甲' }, { key: 'product', label: '订购产品', children: '演示协作服务' }, { key: 'time', label: '创建时间', children: '2026-11-01' }, { key: 'related', label: '关联单据', children: 'DEMO-12421' }, { key: 'valid', label: '生效日期', children: '2026-11-01 ~ 2026-12-01' }, { key: 'note', label: '备注', children: '请于两个工作日内确认（演示）' }]} /><Space size="large"><Statistic title="状态" value={status} /><Statistic title="订单金额" value={568.08} precision={2} prefix="¥" /></Space></div><Space wrap><Button onClick={() => setLog('已执行演示操作一：单据已标记')}>操作一</Button><Button onClick={() => { setStatus('已关闭'); setLog('演示单据已关闭'); }}>关闭单据</Button><Button type="primary" disabled={status !== '待审批'} onClick={() => { setStatus('已通过'); setLog('演示审批已通过'); }}>演示审批</Button><Button onClick={() => { setStatus('待审批'); setLog(''); }}>重置单据</Button></Space>{log && <Alert className="block-gap" title={log} type="success" />}</Card>
+    <Card title="流程进度"><Steps current={status === '待审批' ? 1 : status === '已通过' ? 3 : 1} status={status === '已关闭' ? 'error' : 'process'} items={[{ title: '创建项目', content: '演示成员甲 · 11-01 10:00' }, { title: '部门初审', content: '演示成员乙' }, { title: '财务复核', content: '演示成员丙' }, { title: '完成' }]} /></Card>
+    <Card title="用户信息"><Descriptions column={{ xs: 1, md: 3 }} items={[{ key: 'name', label: '用户姓名', children: '演示用户' }, { key: 'member', label: '会员卡号', children: 'DEMO-CARD-001' }, { key: 'id', label: '证件标识', children: 'DEMO-ID-001（虚构）' }, { key: 'contact', label: '联系方式', children: 'demo@example.com' }, { key: 'address', label: '联系地址', children: '合成示例地址' }]} /><h3>信息组</h3><Descriptions column={{ xs: 1, md: 2 }} items={[{ key: 'cycle', label: '项目周期', children: '30 个工作日' }, { key: 'owner', label: '负责人', children: '演示成员甲' }]} /><Card size="small" title="多层级信息组"><Timeline items={[{ content: '用户来访记录：2026-11-01' }, { content: '服务记录：已完成资料核验（演示）' }]} /></Card></Card>
+    <Card title="用户近半年来电记录"><Empty description="暂无来电记录" /></Card>
+    <Card><Tabs items={['操作日志一', '操作日志二', '操作日志三'].map((name, i) => ({ key: name, label: name, children: <Table rowKey="id" scroll={{ x: 650 }} pagination={false} dataSource={[{ id: i, type: i === 0 ? '创建订单' : i === 1 ? '费用复核' : '通知用户', owner: `演示成员${i + 1}`, memo: log || '本地合成记录' }]} columns={[{ title: '操作类型', dataIndex: 'type' }, { title: '操作人', dataIndex: 'owner' }, { title: '执行结果', render: () => <Badge status="success" text="成功" /> }, { title: '操作时间', render: () => '2026-11-01 12:00' }, { title: '备注', dataIndex: 'memo' }]} /> }))} /></Card>
+  </ExampleFrame>;
+}

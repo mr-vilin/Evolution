@@ -1,2 +1,6 @@
 import type { ReactNode } from 'react';
-export function PageHeader({ title, description, extra }: { title: string; description: string; extra?: ReactNode }) { return <header className="page-header"><div><div className="breadcrumb">工作台 / {title}</div><h1>{title}</h1><p>{description}</p></div>{extra}</header>; }
+import { PageContainer } from '@ant-design/pro-components';
+
+export function PageHeader({ title, description, extra, children }: { title: string; description: string; extra?: ReactNode; children?: ReactNode; area?: '业务管理' | '系统管理' | '参考案例' }) {
+  return <PageContainer className="page-heading" ghost title={<h1>{title}</h1>} content={description} extra={extra} breadcrumbRender={false}>{children}</PageContainer>;
+}

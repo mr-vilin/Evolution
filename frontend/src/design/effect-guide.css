@@ -1,0 +1,69 @@
+/* 阴影与动画共用案例布局；令牌值读取当前主题，所有规则限定在设计标准页。 */
+.design-standards .effect-guide-intro{padding:24px;scroll-margin-top:80px}
+.design-standards .effect-guide h3,.design-standards .effect-guide h4{font-size:16px;line-height:24px;font-weight:600;margin:0}
+.design-standards .effect-guide p{font-size:14px;line-height:22px;margin:0;color:var(--ink)}
+.design-standards .effect-guide-intro p{margin-top:8px;color:var(--muted)}
+.design-standards .effect-entry{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);align-items:center;gap:32px;padding:24px;border-top:1px solid var(--line);min-width:0}
+.design-standards .effect-explanation,.design-standards .effect-example{min-width:0}
+.design-standards .effect-explanation>code{display:block;color:var(--muted);margin:4px 0 8px}
+.design-standards .effect-guide p.effect-reminder{color:var(--muted);padding-inline-start:8px;border-inline-start:2px solid var(--line);margin-top:16px}
+.design-standards .effect-example-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;color:var(--caption);font-size:12px;line-height:20px}
+.design-standards .effect-stage{padding:24px;border-radius:8px;background:var(--surface-container);min-width:0}
+.design-standards .effect-live-example{min-width:0;width:100%}
+.design-standards .effect-stage.is-code{background:var(--color-primary-bg)}
+.design-standards .effect-stage pre,.design-standards .effect-easing-rules pre{font:12px/20px Consolas,'SFMono-Regular',monospace;white-space:pre-wrap;overflow-wrap:anywhere;overflow:visible;margin:0;color:var(--ink)}
+.design-standards .effect-demo-stack{display:flex;flex-direction:column;align-items:flex-start;gap:16px;width:100%}
+.design-standards .effect-demo-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.design-standards .effect-demo-field{display:flex;flex-direction:column;gap:8px;width:100%;max-width:280px;color:var(--muted)}
+.design-standards .effect-demo-field>.ant-select{width:100%}
+.design-standards .effect-guide p.effect-caption,.design-standards .effect-guide .effect-caption{font-size:12px;line-height:20px;color:var(--caption)}
+.design-standards .shadow-flat-card,.design-standards .shadow-action-card{width:100%;background:var(--surface)}
+.design-standards .shadow-flat-card{box-shadow:none}
+.design-standards .shadow-action-card:focus-within{box-shadow:var(--effect-card-shadow)}
+.design-standards .shadow-action-card h4{display:flex;align-items:center;gap:8px}
+.design-standards .shadow-action-card .ant-btn-link{padding-inline:0}
+.design-standards .shadow-batch-scene{position:relative;padding:64px 16px 16px;border:1px solid var(--line);border-radius:8px;background:var(--surface);width:100%}
+.design-standards .shadow-batch-scene>.effect-caption:first-child{display:block;margin-bottom:8px}
+.design-standards .shadow-batch-toolbar{position:absolute;inset-block-start:16px;inset-inline:16px;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 8px;border-radius:6px;background:var(--surface);z-index:1}
+.design-standards .effect-member-department{font-size:14px;line-height:22px;color:var(--ink)}
+.design-standards .shadow-member-line{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:8px 0;border-bottom:1px solid var(--line)}
+.design-standards .shadow-batch-scene>p.effect-caption{margin-top:16px}
+.design-standards .shadow-overflow-tabs{width:100%;max-width:320px;min-width:0}
+.design-standards .shadow-overflow-tabs .ant-tabs-tab-btn{font-weight:400}
+.design-standards .effect-composition,.design-standards .effect-comparison-section{padding:24px;border-top:1px solid var(--line)}
+.design-standards .effect-composition>p{margin-top:8px;color:var(--muted)}
+.design-standards .effect-composition-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:32px;align-items:start;margin-top:24px}
+.design-standards .shadow-composition-paper{padding:24px;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.design-standards .shadow-composition-paper>header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px;margin-bottom:8px}
+.design-standards .shadow-composition-paper>p.effect-caption{margin-top:16px}
+.design-standards .effect-usage-list{padding-inline-start:16px;margin:0;color:var(--ink)}
+.design-standards .effect-usage-list li+li{margin-top:16px}
+.design-standards .effect-usage-list strong{font-weight:600}
+.design-standards .motion-state-control{display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:4px 16px;border:1px solid var(--outline);border-radius:6px;background:var(--surface);color:var(--ink);transition:background-color var(--effect-fast) var(--effect-ease),border-color var(--effect-fast) var(--effect-ease),color var(--effect-fast) var(--effect-ease),box-shadow var(--effect-fast) var(--effect-ease)}
+.design-standards .motion-state-control:hover{border-color:var(--color-primary-hover);color:var(--color-primary-hover)}
+.design-standards .motion-state-control[aria-pressed=true]{background:var(--color-primary-bg);border-color:var(--primary);color:var(--primary)}
+.design-standards .motion-state-control:active{background:var(--color-primary-bg);border-color:var(--color-primary-active);color:var(--color-primary-active)}
+.design-standards .motion-state-control:focus-visible{outline:2px solid var(--primary);outline-offset:4px;box-shadow:var(--effect-focus-shadow)}
+.design-standards .motion-filter{width:100%}
+.design-standards .effect-comparison-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:16px;margin-bottom:8px}
+.design-standards .effect-motion-tracks{display:grid;gap:16px;margin-top:24px}
+.design-standards .effect-motion-row{display:grid;grid-template-columns:192px minmax(0,1fr) 40px;align-items:center;gap:24px}
+.design-standards .effect-motion-label{min-width:0}
+.design-standards .effect-motion-label code{display:block}
+.design-standards .effect-motion-label>span{display:block;font-size:12px;line-height:20px;color:var(--caption);margin-top:4px}
+.design-standards .effect-motion-track{min-width:0;padding:4px;background:var(--surface-container);border:1px solid var(--line);border-radius:6px}
+.design-standards .effect-motion-runner{width:calc(100% - 24px);height:24px}
+.design-standards .effect-motion-runner>span{display:block;width:24px;height:24px;background:var(--primary);border-radius:4px}
+.design-standards .effect-motion-runner.is-playing{animation-name:effect-motion-travel;animation-fill-mode:both;animation-iteration-count:1}
+.design-standards .effect-motion-duration{font-size:12px;line-height:20px;color:var(--dimension);text-align:end}
+.design-standards .effect-guide p.effect-reduced-note{display:none;margin-top:16px;color:var(--muted);font-size:12px}
+.design-standards .effect-easing-rules{display:grid;gap:8px;margin-top:24px}
+.design-standards .effect-easing-rules pre{margin-top:8px}
+@keyframes effect-motion-travel{from{transform:translateX(0)}to{transform:translateX(100%)}}
+@media(max-width:1100px){.design-standards .effect-entry{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}.design-standards .effect-stage{padding:16px}.design-standards .effect-motion-row{gap:16px}}
+@media(max-width:760px){.design-standards .effect-entry,.design-standards .effect-composition-grid{grid-template-columns:minmax(0,1fr);gap:24px}.design-standards .effect-motion-row{grid-template-columns:minmax(0,1fr) 40px;gap:8px 16px}.design-standards .effect-motion-label{grid-column:1/-1}}
+@media(max-width:640px){.design-standards .effect-guide-intro,.design-standards .effect-entry,.design-standards .effect-composition,.design-standards .effect-comparison-section{padding:16px}.design-standards .shadow-composition-paper{padding:16px}.design-standards .effect-comparison-head{align-items:flex-start}.design-standards .effect-comparison-head h3{flex:1 1 160px}}
+@media(prefers-reduced-motion:reduce){.design-standards .motion-state-control,.design-standards .shadow-action-card{transition:none}.design-standards .effect-motion-runner.is-playing{animation:none;transform:translateX(100%)}.design-standards .effect-guide p.effect-reduced-note{display:block}}
+@media print{.design-standards .effect-entry{break-inside:avoid}.design-standards .effect-example-head .code-icon{display:none}}
+
+.design-standards .effect-guide p.effect-caption,.design-standards .effect-guide p.effect-reduced-note{font-size:14px;line-height:22px;color:var(--muted)}

@@ -14,6 +14,10 @@ class FeishuClient:
     def _request(self, method, path, token=None, **kwargs):
         try:
             response = self.http.request(method, 'https://open.feishu.cn/open-apis/' + path, headers={'Authorization': 'Bearer ' + token} if token else {}, **kwargs)
+            if response.status_code == 400:
+                error = response.json()
+                if isinstance(error, dict) and error.get('code') == 99991672:
+                    raise RuntimeError('FEISHU_PERMISSION_REQUIRED')
             response.raise_for_status()
             payload = response.json()
             if payload.get('code') != 0:
@@ -41,8 +45,10 @@ class FeishuClient:
 
     def pages(self, resource, **params):
         identifier = params.pop('department_id', None)
-        path = {'scopes': 'scopes', 'users': 'users/find_by_department', 'children': f'departments/{quote(str(identifier), safe="")}/children'}[resource]
+        path = {'scopes': 'scopes', 'users': 'users/find_by_department', 'custom_attrs': 'custom_attrs', 'children': f'departments/{quote(str(identifier), safe="")}/children'}[resource]
         query = {'user_id_type': 'user_id', 'department_id_type': 'open_department_id', 'page_size': 50, **params}
+        if resource == 'custom_attrs':
+            query = {'page_size': 100, **params}
         if resource == 'users':
             query['department_id'] = identifier
         if resource == 'children':
@@ -68,4 +74,11 @@ class FeishuClient:
             raise RuntimeError('FEISHU_DETAIL_MISSING')
         if data.get('user_id' if kind == 'user' else 'open_department_id') != identifier:
             raise RuntimeError('FEISHU_ID_MISMATCH')
+        return data
+
+    def chat(self, identifier):
+        data = self._request('GET', f'im/v1/chats/{quote(identifier, safe="")}',
+                             self._token('tenant'), params={'user_id_type': 'user_id'}).get('data')
+        if not isinstance(data, dict):
+            raise RuntimeError('FEISHU_CHAT_MISSING')
         return data

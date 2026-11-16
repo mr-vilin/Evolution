@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -7,6 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ORG_", case_sensitive=False, extra="ignore")
 
+    agent_service_token: SecretStr | None = None
+    agent_environment: Literal["production", "test"] = "production"
     database_url: str | None = None
     session_secret: SecretStr | None = None
     feishu_app_id: str | None = None
@@ -14,6 +17,8 @@ class Settings(BaseSettings):
     feishu_redirect_uri: str | None = None
     feishu_tenant_key: str | None = None
     feishu_scopes: str = ""
+    feishu_reconcile_on_startup: bool = False
+    feishu_reconcile_on_reconnect: bool = False
     coverage_acceptance_reference: str = ""
     coverage_all_members_verified: bool = False
     coverage_departmentless_verified: bool = False

@@ -1,0 +1,23 @@
+import { examplePages } from './examples';
+// 菜单与业务地址共用一份声明；人员详情归属于组织架构。
+export default [
+  { path: '/initialize', layout: false, component: './InitializationPage', hideInMenu: true },
+  { path: '/', redirect: '/organization' },
+  { path: '/organization', name: '组织架构', icon: 'ApartmentOutlined', component: './OrganizationPage' },
+  { path: '/employees/:id', name: '人员详情', component: './EmployeePage', hideInMenu: true, parentKeys: ['/business', '/organization'] },
+  { path: '/stores', name: '门店管理', icon: 'ShopOutlined', component: './StoresPage' },
+  { path: '/sync', name: '同步中心', icon: 'SyncOutlined', component: './SyncPage' },
+  { path: '/sync/jobs/:id', name: '同步任务详情', component: './SyncJobPage', hideInMenu: true, parentKeys: ['/system', '/sync'] },
+  { path: '/logs', name: '变更日志', icon: 'AuditOutlined', component: './LogsPage' },
+  { path: '/settings', name: '管理设置', icon: 'SettingOutlined', component: './SettingsPage' },
+  { path: '/system-info', name: '系统信息', icon: 'InfoCircleOutlined', component: './SystemInfoPage' },
+  { path: '/ui-standards/design', name: '设计标准', icon: 'BgColorsOutlined', component: './DesignStandardsPage' },
+  { path: '/ui-standards/table', name: '表格规范', icon: 'TableOutlined', component: './TableStandardsPage' },
+  { path: '/ui-standards', redirect: '/ui-standards/design', hideInMenu: true },
+  { path: '/examples/ui-prototypes', name: 'UI 原型总览', icon: 'PictureOutlined', component: './UiPrototypesPage' },
+  ...examplePages.map(page => ({ path: page.path, name: page.name, component: `./examples/${page.component}` })),
+  { path: '/business', redirect: '/organization', hideInMenu: true },
+  { path: '/system', redirect: '/sync', hideInMenu: true },
+  { path: '/examples', redirect: '/examples/welcome', hideInMenu: true },
+  { path: '/*', redirect: '/organization' },
+];
