@@ -6,6 +6,11 @@
 .workspace-menu-leaf { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .workspace-menu-leaf-icon { display: inline-flex; flex: none; align-items: center; }
 .workspace-menu-leaf > div { min-width: 0; }
+/* 菜单溢出仍可滚动，仅隐藏侧栏滚动条。 */
+.ant-pro-sider .ant-layout-sider-children > div { scrollbar-width: none; }
+.ant-pro-sider .ant-layout-sider-children > div::-webkit-scrollbar { display: none; }
+.ant-pro-sider .ant-pro-sider-footer { padding-block-end: 8px; }
+.workspace-menu-version { margin-inline: 16px; padding-top: 8px; border-top: 1px solid var(--app-line); color: var(--app-muted); font-size: 12px; line-height: 20px; font-weight: 400; text-align: center; }
 .ui-prototypes-frame { display: block; width: 100%; height: calc(100dvh - 240px); min-height: 480px; border: 0; }
 .employee-sections { display: flex; flex-direction: column; gap: 24px; }
 .ant-pro-layout .ant-pro-page-container-warp-page-header { padding-inline: 0; }

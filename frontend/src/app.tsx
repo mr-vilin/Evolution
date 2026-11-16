@@ -10,6 +10,7 @@ import { useThemeColors } from './theme/ThemeProvider';
 import { PageErrorBoundary } from './components/PageErrorBoundary';
 import settings from '../config/defaultSettings';
 import { themeLogoUrl } from './branding/logo';
+import { buildInfo } from './buildInfo';
 import './styles.css';
 import './responsive.css';
 import './workspace.css';
@@ -53,7 +54,7 @@ export const layout: RunTimeLayoutConfig = () => {
       const content = <span className="workspace-menu-leaf"><span className="workspace-menu-leaf-icon" aria-hidden="true">{item.icon}</span>{dom}</span>;
       return item.path ? <Link to={item.path} onClick={item.isMobile ? item.onClick : undefined}>{content}</Link> : content;
     },
-    menuFooterRender: (props) => props?.collapsed ? null : <span>内部管理工作台</span>,
+    menuFooterRender: (props) => props?.collapsed ? null : <div className="workspace-menu-version">版本 V {buildInfo.version}</div>,
     links: [],
     footerRender: false,
     breadcrumbRender: false,
