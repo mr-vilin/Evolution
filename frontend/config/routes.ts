@@ -15,7 +15,7 @@ export default [
   { path: '/ui-standards/table', name: '表格规范', icon: 'TableOutlined', component: './TableStandardsPage' },
   { path: '/ui-standards', redirect: '/ui-standards/design', hideInMenu: true },
   { path: '/examples/ui-prototypes', name: 'UI 原型总览', icon: 'PictureOutlined', component: './UiPrototypesPage' },
-  ...examplePages.map(page => ({ path: page.path, name: page.name, component: `./examples/${page.component}` })),
+  ...examplePages.map(page => ({ path: page.path, name: page.name, icon: page.icon, component: `./examples/${page.component}` })),
   { path: '/business', redirect: '/organization', hideInMenu: true },
   { path: '/system', redirect: '/sync', hideInMenu: true },
   { path: '/examples', redirect: '/examples/welcome', hideInMenu: true },

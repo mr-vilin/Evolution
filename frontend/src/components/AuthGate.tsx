@@ -3,12 +3,15 @@ import { Button, Result, Space, Spin } from 'antd';
 import { AUTH_FAILURE_EVENT, setCsrfToken } from '../services/http';
 import { useResource } from '../services/useResource';
 import InitializationPage from '../pages/InitializationPage';
+import { useThemeColors } from '../theme/ThemeProvider';
+import { themeLogoUrl } from '../branding/logo';
 
 interface AdminSession { open_id: string; csrf_token: string; initialization_complete: boolean }
 const SessionContext = createContext<AdminSession | null>(null);
 export const useAdminSession = () => useContext(SessionContext);
 
 export function AuthGate({ children }: { children: ReactNode }) {
+  const { colors } = useThemeColors();
   const session = useResource<AdminSession>('/admin/auth/session');
   useEffect(() => {
     setCsrfToken(session.data?.csrf_token ?? null);
@@ -27,7 +30,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   return <main className="login-page" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--app-canvas)', padding: 24 }}>
     <div style={{ width: 'min(560px, 100%)', background: 'var(--app-surface)', borderRadius: 12, padding: '24px 8px', border: '1px solid var(--app-line)' }}>
       <Result
-        icon={needsLogin ? <img src="/branding/logo.svg" alt="组织服务 Logo" width={64} height={64} /> : undefined}
+        icon={needsLogin ? <img src={themeLogoUrl(colors.primary)} alt="EVOLUTION Logo" width={64} height={64} /> : undefined}
         status={needsLogin ? 'info' : forbidden ? '403' : 'warning'}
         title={needsLogin ? '组织服务' : forbidden ? '暂无管理权限' : '暂时无法进入工作台'}
         subTitle={needsLogin ? '使用企业飞书身份登录，仅管理员白名单成员可访问。' : session.error.message}
