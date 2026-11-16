@@ -87,9 +87,13 @@ export function checkRepository(root = repositoryRoot, { release = false, tag, b
   if (baseRef) {
     if (!/^[0-9a-f]{40}$/.test(baseRef)) throw new Error('base-ref 必须是完整提交 SHA');
     const oldChangelog = git(root, ['show', `${baseRef}:CHANGELOG.md`]);
-    if (oldChangelog === null) throw new Error('无法读取基准提交的 CHANGELOG.md');
+    if (oldChangelog === null) {
+      const tree = git(root, ['ls-tree', '--name-only', baseRef, '--', 'CHANGELOG.md', 'version.json']);
+      if (tree !== '') throw new Error('无法读取基准提交的 CHANGELOG.md');
+      // 基准确实未建立版本体系时，允许首次引入；无效基准或部分缺失仍拒绝。
+    }
     // 旧规则台账没有方括号标题；首次重编号经 ADR 0003 明确授权。
-    if (oldChangelog.includes('## [Unreleased]')) {
+    if (oldChangelog?.includes('## [Unreleased]')) {
       for (const record of releaseRecords(oldChangelog)) {
         if (!records.some(item => item.version === record.version && item.text === record.text)) throw new Error(`不得修改或移除既有版本记录：${record.version}`);
       }

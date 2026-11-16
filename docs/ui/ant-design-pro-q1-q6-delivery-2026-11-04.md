@@ -1,7 +1,7 @@
 # Ant Design Pro Q1–Q6 实施记录
 
 - 日期：2026-11-04（北京时间）。
-- 来源：[Issue #10](https://github.com/mr-vilin/OrganizationalStructure/issues/10)、《Ant Design Pro 完整布局与管理员参考案例规格》。
+- 来源：[Issue #10](https://github.com/mr-vilin/Evolution/issues/10)、《Ant Design Pro 完整布局与管理员参考案例规格》。
 - 本次范围：用户明确选择“只实施 Q1–Q6，保留 Q7 待确认”。不将 `ready-for-agent` 标签作为 Q7 确认。
 
 ## 已实现范围

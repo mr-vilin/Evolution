@@ -13,6 +13,10 @@ def snapshot():
         conn.exec_driver_sql('SET TRANSACTION READ ONLY')
         result = {
             'schema': conn.scalar(text('SELECT version_num FROM alembic_version')),
+            'database': dict(conn.execute(text(
+                'SELECT VERSION() AS version, @@character_set_connection AS connection_charset, '
+                '@@collation_connection AS connection_collation, @@character_set_server AS server_charset, '
+                '@@collation_server AS server_collation')).mappings().one()),
             'state': dict(conn.execute(text('SELECT dataset_epoch,data_version,initialization_status,coverage_status FROM dataset_state WHERE id=1')).mappings().one()),
             'active_jobs': conn.scalar(text("SELECT COUNT(*) FROM sync_job WHERE status IN ('queued','running')")),
             'counts': {table: conn.scalar(text('SELECT COUNT(*) FROM ' + table))

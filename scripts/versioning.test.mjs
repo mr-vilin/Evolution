@@ -81,3 +81,16 @@ test('PR 基准检查拒绝改写已有发行说明或降低版本', t => {
   writeFileSync(join(root, 'version.json'), JSON.stringify({ version: '0.0.9' }));
   assert.throws(() => checkRepository(root, { baseRef }), /低于/);
 });
+
+test('首次引入版本台账允许空基准体系，但拒绝无效基准和部分缺失', t => {
+  const root = fixture(t);
+  const run = args => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  run(['init', '--quiet']);
+  run(['-c', 'user.name=Version Test', '-c', 'user.email=version-test@example.invalid', 'commit', '--allow-empty', '--quiet', '-m', 'empty baseline']);
+  const baseRef = run(['rev-parse', 'HEAD']);
+  assert.doesNotThrow(() => checkRepository(root, { baseRef }));
+  assert.throws(() => checkRepository(root, { baseRef: 'f'.repeat(40) }), /无法读取基准/);
+  run(['add', 'version.json']);
+  run(['-c', 'user.name=Version Test', '-c', 'user.email=version-test@example.invalid', 'commit', '--quiet', '-m', 'incomplete baseline']);
+  assert.throws(() => checkRepository(root, { baseRef: run(['rev-parse', 'HEAD']) }), /无法读取基准/);
+});

@@ -2,7 +2,9 @@
 
 ## 标准部署入口
 
-开发完成默认部署**本地 Docker**；线上测试与正式环境仅在用户当次明确要求时部署。环境台账、固定命令、制品、验证、回退及授权边界统一见 [环境与标准发布流程](ENVIRONMENTS.md)，配置源为 `environments.json`，脚本入口为 `release.py`。
+开发完成并通过验证后，通知用户手动启动，不自动重新部署 Docker。用户明确要求部署时执行；未指定环境的“部署”指**本地 Docker**，线上测试与正式环境必须由用户当次明确指定。环境台账、固定命令、制品、验证、回退及授权边界统一见 [环境与标准发布流程](ENVIRONMENTS.md)，配置源为 `environments.json`，脚本入口为 `release.py`。
+
+本地项目名为 `evolution`，原数据库卷 `organization-directory_mysql-data` 作为 external 卷固定复用；不要改成空的新卷。改名及验收见[本地 Docker 切换记录](../docs/architecture/local-docker-rename-2026-11-16.md)。MCP 客户端注册名 `organization-directory` 是独立的工具入口标识，不是 Docker 项目名。
 
 普通更新使用 `backend/.venv/Scripts/python.exe deploy/release.py deploy`，默认仅更新本地 app/MCP。数据库版本不匹配时必须停止，另行执行已授权的迁移流程。以下历史首次搭建和迁移命令不替代标准发布入口；使用新脚本后启动必须带其镜像覆盖配置，不能直接 `docker compose up --build` 覆盖已验收版本。
 
@@ -171,7 +173,7 @@ docker compose --profile agent ps
 docker compose --profile agent exec -T mcp python -m app.mcp.health
 ```
 
-启动顺序为 MySQL → 迁移 → app 就绪 → mcp。侧车与 app 复用 `organization-directory-runtime` 镜像和现有 Dockerfile，独立执行 `python -m app.mcp --transport streamable-http`，不运行应用监督器。侧车仅加入 `internal: true` 的 `capabilities` 网络；app 同时加入原默认网络及能力网络，MySQL、迁移仍在原默认网络。侧车没有宿主机端口、数据库网络、数据卷或全量 `env_file`，仅逐项传递下表配置，不获得数据库、飞书或管理员凭据。构建上下文排除 `.env`、venv 和 `.superpowers` 私有运行/凭据材料。
+启动顺序为 MySQL → 迁移 → app 就绪 → mcp。侧车与 app 复用同一运行镜像和现有 Dockerfile（本地为 `evolution-runtime`；测试环境保留 `organization-directory-runtime`），独立执行 `python -m app.mcp --transport streamable-http`，不运行应用监督器。侧车仅加入 `internal: true` 的 `capabilities` 网络；app 同时加入原默认网络及能力网络，MySQL、迁移仍在原默认网络。侧车没有宿主机端口、数据库网络、数据卷或全量 `env_file`，仅逐项传递下表配置，不获得数据库、飞书或管理员凭据。构建上下文排除 `.env`、venv 和 `.superpowers` 私有运行/凭据材料。
 
 | 配置 | 用途与默认值 |
 | --- | --- |
@@ -219,7 +221,7 @@ stdio 与 HTTP 使用同一工具、身份、版本、幂等和人工确认策�
   "mcpServers": {
     "organization-directory": {
       "command": "powershell.exe",
-      "args": ["-NoProfile", "-File", "D:\\WorkBench\\AI Projects\\OrganizationalStructure\\deploy\\mcp-stdio.ps1"]
+      "args": ["-NoProfile", "-File", "D:\\WorkBench\\AI Projects\\Evolution\\deploy\\mcp-stdio.ps1"]
     }
   }
 }
@@ -229,10 +231,12 @@ stdio 与 HTTP 使用同一工具、身份、版本、幂等和人工确认策�
 
 ### 腾讯云受信 SSH 客户端
 
+项目目录已改为 `D:\WorkBench\AI Projects\Evolution`，本节接入示例使用新路径。旧目录是 Junction 兼容入口，供仍引用旧路径的既有工具使用；修改客户端配置后需重新加载，不能据此认定当前连接已切换。
+
 `deploy/mcp-stdio-ssh.ps1` 通过本机 SSH 别名 `tencent_test_col` 连接 `/srv/organization-directory` 的 `compose.json`，在远端 MCP 容器中启动 stdio；它与上面的本机入口是两个独立环境。SSH 要求现有可信主机记录、非交互密钥认证及远端受控的 Docker 执行权限，不自动接受陌生主机密钥、不输出服务令牌，也不公开 MCP 端口。
 
 ```powershell
-codex mcp add organization-directory-cloud -- powershell.exe -NoProfile -File "D:\WorkBench\AI Projects\OrganizationalStructure\deploy\mcp-stdio-ssh.ps1"
+codex mcp add organization-directory-cloud -- powershell.exe -NoProfile -File "D:\WorkBench\AI Projects\Evolution\deploy\mcp-stdio-ssh.ps1"
 ```
 
 该注册只添加云端入口，不替换本机 `organization-directory`。新增后需在客户端重新加载并确认工具目录；注册成功不等于当前对话已经加载工具，也不等于已经批准业务写入。云端部署与验收状态见 [接入与业务验收记录](../docs/mcp-client-and-live-acceptance-2026-10-24.md)。

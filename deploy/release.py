@@ -51,7 +51,7 @@ def environment(name, action, authorization):
     return target
 
 
-def build(release_tag=None):
+def build(release_tag=None, image_repository='organization-directory-runtime'):
     run(['node', 'scripts/versioning.mjs', 'check', *(['--release', '--tag', release_tag] if release_tag else [])], cwd=ROOT)
     commit = run(['git', 'rev-parse', 'HEAD'], cwd=ROOT).strip()
     dirty = bool(run(['git', 'status', '--porcelain'], cwd=ROOT).strip())
@@ -87,7 +87,7 @@ def build(release_tag=None):
             raise RuntimeError('BASE_IMAGE_CONFIGURATION_STALE')
         dockerfile = dockerfile.replace('FROM ' + original + ' ', 'FROM ' + pinned + ' ')
     (source / 'Dockerfile.release').write_text(dockerfile, encoding='utf-8')
-    image = 'organization-directory-runtime:' + release_id
+    image = image_repository + ':' + release_id
     command = ['docker', 'build', '-f', str(source / 'Dockerfile.release'), '--build-arg', 'ORG_COMMIT_SHA=' + commit,
                '--build-arg', 'ORG_SOURCE_DIRTY=' + str(dirty).lower(), '-t', image]
     if release_tag:
@@ -131,7 +131,7 @@ def validate_artifact(path):
     manifest = json.loads((path / 'manifest.json').read_text(encoding='utf-8'))
     if not re.fullmatch(r'release-[a-z0-9-]+', manifest['release_id']):
         raise RuntimeError('INVALID_RELEASE_ID')
-    if manifest['image'] != 'organization-directory-runtime:' + manifest['release_id']:
+    if manifest['image'] not in [repository + ':' + manifest['release_id'] for repository in ('organization-directory-runtime', 'evolution-runtime')]:
         raise RuntimeError('INVALID_IMAGE_NAME')
     if digest(path / 'image.tar.gz') != manifest['archive_sha256']:
         raise RuntimeError('ARCHIVE_HASH_MISMATCH')
@@ -165,18 +165,23 @@ def remote_write(target, action, artifact, manifest, release_id, authorization):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['plan', 'inspect', 'build', 'deploy', 'verify', 'rollback'])
+    parser.add_argument('action', choices=['plan', 'inspect', 'build', 'deploy', 'verify', 'rollback', 'rename-local'])
     parser.add_argument('--environment', choices=['local', 'test', 'production'], default='local')
     parser.add_argument('--artifact', type=Path, help='已有构建制品目录，含 manifest.json 和 image.tar.gz')
     parser.add_argument('--authorization', default='', help='记录用户本次明确的远端部署指令，不是自动授权开关')
     parser.add_argument('--release-tag')
     parser.add_argument('--release-id')
     args = parser.parse_args()
+    if args.action == 'rename-local' and args.environment != 'local':
+        raise RuntimeError('RENAME_LOCAL_ONLY: 只允许本地 Docker 改名')
     target = environment(args.environment, args.action, args.authorization)
-    if args.action == 'plan':
+    if args.action == 'rename-local':
+        from release_rename import LocalRename
+        result = LocalRename(target).execute()
+    elif args.action == 'plan':
         result = {'target': target, 'migration': '禁止自动执行', 'remote_write': False}
     elif args.action == 'build':
-        result = {'artifact': str(build(args.release_tag))}
+        result = {'artifact': str(build(args.release_tag, target.get('image_repository', 'organization-directory-runtime')))}
     elif args.action in ('inspect', 'verify'):
         if target['transport'] == 'ssh':
             result = remote_read(target, args.action)
@@ -188,7 +193,7 @@ def main():
     elif args.action == 'deploy':
         if args.environment != 'local' and not args.artifact:
             raise RuntimeError('REMOTE_REQUIRES_REVIEWED_ARTIFACT: 远端必须明确指定已验收制品')
-        artifact = args.artifact.resolve() if args.artifact else build(args.release_tag)
+        artifact = args.artifact.resolve() if args.artifact else build(args.release_tag, target.get('image_repository', 'organization-directory-runtime'))
         manifest = validate_artifact(artifact)
         if args.environment == 'production':
             receipt = artifact / 'test-deployment.json'

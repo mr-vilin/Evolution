@@ -1,4 +1,4 @@
-name: organization-directory
+name: evolution
 services:
   mysql:
     image: mysql:8.4
@@ -19,7 +19,7 @@ services:
       timeout: 5s
       retries: 30
   migrate:
-    image: organization-directory-runtime:${ORG_IMAGE_TAG:-local}
+    image: evolution-runtime:${ORG_IMAGE_TAG:-local}
     build: .
     env_file: .env
     command: ["python", "-m", "alembic", "upgrade", "head"]
@@ -27,7 +27,7 @@ services:
       mysql:
         condition: service_healthy
   app:
-    image: organization-directory-runtime:${ORG_IMAGE_TAG:-local}
+    image: evolution-runtime:${ORG_IMAGE_TAG:-local}
     build: .
     networks: [default, capabilities]
     env_file: .env
@@ -45,7 +45,7 @@ services:
     stop_grace_period: 20s
   mcp:
     profiles: [agent]
-    image: organization-directory-runtime:${ORG_IMAGE_TAG:-local}
+    image: evolution-runtime:${ORG_IMAGE_TAG:-local}
     build: .
     restart: unless-stopped
     command: ["python", "-m", "app.mcp", "--transport", "streamable-http"]
@@ -78,3 +78,5 @@ networks:
     internal: true
 volumes:
   mysql-data:
+    external: true
+    name: organization-directory_mysql-data

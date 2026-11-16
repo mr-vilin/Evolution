@@ -3,7 +3,7 @@
 > 2026-11-04 确认更新：用户已明确“确认 Q7，按完整范围实施”。下文原有“Q7 待确认／候选／未开始”描述保留为形成过程记录；本次最终基线覆盖全部 27 个案例及七类业务页面，授权本地 Docker 发布，不包含数据库迁移、业务规则变更、框架升级或远端发布。当前实现说明见 `frontend/src/pages/examples/README.md`；验收与发布结论以本轮实际证据为准。
 - 日期：2026-11-04（北京时间）。
 - 状态：规格已整理，测试边界已于 2026-11-04 经用户确认；Q1–Q6 为已确认需求，Q7 的最终布局、案例清单与验收细则仍待确认。
-- 目标跟踪器：`mr-vilin/OrganizationalStructure` 的 GitHub Issues；发布标签：`ready-for-agent`。
+- 目标跟踪器：`mr-vilin/Evolution` 的 GitHub Issues；发布标签：`ready-for-agent`。
 - 当前工作：整理规格，不开始界面实现或部署。生成或发布规格不自动将待确认项转为已确认。
 
 ## Problem Statement

@@ -1,6 +1,6 @@
 # 组织工作台实现与迁移交付
 
-日期：2026-11-05（北京时间）。依据：[Issue #11](https://github.com/mr-vilin/OrganizationalStructure/issues/11) 与[规格](../ui/organization-tree-spec-2026-11-05.md)。用户本次显式调用 `implement` 授权开始实现；原规格中的 Q12 待确认是发布规格时的历史状态，不再阻止本轮实现。
+日期：2026-11-05（北京时间）。依据：[Issue #11](https://github.com/mr-vilin/Evolution/issues/11) 与[规格](../ui/organization-tree-spec-2026-11-05.md)。用户本次显式调用 `implement` 授权开始实现；原规格中的 Q12 待确认是发布规格时的历史状态，不再阻止本轮实现。
 
 ## 实现契约
 

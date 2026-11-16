@@ -2,13 +2,13 @@
 
 ## 默认规则与授权
 
-代码完成并通过相关测试后，默认部署本地 Docker。“部署”未指定环境时也指本地。线上测试、正式环境必须由用户当次明确要求，不能从历史任务、截图、上次发布目标或默认参数推断授权。口头与文字指令均可，执行远端发布时用 `--authorization` 记录原指令摘要；该参数不创造授权。
+代码完成并通过相关测试后，通知用户手动启动，不自动重新部署 Docker；仅在用户明确要求部署时执行。“部署”未指定环境时也指本地。线上测试、正式环境必须由用户当次明确要求，不能从历史任务、截图、上次发布目标或默认参数推断授权。口头与文字指令均可，执行远端发布时用 `--authorization` 记录原指令摘要；该参数不创造授权。
 
 本文件与 `environments.json` 是目标信息来源；`release.py` 是统一入口。不要从聊天历史、临时目录或某次构建日志重新拼装发布流程。发布前仍要执行标准检查，信息固化不等于免除验证。
 
 ## 环境台账
 
-核实日期：2026-10-26，北京时间。
+本地核实日期：2026-11-16；远端列保留 2026-10-26 的历史快照，本次未连接或发布远端。日期均为北京时间。
 
 | 项目 | 本地 Docker | 线上测试 | 正式 |
 | --- | --- | --- | --- |
@@ -16,11 +16,11 @@
 | 主机入口 | 当前 Windows 开发机 | SSH 别名 `tencent_test_col`，既有可信主机密钥 | 待确认 |
 | 部署目录 | 仓库根目录 | `/srv/organization-directory` | 待确认 |
 | Compose | `compose.yaml` | `compose.json` | 待确认 |
-| Compose 项目 | `organization-directory` | `organization-directory` | 待确认；不得与测试数据卷混用 |
+| Compose 项目 | `evolution` | `organization-directory` | 待确认；不得与测试数据卷混用 |
 | 应用入口 | `http://127.0.0.1:8000`；仅用于本机检查，正式登录 HTTPS 入口待登记 | `https://test-organization.bzg.company` | 待确认独立 HTTPS 域名与回调 |
 | 容器 | app、mcp、mysql；migrate 为一次性服务 | 同左 | 沿用既定拓扑，实例与凭据独立 |
-| 数据库 | 已授权迁移至 `0010_initialization_wizard`；MySQL 8.4.11 | 实测 `0010_initialization_wizard`；MySQL 8.4.11 | 待创建及实测，不能假定同测试 |
-| 最近镜像 | `organization-directory-runtime:release-20261026-093353-8a68260a` | `organization-directory-runtime:coverage-20261026-01` | 无 |
+| 数据库 | 实测 `0013_employee_profile`；MySQL 8.4.11 | 实测 `0010_initialization_wizard`；MySQL 8.4.11 | 待创建及实测，不能假定同测试 |
+| 最近镜像 | `evolution-runtime:release-20261116-034142-fadb8915`（原镜像新增别名） | `organization-directory-runtime:coverage-20261026-01` | 无 |
 | 凭据来源 | 仓库 `.env` 和 Docker Desktop 当前身份 | 远端原 Compose／受限配置、SSH 当前身份、`sudo -n docker` | 独立配置，禁止复制测试凭据 |
 
 这里的版本和镜像是核实快照；每次运行 `inspect` 获取当前状态。`ORG_AGENT_ENVIRONMENT` 是能力安全策略字段，不能据它的值认定部署主机是测试或正式环境。
@@ -32,6 +32,14 @@
 - `build` 从 Git 受控与未忽略文件生成源码快照，包含 backend、frontend、deploy、scripts 和构建入口，不携带 `.env`、本机依赖、缓存或 Git 历史。制品保存于 `.cache/artifacts/<release-id>/`，包含逐文件 SHA-256、提交、dirty、schema head、镜像 ID、构建信息和镜像压缩包校验值。
 - 每次构建使用独立标签，禁止覆盖既有制品。测试、正式部署必须明确传入制品目录。正式环境启用后必须使用干净版本标签构建，并提升已成功部署测试的同一个镜像，不现场重建。
 - 制品同时记录构建端 `image_id` 与从 Docker 导出包读取的 `image_config_id`。containerd 和经典存储可能对同一制品返回不同 ID；目标端必须匹配其中一个摘要，随后以目标端实际 ID 固定 Compose 并核验运行容器。传输仍校验完整压缩包 SHA-256，不因 ID 表示差异跳过制品校验。
+
+## 本地 Docker 改名（2026-11-16）
+
+本地项目已由 `organization-directory` 切换为 `evolution`，容器为 `evolution-app-1`、`evolution-mcp-1`、`evolution-mysql-1`。应用镜像别名为 `evolution-runtime:release-20261116-034142-fadb8915`，原镜像字节保持不变。用户已确认保留仓库规定的 `utf8mb4_general_ci` 服务端默认值；现有表和字段未执行排序规则转换。数据库卷固定声明为 external 的 `organization-directory_mysql-data`，因此不要重命名、删除或替换该卷。远端目标不变。
+
+统一入口 `backend/.venv/Scripts/python.exe deploy/release.py rename-local --environment local` 只接受本地环境；重复执行时只检查已改名状态。流程保留原配置、镜像和容器，先核实 schema 与空闲状态，停止写入方，再以相同 MySQL 镜像复用原卷；数据库核验通过后才启动 app/MCP。全程不执行 migrate。失败时停止新服务、恢复原配置与容器并核验；验收成功后才移除旧容器，不使用 `-v`，不删除卷。
+
+本次证据位于 `.cache/releases/rename-20261116-070141-13f2a6e2/`；这是名称与配置切换的回退证据，不是数据库备份。详细检查、历史名称和验收边界见[切换记录](../docs/architecture/local-docker-rename-2026-11-16.md)。已有版本的应用回退仍使用原 release-id，不能把 rename-id 传给普通 `rollback`。
 
 ## 常用命令
 
@@ -95,7 +103,7 @@ ORG_FEISHU_RECONCILE_ON_RECONNECT=false
 
 本次配置无需数据库迁移；发布前仍须等待活动任务结束。回退到不支持这些开关的旧镜像会恢复启动、重连自动核对，旧代码会忽略上述配置。
 
-标准脚本使用原 Compose 加 `<部署目录>/.cache/deployment-image.json` 镜像覆盖文件；只含 app/mcp/migrate 的镜像 ID，不含凭据。此覆盖文件是**后续启动的必要部分**：不要绕过脚本直接 `docker compose up --build`，否则可能回到原 Compose 的旧镜像。只读 exec、ps 可使用原 Compose。
+标准脚本使用原 Compose 加 `<部署目录>/.cache/deployment-image.json` 镜像覆盖文件；保存 app/mcp/migrate 的镜像引用；本次本地改名还固定原 MySQL 镜像 ID，不含凭据。此覆盖文件是**后续启动的必要部分**：不要绕过脚本直接 `docker compose up --build`，否则可能回到原 Compose 的旧镜像。只读 exec、ps 可使用原 Compose。
 
 部署来源：`.cache/deployment-source.json`。每次发布证据：`.cache/releases/<release-id>/`，含 `previous-images.json`、`previous-source.json`（若有）、`before.json`、`manifest.json`、`target.json`、`after.json`、`verification.json` 和回退验证记录。远端文件按 umask 077 创建；本地沿用仓库 Windows ACL，禁止公开分享运行证据目录。镜像与证据不自动删除。
 

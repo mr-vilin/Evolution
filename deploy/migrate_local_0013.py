@@ -89,7 +89,7 @@ def main():
     archive = ROOT / '.cache/migrations' / identifier
     temporary = 'org-migration-' + identifier
     host = Host(environment('local', 'inspect', ''))
-    if host.target['transport'] != 'local' or host.target['project'] != 'organization-directory':
+    if host.target['transport'] != 'local' or host.target['project'] not in ('organization-directory', 'evolution'):
         raise RuntimeError('LOCAL_TARGET_MISMATCH')
     archive.mkdir(parents=True, exist_ok=False)
     write_json(archive / 'authorization.json', {

@@ -1,4 +1,4 @@
-# 飞书组织架构维护系统
+# Evolution · 飞书组织架构维护系统
 
 > 开发初始基线：v0.1.0（尚未正式上线）· 编号规范建立日期：2026-10-24；当前产品版本以 [version.json](./version.json) 为准。
 > 状态：MCP 已整合到本地主分支并完成本机容器与 stdio 客户端验收；真实模型与企业飞书另行验收。
@@ -14,6 +14,12 @@
 技术栈为 Python / FastAPI、React / Ant Design 与 MySQL。代码位于 `backend/`、`frontend/`，部署配置位于 `deploy/`；实施和审查状态见下方台账。
 
 项目开发约束见 [AGENTS.md](./AGENTS.md)。管理端采用 **Ant Design Pro v6 / Umi Max / Utoopack**，保留七个业务页面与原有认证、读取和确认协议；本次验证及未验证项见[迁移验收记录](docs/architecture/ant-design-pro-migration-acceptance-2026-10-25.md)。
+
+项目仓库为 [mr-vilin/Evolution](https://github.com/mr-vilin/Evolution)，当前 Windows 开发目录为 `D:\WorkBench\AI Projects\Evolution`。目录改名及 Git 工作区关联修复已完成。
+
+旧路径 `D:\WorkBench\AI Projects\OrganizationalStructure` 是指向新目录的 Junction 兼容入口，两处路径访问同一份文件。Codex 项目登记、Python 激活脚本和命令启动器均已迁移到新路径；部分历史聊天仍保存旧工作目录，尚未退出的旧 MCP 进程也可能继续引用旧路径，因此兼容入口暂时保留。需要用户操作的收尾步骤见 [项目改名收尾](docs/项目改名收尾.md)。
+
+MCP 接入示例使用新目录；已有客户端需重新加载配置。本地 Docker Compose 项目名为 `evolution`，应用镜像仓库名为 `evolution-runtime`；数据库固定复用原卷 `organization-directory_mysql-data`。本地改名核验见[切换记录](docs/architecture/local-docker-rename-2026-11-16.md)。改名前历史验收文档保留当时路径；[改名脚本](scripts/rename-project-to-evolution.ps1) 保留供核查和重复预检，无需再次改名。
 
 ## 开发与运行
 
