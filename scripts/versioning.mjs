@@ -45,14 +45,15 @@ export function releaseRecords(markdown) {
       continue;
     }
     if (!heading.startsWith('[')) continue;
-    const match = /^\[([^\]]+)\] — (\d{4}-\d{2}-\d{2})$/.exec(heading);
+    const match = /^\[([^\]]+)\](?: — (\d{4}-\d{2}-\d{2}))?$/.exec(heading);
     if (!match) throw new Error(`版本记录标题格式错误：${heading}`);
     const [, version, date] = match;
     parseVersion(version);
-    const parsed = new Date(`${date}T00:00:00Z`);
-    if (Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== date) throw new Error(`发布日期无效：${date}`);
+    const parsed = date ? new Date(`${date}T00:00:00Z`) : null;
+    if (date && (Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== date)) throw new Error(`发布日期无效：${date}`);
+    if (!date && records.length) throw new Error('只有最新版本可以暂缺合并日期');
     if (seen.has(version)) throw new Error(`重复版本：${version}`);
-    if (records.length && records.at(-1).date < date) throw new Error('发布记录必须按日期倒序排列');
+    if (records.length && records.at(-1).date && date && records.at(-1).date < date) throw new Error('发布记录必须按日期倒序排列');
     seen.add(version);
     records.push({ version, date, text: section.trimEnd() });
   }
@@ -105,6 +106,7 @@ export function checkRepository(root = repositoryRoot, { release = false, tag, b
   }
   if (release || tag) {
     if (records[0]?.version !== version) throw new Error('发布时 version.json 必须对应最新版本记录');
+    if (!records[0]?.date) throw new Error('发行构建必须有已确认版本日期');
     if (tag && tag !== `v${version}`) throw new Error('tag 与 version.json 不一致');
     const head = git(root, ['rev-parse', 'HEAD']);
     if (tag && head) {

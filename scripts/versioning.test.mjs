@@ -94,3 +94,11 @@ test('首次引入版本台账允许空基准体系，但拒绝无效基准和�
   run(['-c', 'user.name=Version Test', '-c', 'user.email=version-test@example.invalid', 'commit', '--quiet', '-m', 'incomplete baseline']);
   assert.throws(() => checkRepository(root, { baseRef: run(['rev-parse', 'HEAD']) }), /无法读取基准/);
 });
+
+test('候选版本暂缺日期仍可开发校验，但不能用于发行构建', t => {
+  const root = fixture(t, '0.2.0', '## [0.2.0]\n候选');
+  assert.equal(checkRepository(root).version, '0.2.0');
+  assert.equal(buildInfo(root, {}).releaseDate, null);
+  assert.throws(() => checkRepository(root, { release: true }), /已确认版本日期/);
+  assert.throws(() => releaseRecords('## [Unreleased]\n## [0.2.0] — 2026-11-16\n## [0.1.0]\n旧候选'), /只有最新版本/);
+});

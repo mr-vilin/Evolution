@@ -63,4 +63,4 @@
 - 按变更范围运行相关测试和构建；单元测试、静态配置、离线迁移 SQL 不能替代真实 MySQL、飞书或运行容器验证。
 - 报告时区分已实现、已验证、待接入和环境阻塞，不把历史验收记录当作当前环境证据。
 - Windows 下读取中文文本显式使用 UTF-8，Node.js 命令优先使用 `npm.cmd`；不输出数据库密码、应用密钥或会话凭据。
-- 技术选型变化时同步更新本文件及相关说明；产品版本遵循 `docs/versioning.md`（SemVer 2.0.0）；`version.json` 是唯一产品版本声明，`CHANGELOG.md` 保存 Unreleased 和按版本组织的发行记录。日常 PR 不自动递增版本；0.x 破坏性变化和新功能增加 minor，修复增加 patch。合并前运行 `node scripts/versioning.mjs check`；不得把开发基线、历史验收或构建通过描述为已经上线。
+- 技术选型变化时同步更新本文件及相关说明；产品版本遵循 `docs/versioning.md`（SemVer 2.0.0）；`version.json` 是唯一产品版本声明，`CHANGELOG.md` 保存 Unreleased 和按版本组织的发行记录。普通开发和 Git 提交只维护 Unreleased；创建或更新面向 main 的交付 PR 时，按现行 version-management-guidelines Skill 计算并写入候选版本，合并后确认且不重复递增；0.x 破坏性变化和新功能增加 minor，修复增加 patch。合并前运行 `node scripts/versioning.mjs check`；不得把开发基线、历史验收或构建通过描述为已经上线。

@@ -4,8 +4,8 @@
 
 ## 版本台账
 
-- [ ] 已遵循 `docs/versioning.md`，更新 `CHANGELOG.md` 的 Unreleased，或说明无产品行为变化
-- [ ] 若为发布 PR，已更新唯一声明 `version.json` 和对应版本记录；没有手工改写页面版本
+- [ ] 已遵循 `docs/versioning.md`，普通提交维护 Unreleased；面向 main 的 PR 归档本次交付记录，或说明无需编号的理由
+- [ ] 若为面向 main 的功能/修复 PR，已从最新主分支计算候选版本，更新 `version.json` 和对应记录；主分支前进后需复算
 - [ ] 已评估 HTTP API、MCP、稳定 ID、数据语义和部署契约的兼容性
 - [ ] 已运行 `node scripts/versioning.mjs check`；发布 PR 还需 `--release`
 
