@@ -5,6 +5,7 @@ export default [
   { path: '/', redirect: '/organization' },
   { path: '/organization', name: '组织架构', icon: 'ApartmentOutlined', component: './OrganizationPage' },
   { path: '/employees/:id', name: '人员详情', component: './EmployeePage', hideInMenu: true, parentKeys: ['/business', '/organization'] },
+  { path: '/tencent/accounts/:id/balance', name: '实时余额', component: './TencentBalancePage', hideInMenu: true, parentKeys: ['/business', '/tencent/accounts'] },
   { path: '/tencent/accounts', name: '腾讯云账号', icon: 'CloudOutlined', component: './TencentAccountsPage' },
   { path: '/tencent/costs', name: '腾讯云成本', icon: 'BarChartOutlined', component: './TencentCostPage' },
   { path: '/stores', name: '门店管理', icon: 'ShopOutlined', component: './StoresPage' },

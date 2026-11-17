@@ -394,7 +394,10 @@ class TencentApiCall(Base):
     returned_at: Mapped[datetime | None] = mapped_column(DateTime, comment='观察到实际响应返回的 UTC 时间，未观测为空')
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, comment='调用结束 UTC 时间，未结束为空')
     duration_ms: Mapped[int | None] = mapped_column(Integer, comment='单调时钟测量的实际耗时毫秒数')
-    __table_args__ = _table_args('腾讯云模块实际请求事实，元信息白名单且不保存财务正文')
+    __table_args__ = (
+        Index('ix_tencent_api_call_rate_window', 'direction', 'action', 'target_id', 'started_at'),
+        _table_args('腾讯云模块实际请求事实，元信息白名单且不保存财务正文'),
+    )
 
 
 class TencentSyncConfig(Base):
@@ -479,3 +482,4 @@ class TencentCostItem(Base):
     create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text('CURRENT_TIMESTAMP'), comment='当前产品行创建UTC时间')
     update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='当前产品行最后更新UTC时间')
     __table_args__ = (UniqueConstraint('period_id','row_no',name='uk_tencent_item_row'), _table_args('完整月全量产品行，未映射和同名行保持独立'))
+
