@@ -1,12 +1,37 @@
 """官方 SDK 签名和原始传输边界；金额从原始 JSON 解析，不经过 float。"""
 import json
 import logging
+import re
 from decimal import Decimal
 from .errors import TencentError
 
 
 def get_tencent_transport():
     return sdk_transport
+
+
+def safe_request_id(value):
+    return value if isinstance(value,str) and re.fullmatch(r'[A-Za-z0-9_-]{1,128}',value) else None
+
+
+def upstream_error(code, request_id=None):
+    """仅接受稳定分类与已校验请求标识，永不保留上游Message。"""
+    if str(code).startswith(('AuthFailure','UnauthorizedOperation')):
+        mapped,message,status='TENCENT_PERMISSION_DENIED','腾讯云凭据权限不足',502
+    elif str(code).startswith(('RequestLimitExceeded','LimitExceeded')):
+        mapped,message,status='TENCENT_RATE_LIMITED','腾讯云查询受到限流，请稍后重试',502
+    elif str(code).startswith(('InvalidParameter','MissingParameter','UnknownParameter')):
+        mapped,message,status='TENCENT_PARAMETER_INVALID','腾讯云拒绝查询参数，请联系维护人员',502
+    elif str(code).startswith(('InternalError','ServiceUnavailable')):
+        mapped,message,status='TENCENT_UNAVAILABLE','腾讯云暂时无法处理查询',502
+    elif str(code).startswith('ClientNetworkError'):
+        mapped,message,status='TENCENT_TIMEOUT','腾讯云查询超时或网络不可用',504
+    else:
+        mapped,message,status='TENCENT_UPSTREAM_FAILED','腾讯云拒绝本次查询，请核查账号及查询范围',502
+    error=TencentError(mapped,message,status)
+    error.upstream_request_id=safe_request_id(request_id)
+    error.upstream_response_state='ERROR' if error.upstream_request_id else 'UNKNOWN'
+    return error
 
 
 def sdk_transport(credential, action, params):
@@ -37,12 +62,14 @@ class TencentGateway:
                 response = value['Response']
                 if not isinstance(response, dict):
                     raise ValueError()
+                request_id = safe_request_id(response.get('RequestId'))
+                if request_id:
+                    evidence['upstream_request_id'] = request_id
                 if 'Error' in response:
-                    raise TencentError('TENCENT_PERMISSION_DENIED' if str(response['Error'].get('Code','')).startswith(('AuthFailure','UnauthorizedOperation')) else 'TENCENT_UPSTREAM_FAILED', '腾讯云拒绝本次查询，请核查凭据权限和账号', 502)
-                request_id = response.get('RequestId')
-                if not isinstance(request_id, str) or not 0 < len(request_id) <= 128:
+                    if not isinstance(response['Error'],dict):raise ValueError()
+                    raise upstream_error(response['Error'].get('Code',''),request_id)
+                if not request_id:
                     raise ValueError()
-                evidence['upstream_request_id'] = request_id
                 return response
             except TencentError:
                 raise
@@ -50,10 +77,10 @@ class TencentGateway:
                 raise TencentError('TENCENT_TIMEOUT', '腾讯云查询超时，请稍后重试', 504) from None
             except Exception as exc:
                 code = exc.get_code() if hasattr(exc, 'get_code') else ''
-                if str(code).startswith(('AuthFailure', 'UnauthorizedOperation')):
-                    raise TencentError('TENCENT_PERMISSION_DENIED', '腾讯云凭据权限不足', 502) from None
-                if str(code).startswith('ClientNetworkError'):
-                    raise TencentError('TENCENT_TIMEOUT', '腾讯云查询超时或网络不可用', 504) from None
+                if code:
+                    request_id=safe_request_id(exc.get_request_id() if hasattr(exc,'get_request_id') else None)
+                    if request_id:evidence['upstream_request_id']=request_id
+                    raise upstream_error(code,request_id) from None
                 raise TencentError('TENCENT_UPSTREAM_INVALID', '腾讯云返回无法核验的结果', 502) from None
 
     def verify_uin(self, credential, uin):

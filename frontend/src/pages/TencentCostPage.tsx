@@ -9,29 +9,19 @@ import { ResourceTable } from '../components/ResourceTable';
 import { request } from '../services/http';
 import { useResource } from '../services/useResource';
 import type { TencentAccount } from './TencentAccountsPage';
+import { TencentCostJobDetail, costStatusTag as statusTag, costStatuses as statuses, type CostJob } from '../components/TencentCostJobDetail';
 
-interface CostConfig { revision: number; is_enabled: boolean; frequency: 'manual'; currency: 'CNY'; latest_eligible_month: string }
+import { TencentCostPolicyFields, defaultCostPolicy, costPolicyErrors, type CostPolicy } from '../components/TencentCostPolicyFields';
+
+interface CostConfig { run_policy?: CostPolicy; revision: number; is_enabled: boolean; frequency: 'manual'; currency: 'CNY'; latest_eligible_month: string }
 interface CostItem { id: string; source_name: string; business_code: string | null; mapping_status: string; amount: string }
 interface Period { id: string; month: string; currency: string; total: string; coverage: { status: string; zero_evidence?: string | null }; latest_job_id: string; items: CostItem[] }
-interface Attempt { id: string; attempt_no: number; status: string; error_code: string | null;
-  execution_input: { month: string; begin: string; end_exclusive: string };
-  execution_output: { row_count: number; total: string; currency: string; request_ids: string[] } | null }
-interface CostJob { id: string; month: string; status: string; error_code?: string | null; attempts?: Attempt[] }
-const statuses: Record<string, string> = { pending:'等待执行',running:'正在采集',succeeded:'已成功提交',failed:'执行失败' };
-const errors: Record<string, string> = {
-  TENCENT_COST_NOT_READY:'账单尚未就绪，原完整费用已保留', TENCENT_PERMISSION_DENIED:'费用查询权限不足，原完整费用已保留',
-  TENCENT_COST_TOTAL_MISMATCH:'费用总计不一致，原完整费用已保留', TENCENT_COST_SOURCE_CHANGED:'分页期间源数据变化，原完整费用已保留',
-  TENCENT_ACCOUNT_MISMATCH:'本次凭据实际归属不符，原完整费用已保留',
-};
-function statusTag(status: string) {
-  return <Tag color={status === 'succeeded' ? 'success' : status === 'failed' ? 'error' : status === 'running' ? 'processing' : 'default'}>{statuses[status] ?? '未知状态'}</Tag>;
-}
-
 function CostAccountPanel({ account }: { account: TencentAccount }) {
   const base = `/admin/api/tencent/accounts/${account.id}`;
   const config = useResource<CostConfig>(`${base}/cost-config`);
   const jobs = useResource<CostJob[]>(`${base}/cost-jobs`, true);
   const [enabled, setEnabled] = useState(false);
+  const [policy,setPolicy] = useState<CostPolicy>(defaultCostPolicy);
   const [month, setMonth] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -43,7 +33,7 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
   const period = useResource<Period>(month ? `${base}/cost-periods/${month}` : null, true);
   const { message } = App.useApp();
   useEffect(() => {
-    if (config.data) { setEnabled(config.data.is_enabled); setMonth(value => value ?? config.data!.latest_eligible_month); }
+    if (config.data) { setEnabled(config.data.is_enabled); setPolicy({...defaultCostPolicy,...config.data.run_policy}); setMonth(value => value ?? config.data!.latest_eligible_month); }
   }, [config.data]);
   useEffect(() => { if (!jobId && jobs.data?.length) setJobId(jobs.data[0].id); }, [jobs.data,jobId]);
   useEffect(() => {
@@ -51,9 +41,10 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
   }, [detail.data]);
   async function save() {
     if (!config.data) return;
+    if (Object.keys(costPolicyErrors(policy)).length) { setFeedback({type:'error',text:'请修正执行策略中的字段错误'}); return; }
     setBusy(true); setFeedback(null);
     try {
-      await request(`${base}/cost-config`, { method:'PUT', body:{ revision:config.data.revision,is_enabled:enabled,frequency:'manual',currency:'CNY' } });
+      await request(`${base}/cost-config`, { method:'PUT', body:{ revision:config.data.revision,is_enabled:enabled,frequency:'manual',currency:'CNY',run_policy:policy } });
       message.success('成本配置已保存'); config.reload();
     } catch (error) { setFeedback({type:'error',text:error instanceof Error ? error.message : '保存失败，请重试'}); }
     finally { setBusy(false); }
@@ -69,7 +60,7 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
     } catch (error) { setFeedback({type:'error',text:error instanceof Error ? error.message : '受理结果未确认，请重试同一账月核实'}); }
     finally { setBusy(false); }
   }
-  const active = detail.data?.month === month && ['pending','running'].includes(detail.data.status);
+  const active = detail.data?.month === month && ['pending','running','retry_wait'].includes(detail.data.status);
   const rows = (period.data?.items ?? []).filter(row => !search || `${row.source_name} ${row.business_code ?? ''}`.includes(search));
   const columns: TableColumnsType<CostItem> = [
     {key:'name',title:'产品名称',dataIndex:'source_name',fixed:'left',width:220,ellipsis:true},
@@ -77,7 +68,6 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
     {key:'mapping',title:'产品映射',dataIndex:'mapping_status',width:140,render:value => <Tag color={value==='mapped' ? 'success' : 'warning'}>{value==='mapped' ? '已映射' : value==='ambiguous' ? '同名歧义' : '未映射'}</Tag>},
     {key:'amount',title:'总费用（元）',dataIndex:'amount',align:'right',width:180},
   ];
-  const attempt = detail.data?.attempts?.at(-1);
   return <Space orientation="vertical" size={24} style={{width:'100%'}}>
     <Card title="成本配置">
       <ResourceState {...config}>
@@ -85,6 +75,7 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
           <Form.Item label="成本能力"><Switch aria-label="成本能力" checked={enabled} onChange={setEnabled} disabled={busy || !config.data} checkedChildren="开启" unCheckedChildren="关闭" /></Form.Item>
           <Form.Item label="采集方式"><Select aria-label="采集方式" value="manual" options={[{value:'manual',label:'手动采集完整月'}]} disabled style={{maxWidth:320}} /></Form.Item>
           <p style={{color:'var(--app-muted)'}}>费用账单 · 总费用 · 产品维度 · 人民币（CNY）</p>
+          <TencentCostPolicyFields policy={policy} onChange={setPolicy} disabled={busy || !config.data} />
           <Button onClick={() => void save()} disabled={busy || !config.data} loading={busy}>保存配置</Button>
         </Form>
       </ResourceState>
@@ -100,14 +91,9 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
       <ResourceState {...jobs}>
         <Form layout="vertical"><Form.Item label="查看任务"><Select aria-label="查看任务" placeholder="暂无采集任务" value={jobId} options={(jobs.data ?? []).map(job => ({value:job.id,label:`${job.month} · #${job.id} · ${statuses[job.status] ?? '未知状态'}`}))} onChange={setJobId} style={{width:'100%',maxWidth:480}} /></Form.Item></Form>
       </ResourceState>
-      {jobId && <ResourceState {...detail}>{detail.data && <Descriptions size="small" column={{xs:1,md:2}} items={[
-        {key:'job',label:'任务',children:`#${detail.data.id} / ${detail.data.month}`},
-        {key:'status',label:'执行结果',children:statusTag(detail.data.status)},
-        {key:'attempt',label:'实际尝试次数',children:detail.data.attempts?.length ?? 0},
-        {key:'error',label:'失败原因',children:detail.data.error_code ? errors[detail.data.error_code] ?? `采集未发布（${detail.data.error_code}），请检查后重新提交` : '-'},
-        ...(attempt ? [{key:'begin',label:'冻结期间起点',children:attempt.execution_input.begin}, {key:'end',label:'冻结期间终点（不含）',children:attempt.execution_input.end_exclusive},
-          {key:'receipt',label:'本次提交回执',children:attempt.execution_output ? `已提交 ${attempt.execution_output.row_count} 条产品` : '尚无成功提交回执'}] : []),
-      ]} />}</ResourceState>}
+      {jobId && <ResourceState {...detail}>{detail.data && <TencentCostJobDetail job={detail.data}
+        canRerun={!!config.data?.is_enabled && account.is_enabled && !busy}
+        onRerun={id => { setJobId(id); jobs.reload(); }} />}</ResourceState>}
     </Card>
     <Card title="所选账月费用">
       {period.error?.code === 'TENCENT_PERIOD_NOT_FOUND' ? <Alert type="info" showIcon title="该账月尚无完整费用结果" /> : <ResourceState {...period}>

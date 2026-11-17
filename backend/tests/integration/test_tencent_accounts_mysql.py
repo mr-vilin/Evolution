@@ -40,7 +40,7 @@ def tencent_http(request):
         if 'tencent_sync_job' in inspect(db).get_table_names():
             active += db.execute(text("SELECT COUNT(*) FROM tencent_sync_job WHERE status IN ('validating','pending','queued','running','retry_wait')")).scalar_one()
         if 'tencent_sync_config' in inspect(db).get_table_names():
-            lease += db.execute(text('SELECT COUNT(*) FROM tencent_sync_config WHERE owner IS NOT NULL')).scalar_one()
+            lease += db.execute(text('SELECT COUNT(*) FROM tencent_sync_config WHERE owner IS NOT NULL OR active_job_id IS NOT NULL')).scalar_one()
         if lease or active:
             engine.dispose()
             pytest.fail('隔离库仍有活动执行资格，禁止重置')
@@ -77,7 +77,7 @@ def tencent_http(request):
         with sessions.begin() as db:
             db.execute(delete(TencentApiCall))
             # Tests must join all cloud execution before fixture teardown.
-            if db.scalar(select(TencentSyncConfig.id).where(TencentSyncConfig.owner.is_not(None)).limit(1)) is not None:
+            if db.scalar(select(TencentSyncConfig.id).where((TencentSyncConfig.owner.is_not(None) | TencentSyncConfig.active_job_id.is_not(None))).limit(1)) is not None:
                 pytest.fail('云worker仍持有执行资格，禁止清理')
             for model in (TencentCostItem,TencentCostPeriod,TencentSyncAttempt,TencentSyncJob,TencentSyncConfig):
                 db.execute(delete(model))

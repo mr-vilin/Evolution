@@ -33,18 +33,24 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False, default=str, separators=(',', ':')).encode()).hexdigest()
 
 
-def collect_month(gateway, credential, snapshot, *, clock=time.monotonic):
+def collect_month(gateway, credential, snapshot, *, clock=time.monotonic, check=None):
     """有界单次完整采集。成功只返回内存候选，发布另有当前资格事务。"""
     started = clock()
+    policy=snapshot.get('policy') or {}
+    deadline=policy.get('deadline_seconds',90)
+    max_rows=policy.get('max_rows',MAX_ROWS)
     request_ids = []
     month = snapshot['month']
     labels = {month, month+'-01', month+'-01 00:00:00'}
     params = dict(snapshot['upstream_params'])
 
     def call(action, values):
-        if clock() - started >= 90:
+        if check:check()
+        if clock() - started >= deadline:
             invalid('TENCENT_COST_DEADLINE')
         result = gateway.call(credential, action, values, target=snapshot['uin'])
+        if check:check()
+        if clock()-started>=deadline:invalid('TENCENT_COST_DEADLINE')
         request_ids.append(result['RequestId'])
         return result
 
@@ -56,7 +62,7 @@ def collect_month(gateway, credential, snapshot, *, clock=time.monotonic):
     def page(number):
         response = call('DescribeCostExplorerSummary', {**params, 'PageNo': number, 'PageSize': PAGE_SIZE})
         count = response.get('Total')
-        if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= MAX_ROWS:
+        if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= max_rows:
             invalid('TENCENT_COST_COUNT_INVALID')
         if not isinstance(response.get('Detail'), list):
             invalid('TENCENT_COST_EARLY_EMPTY')

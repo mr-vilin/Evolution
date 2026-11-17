@@ -114,5 +114,6 @@ def _route_action(method, route):
             ('PUT','/admin/api/tencent/accounts/{account_id}/cost-config'):'tencent.config.update',
             ('POST','/admin/api/tencent/accounts/{account_id}/cost-jobs'):'tencent.cost.rerun',
             ('GET','/admin/api/tencent/accounts/{account_id}/cost-jobs'):'tencent.job.read',
+            ('POST','/admin/api/tencent/cost-jobs/{job_id}/rerun'):'tencent.cost.rerun',
             ('GET','/admin/api/tencent/cost-jobs/{job_id}'):'tencent.job.read',
             ('GET','/admin/api/tencent/accounts/{account_id}/cost-periods/{month}'):'tencent.cost.read'}.get((method,route),'unknown')
