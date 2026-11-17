@@ -1,4 +1,4 @@
-"""费用账单/总费用/产品维度的完整月采集；完整性不能降级为空零。"""
+"""费用账单/总费用/产品维度的日/月完整期间采集；完整性不能降级为空零。"""
 from collections import Counter, defaultdict
 from decimal import Decimal, InvalidOperation, localcontext
 import hashlib
@@ -6,7 +6,8 @@ import json
 import time
 from .errors import TencentError
 
-CONTRACT = 'tencent-cost-month-v1'
+CONTRACT = 'tencent-cost-month-v1'  # 仅兼容已受理月快照
+PERIOD_CONTRACT = 'tencent-cost-period-v2'
 MAX_ROWS = 10000
 PAGE_SIZE = 100
 
@@ -33,7 +34,7 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False, default=str, separators=(',', ':')).encode()).hexdigest()
 
 
-def collect_month(gateway, credential, snapshot, *, clock=time.monotonic, check=None):
+def collect_period(gateway, credential, snapshot, *, clock=time.monotonic, check=None):
     """有界单次完整采集。成功只返回内存候选，发布另有当前资格事务。"""
     started = clock()
     policy=snapshot.get('policy') or {}
@@ -41,7 +42,9 @@ def collect_month(gateway, credential, snapshot, *, clock=time.monotonic, check=
     max_rows=policy.get('max_rows',MAX_ROWS)
     request_ids = []
     month = snapshot['month']
-    labels = {month, month+'-01', month+'-01 00:00:00'}
+    daily=snapshot.get('granularity')=='day'
+    key=snapshot.get('period_key',month)
+    labels = {key,key+' 00:00:00'} if daily else {month, month+'-01', month+'-01 00:00:00'}
     params = dict(snapshot['upstream_params'])
 
     def call(action, values):
@@ -123,6 +126,8 @@ def collect_month(gateway, credential, snapshot, *, clock=time.monotonic, check=
         if sum((r['amount'] for r in rows), Decimal(0)) != total:
             invalid('TENCENT_COST_TOTAL_MISMATCH')
     zero_evidence = None
+    if daily and (not rows or all(row['amount']==0 for row in rows)):
+        invalid('TENCENT_COST_ZERO_UNCONFIRMED')
     if count == 0:
         auxiliary = call('DescribeBillSummaryByProduct', {'BeginTime': month, 'EndTime': month})
         values, summary = auxiliary.get('SummaryOverview'), auxiliary.get('SummaryTotal')
@@ -151,8 +156,12 @@ def collect_month(gateway, credential, snapshot, *, clock=time.monotonic, check=
         row['business_code'] = next(iter(codes)) if mapped else None
         row['mapping_status'] = 'mapped' if mapped else 'ambiguous' if codes or counts[name]>1 else 'unmapped'
     return {'rows': rows, 'total': total, 'request_ids': request_ids,
-        'coverage': {'status': 'complete', 'month': month, 'timezone': 'Asia/Shanghai',
+        'coverage': {'status': 'complete', 'month': month, 'granularity':snapshot.get('granularity','month'), 'period_key':key, 'timezone': 'Asia/Shanghai',
             'begin': snapshot['begin'], 'end_exclusive': snapshot['end_exclusive'],
             'bill_type': '1', 'fee_type': 'cost', 'dimensions': 'business',
             'currency_source': 'declared-domestic-CNY', 'row_count': len(rows),
             'source_snapshot': False, 'stability_check': 'first-page-reread', 'zero_evidence': zero_evidence}}
+
+
+# 保留旧 Python 入口，不改变已受理月任务的契约身份。
+collect_month = collect_period

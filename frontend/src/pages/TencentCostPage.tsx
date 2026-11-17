@@ -13,14 +13,14 @@ import { TencentCostJobDetail, costStatusTag as statusTag, costStatuses as statu
 
 import { TencentCostPolicyFields, defaultCostPolicy, costPolicyErrors, type CostPolicy } from '../components/TencentCostPolicyFields';
 
-interface CostConfig { run_policy?: CostPolicy; revision: number; is_enabled: boolean; frequency: 'manual' | 'monthly'; execution_time?: string; next_execution_at?: string | null; last_success_month?: string | null; last_success_at?: string | null; currency: 'CNY'; latest_eligible_month: string }
+interface CostConfig { run_policy?: CostPolicy; revision: number; is_enabled: boolean; frequency: 'manual' | 'monthly' | 'daily' | 'weekly'; execution_time?: string; next_execution_at?: string | null; last_success_period?: string | null; last_success_month?: string | null; last_success_at?: string | null; currency: 'CNY'; latest_eligible_month: string; latest_eligible_date?: string }
 interface CostItem { id: string; source_name: string; business_code: string | null; mapping_status: string; amount: string }
-interface Period { id: string; month: string; currency: string; total: string; coverage: { status: string; zero_evidence?: string | null }; latest_job_id: string; items: CostItem[] }
+interface Period { granularity?: string; covered_through?: string; missing_dates?: string[]; id: string; month: string; currency: string; total: string; coverage: { status: string; zero_evidence?: string | null }; latest_job_id: string; items: CostItem[] }
 function CostAccountPanel({ account }: { account: TencentAccount }) {
   const base = `/admin/api/tencent/accounts/${account.id}`;
   const config = useResource<CostConfig>(`${base}/cost-config`, true);
   const jobs = useResource<CostJob[]>(`${base}/cost-jobs`, true);
-  const [frequency,setFrequency]=useState<'manual' | 'monthly'>('manual');
+  const [frequency,setFrequency]=useState<'manual' | 'monthly' | 'daily' | 'weekly'>('manual');
   const [executionTime,setExecutionTime]=useState('13:30');
   const batchKey=useRef<string | null>(null);
   const [enabled, setEnabled] = useState(false);
@@ -65,13 +65,13 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
     finally { setBusy(false); }
   }
   async function submitBatch() {
-    if (!config.data?.is_enabled || config.data.frequency !== 'monthly') return;
+    if (!config.data?.is_enabled || !['monthly','daily','weekly'].includes(config.data.frequency)) return;
     batchKey.current ??= crypto.randomUUID();
     setBusy(true);setFeedback(null);
     try {
       const accepted=await request<CostJob>(`${base}/cost-batches`,{method:'POST',body:{idempotency_key:batchKey.current}});
       setJobId(accepted.data.id);jobs.reload();
-      setFeedback({type:'info',text:`月度批次 #${accepted.data.id} 已受理，请查看各账月结果。`});
+      setFeedback({type:'info',text:`费用复核批次 #${accepted.data.id} 已受理，请查看各期间结果。`});
       batchKey.current=null;
     } catch(error) {setFeedback({type:'error',text:error instanceof Error ? error.message : '受理未确认，请重试核实同一批次'});}
     finally {setBusy(false);}
@@ -89,14 +89,15 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
       <ResourceState {...config}>
         <Form layout="vertical">
           <Form.Item label="成本能力"><Switch aria-label="成本能力" checked={enabled} onChange={setEnabled} disabled={busy || !config.data} checkedChildren="开启" unCheckedChildren="关闭" /></Form.Item>
-          <Form.Item label="采集方式"><Select aria-label="采集方式" value={frequency} onChange={setFrequency} options={[{value:'manual',label:'手动采集完整月'},{value:'monthly',label:'每月 3 日自动采集并复核近期两月'}]} disabled={busy || !config.data} style={{maxWidth:320}} /></Form.Item>
-          {frequency === 'monthly' && <Form.Item label="北京时间执行时刻" help="每月 3 日，Asia/Shanghai；13:30 为可修改建议，按保存时刻执行。"><Input aria-label="北京时间执行时刻" type="time" value={executionTime} onChange={event => setExecutionTime(event.target.value)} disabled={busy} style={{maxWidth:200}} /></Form.Item>}
+          <Form.Item label="采集方式"><Select aria-label="采集方式" value={frequency} onChange={setFrequency} options={[{value:'manual',label:'手动采集完整月'},{value:'monthly',label:'每月 3 日自动采集并复核近期两月'},{value:'daily',label:'每日自动采集，截至昨日'},{value:'weekly',label:'每周日自动采集，截至昨日'}]} disabled={busy || !config.data} style={{maxWidth:320}} /></Form.Item>
+          {frequency !== 'manual' && <Form.Item label="北京时间执行时刻" help={`${frequency === 'monthly' ? '每月 3 日' : frequency === 'weekly' ? '固定每周日' : '每天'}，Asia/Shanghai；13:30 为可修改建议，按保存时刻执行。`}><Input aria-label="北京时间执行时刻" type="time" value={executionTime} onChange={event => setExecutionTime(event.target.value)} disabled={busy} style={{maxWidth:200}} /></Form.Item>}
           <Descriptions column={{xs:1,md:2}} items={[
-            {key:'next',label:'下次计划执行（北京时间）',children:config.data?.next_execution_at ? new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',dateStyle:'medium',timeStyle:'short'}).format(new Date(config.data.next_execution_at)) : '未启用月计划'},
-            {key:'cutoff',label:'费用截止账月',children:config.data?.latest_eligible_month ?? '-'},
-            {key:'success',label:'最近成功账月',children:config.data?.last_success_month ?? '尚无成功结果'},
+            {key:'next',label:'下次计划执行（北京时间）',children:config.data?.next_execution_at ? new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',dateStyle:'medium',timeStyle:'short'}).format(new Date(config.data.next_execution_at)) : '未启用自动计划'},
+            {key:'cutoff',label:frequency==='daily' || frequency==='weekly' ? '费用截止日期' : '费用截止账月',children:(frequency==='daily' || frequency==='weekly' ? config.data?.latest_eligible_date : config.data?.latest_eligible_month) ?? '-'},
+            {key:'success',label:frequency==='daily' || frequency==='weekly' ? '最近成功期间' : '最近成功账月',children:(frequency==='daily' || frequency==='weekly' ? config.data?.last_success_period : config.data?.last_success_month) ?? '尚无成功结果'},
             {key:'successTime',label:'最近成功时间（北京时间）',children:config.data?.last_success_at ? new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',dateStyle:'medium',timeStyle:'short'}).format(new Date(config.data.last_success_at)) : '-'},
           ]} />
+          {(frequency==='daily' || frequency==='weekly') && <Alert type="info" showIcon title="按日补缺并复核当月截至昨日及上月；已有完整月按整月复核。" description="空日与全零日尚缺独立就绪证据，保留原费用并显示未确认缺口。" />}
           <p style={{color:'var(--app-muted)'}}>费用账单 · 总费用 · 产品维度 · 人民币（CNY）</p>
           <TencentCostPolicyFields policy={policy} onChange={setPolicy} disabled={busy || !config.data} />
           <Button onClick={() => void save()} disabled={busy || !config.data} loading={busy}>保存配置</Button>
@@ -107,13 +108,13 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
       <Space wrap>
         <DatePicker aria-label="完整账月" picker="month" format="YYYY-MM" value={month ? dayjs(`${month}-01`) : null} maxDate={config.data ? dayjs(`${config.data.latest_eligible_month}-01`).endOf('month') : undefined} minDate={dayjs('1970-01-01')} allowClear={false} onChange={value => {setMonth(value?.format('YYYY-MM') ?? null);setSearch('');setPage(1);setFeedback(null);}} />
         <Button aria-label="采集所选账月" type="primary" loading={busy} disabled={busy || !config.data?.is_enabled || !month || Boolean(active) || enabled !== config.data.is_enabled} onClick={() => void submit()}>采集所选账月</Button>
-        {config.data?.frequency === 'monthly' && <Button aria-label="立即执行月度复核" loading={busy} disabled={busy || config.loading || !config.data.is_enabled || enabled !== config.data.is_enabled} onClick={() => void submitBatch()}>立即执行月度复核</Button>}
+        {config.data && ['monthly','daily','weekly'].includes(config.data.frequency) && <Button aria-label={config.data.frequency==='monthly' ? '立即执行月度复核' : '立即执行日周复核'} loading={busy} disabled={busy || config.loading || !config.data.is_enabled || enabled !== config.data.is_enabled} onClick={() => void submitBatch()}>{config.data.frequency==='monthly' ? '立即执行月度复核' : '立即执行日周复核'}</Button>}
         <Button aria-label="刷新结果" icon={<ReloadOutlined />} onClick={() => {config.reload();jobs.reload();detail.reload();period.reload();}}>刷新结果</Button>
       </Space>
       <p style={{color:'var(--app-muted)'}}>按北京时间每月 3 日开放上月。每月 1–2 日最多选择上上月；受理后由后台执行。</p>
       {feedback && <Alert type={feedback.type} showIcon title={feedback.text} style={{marginBottom:16}} />}
       <ResourceState {...jobs}>
-        <Form layout="vertical"><Form.Item label="查看任务"><Select aria-label="查看任务" placeholder="暂无采集任务" value={jobId} options={(jobs.data ?? []).map(job => ({value:job.id,label:`${job.kind==='batch' ? '月度父批次' : job.month} · #${job.id} · ${statuses[job.status] ?? '未知状态'}`}))} onChange={setJobId} style={{width:'100%',maxWidth:480}} /></Form.Item></Form>
+        <Form layout="vertical"><Form.Item label="查看任务"><Select aria-label="查看任务" placeholder="暂无采集任务" value={jobId} options={(jobs.data ?? []).map(job => ({value:job.id,label:`${job.kind==='batch' ? '费用父批次' : job.period_key ?? job.month} · #${job.id} · ${statuses[job.status] ?? '未知状态'}`}))} onChange={setJobId} style={{width:'100%',maxWidth:480}} /></Form.Item></Form>
       </ResourceState>
       {jobId && <ResourceState {...detail}>{detail.data && <TencentCostJobDetail job={detail.data}
         canRerun={!!config.data?.is_enabled && account.is_enabled && !busy}
@@ -122,9 +123,10 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
     <Card title="所选账月费用">
       {period.error?.code === 'TENCENT_PERIOD_NOT_FOUND' ? <Alert type="info" showIcon title="该账月尚无完整费用结果" /> : <ResourceState {...period}>
         {period.data && <>
+          {period.data.granularity==='day' && <Alert type="info" showIcon title={`原始日费用累计；累计至 ${period.data.covered_through ?? '-'}，缺 ${period.data.missing_dates?.length ?? 0} 日`} style={{marginBottom:16}} />}
           <Descriptions column={{xs:1,md:2}} items={[
             {key:'month',label:'账月',children:period.data.month}, {key:'total',label:'总费用',children:`${period.data.total} ${period.data.currency}`},
-            {key:'coverage',label:'覆盖',children:<Tag color="success">完整月已覆盖</Tag>}, {key:'latest',label:'最近成功任务',children:`#${period.data.latest_job_id}`},
+            {key:'coverage',label:'覆盖',children:<Tag color={period.data.coverage.status==='complete' ? 'success':'warning'}>{period.data.coverage.status==='complete' ? '完整月已覆盖':'累计未完整'}</Tag>}, {key:'latest',label:'最近成功任务',children:`#${period.data.latest_job_id}`},
             {key:'basis',label:'费用口径',children:'费用账单 / 总费用 / 产品'},
           ]} />
           <Space style={{display:'flex',justifyContent:'flex-end',marginBottom:16}}><Input.Search aria-label="搜索费用产品" placeholder="搜索产品名称或编码" value={search} allowClear onChange={event => {setSearch(event.target.value);setPage(1);}} style={{width:260}} /></Space>
@@ -139,7 +141,7 @@ export function TencentCostPage() {
   const accounts = useResource<TencentAccount[]>('/admin/api/tencent/accounts');
   const [selected, setSelected] = useState<string | null>(null);
   const account = accounts.data?.find(item => item.id === selected) ?? accounts.data?.[0];
-  return <PageHeader area="业务管理" title="腾讯云成本" description="按独立账号采集完整账月，查看该月全部产品、精确费用及后台执行结果。">
+  return <PageHeader area="业务管理" title="腾讯云成本" description="按独立账号采集日/月费用，切换自动频率并查看完整产品、精确费用及实际执行结果。">
     <Space orientation="vertical" size={24} style={{width:'100%'}}>
       <Card><ResourceState {...accounts} empty={accounts.data?.length === 0}>
         <Form layout="vertical"><Form.Item label="腾讯云账号" style={{marginBottom:0}}><Select aria-label="腾讯云账号" value={account?.id} options={(accounts.data ?? []).map(item => ({value:item.id,label:`${item.alias}（${item.uin}）${item.is_enabled ? '' : ' · 已停用'}`}))} onChange={setSelected} style={{width:'100%',maxWidth:480}} /></Form.Item></Form>

@@ -11,7 +11,7 @@ import { useResource } from '../services/useResource';
 import type { TencentAccount } from './TencentAccountsPage';
 
 interface Change { value: string | null; reason: string | null }
-interface Month { month: string; total: string | null; status: string; coverage_complete: boolean;
+interface Month { source_granularity?: string | null; covered_through?: string | null; missing_dates?: string[]; month: string; total: string | null; status: string; coverage_complete: boolean;
   due_date: string; latest_success_at: string | null; latest_task_status: string | null; mom: Change; yoy: Change }
 interface Product { key: string; source_name: string; business_code: string | null; mapping_status: string;
   amounts: Record<string,string | null>; total: string }
@@ -77,7 +77,7 @@ function DashboardPanel({account}: {account:TencentAccount}) {
   const monthColumns: TableColumnsType<Month> = [
     {key:'month',title:'账月',dataIndex:'month',fixed:'left',width:120},
     {key:'total',title:'费用（元）',dataIndex:'total',width:180,align:'right',render:value=>value ?? '-'},
-    {key:'status',title:'覆盖状态',width:250,render:(_,row)=>status(row)},
+    {key:'status',title:'覆盖状态',width:280,render:(_,row)=><Space orientation="vertical" size={4}>{status(row)}{row.source_granularity==='day' && <span style={{fontSize:12,color:'var(--app-muted)'}}>原始日费用，累计至 {row.covered_through ?? '-'}；缺 {row.missing_dates?.length ?? 0} 日</span>}</Space>},
     {key:'mom',title:'环比',dataIndex:'mom',width:220,render:change},
     {key:'yoy',title:'同比',dataIndex:'yoy',width:220,render:change},
     {key:'due',title:'开放采集日（北京时间）',dataIndex:'due_date',width:210,render:value=><span style={{fontSize:12,color:'var(--app-muted)'}}>{value ?? '-'}</span>},
