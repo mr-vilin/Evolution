@@ -169,7 +169,8 @@ def test_missed_months_merge_into_one_batch_partial_failure_keeps_recent_months_
     assert done['attempts']==[]
     assert next(j for j in done['children'] if j['month']=='2026-09')['status']=='failed'
     assert client.get(base+'/cost-periods/2027-02').json()['data']['total']=='12.00000000'
-    assert scheduler.tick()==0
+    assert scheduler.tick()==1 # an independent bounded history continuation, not a duplicate calendar event
+    drain(worker)
 
 
 @pytest.mark.parametrize('gate',['initialization','account','config'])
@@ -311,9 +312,10 @@ def test_long_outage_is_bounded_recent_first_and_keeps_deferred_gaps_visible(cos
     jobs=client.get(f"/admin/api/tencent/accounts/{account['id']}/cost-jobs").json()['data']
     batch=next(j for j in jobs if j['kind']=='batch')
     data=client.get('/admin/api/tencent/cost-jobs/'+batch['id']).json()['data']
-    assert len(data['children'])==14
+    assert len(data['children'])==12 # only the known source window is automatically probed
     assert [j['month'] for j in data['children']][:2]==['2026-11','2026-10']
-    assert len(data['deferred_months'])==69
+    assert data['deferred_months']==[]
+    assert len(data['outside_known_source_window'])==71
 
 
 def test_system_monthly_publish_rechecks_epoch_and_does_not_resurrect_old_jobs(cost_http):

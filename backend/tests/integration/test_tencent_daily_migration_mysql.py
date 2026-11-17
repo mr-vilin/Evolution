@@ -80,6 +80,6 @@ def test_daily_downgrade_refuses_unexpressible_config_or_task_before_any_ddl(cos
     assert client.get(base+'/cost-config').json()['data']==before_config
     assert client.get(base+'/cost-jobs').json()['data']==before_jobs
     with sessions() as db:
-        assert db.execute(text('SELECT version_num FROM alembic_version')).scalars().all()==['0019_tencent_daily']
+        assert db.execute(text('SELECT version_num FROM alembic_version')).scalars().all()==['0020_tencent_history']
         assert {name:db.execute(text('SHOW CREATE TABLE '+name)).one()[1] for name in before_ddl}==before_ddl
     assert not check_schema(sessions.kw['bind'])['errors']

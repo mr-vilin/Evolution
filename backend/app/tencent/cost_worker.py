@@ -7,7 +7,7 @@ import signal
 import threading
 import uuid
 import random
-from sqlalchemy import delete, select, func, or_
+from sqlalchemy import delete, select, func, or_, case
 from app.persistence.models import (AdminAllowlist, DatasetState, TencentSyncConfig, TencentSyncJob,
     TencentSyncAttempt, TencentCostPeriod, TencentCostItem, ChangeLog)
 from .access import require_account
@@ -65,14 +65,21 @@ class TencentCostWorker:
             if state is None or state.initialization_status!='complete':return None
         self.recover(now)
         with self.sessions() as db:
-            # 每个可领取配置只贡献最早一条候选；被同配置占用的积压不消耗全局候选窗口。
-            candidates = list(db.scalars(select(func.min(TencentSyncJob.id)).join(
+            # 每配置一个候选；四次近期后给历史一次份额，active retry 始终保持资格。
+            rank=func.row_number().over(partition_by=TencentSyncJob.config_id,order_by=(
+                case((TencentSyncConfig.generation % 5 == 4,-TencentSyncJob.priority),else_=TencentSyncJob.priority),
+                TencentSyncJob.id)).label('position')
+            ranked=select(TencentSyncJob.id.label('id'),TencentSyncJob.config_id.label('config_id'),rank).join(
                 TencentSyncConfig,TencentSyncConfig.id==TencentSyncJob.config_id).where(
                 TencentSyncJob.kind=='period',TencentSyncJob.status.in_(['pending','retry_wait']),
                 TencentSyncConfig.owner.is_(None),
                 or_(TencentSyncConfig.active_job_id.is_(None),TencentSyncConfig.active_job_id==TencentSyncJob.id),
-                or_(TencentSyncJob.next_attempt_at.is_(None),TencentSyncJob.next_attempt_at<=now)
-            ).group_by(TencentSyncJob.config_id).order_by(func.min(TencentSyncJob.id)).limit(100)))
+                or_(TencentSyncJob.next_attempt_at.is_(None),TencentSyncJob.next_attempt_at<=now)).subquery()
+            # 实际 attempt 自增序列是跨配置公平标识，不依赖同一批次的插入顺序或时钟精度。
+            last=select(TencentSyncJob.config_id.label('config_id'),func.max(TencentSyncAttempt.id).label('last')).join(
+                TencentSyncAttempt,TencentSyncAttempt.job_id==TencentSyncJob.id).group_by(TencentSyncJob.config_id).subquery()
+            candidates=list(db.scalars(select(ranked.c.id).outerjoin(last,last.c.config_id==ranked.c.config_id)
+                .where(ranked.c.position==1).order_by(func.coalesce(last.c.last,0),ranked.c.id).limit(100)))
         for job_id in candidates:
             try:
                 with self.sessions.begin() as db:

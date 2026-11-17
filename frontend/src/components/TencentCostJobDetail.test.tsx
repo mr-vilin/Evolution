@@ -33,3 +33,16 @@ it('区分逻辑任务和逐次事实，展示完整脱敏输入及真实回执�
   expect(requests[0].body).toMatchObject({ reason: 'after_fix' });
   expect(requests[0].body).not.toHaveProperty('actor_id');
 });
+
+it('范围批次单片成功仍披露延期及未知历史，不宣称全范围完成', () => {
+  render(<App><TencentCostJobDetail canRerun={false} onRerun={vi.fn()} job={{
+    id:'90',kind:'batch',month:null,status:'succeeded',scope_status:'pending',earlier_history_unknown:true,
+    requested_scope:{scope:'range',start_date:'2026-02-14',end_date:'2026-03-05'},
+    periods:[{period_key:'2026-02',month:'2026-02',granularity:'month'}],
+    deferred_periods:['2026-03-05'],children:[],
+  }} /></App>);
+  expect(screen.getByText('本片已完成，申请范围仍未全部覆盖')).toBeVisible();
+  expect(screen.getByText('2026-02-14 至 2026-03-05（含结束日）')).toBeVisible();
+  expect(screen.getByText('2026-02（完整月）')).toBeVisible();
+  expect(screen.getByText('账号费用发生起点仍未知，更早历史待评估')).toBeVisible();
+});
