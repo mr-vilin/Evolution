@@ -233,3 +233,45 @@ def test_query_keeps_total_and_all_products_from_one_mysql_snapshot_during_repla
     assert data['known_total'] == '12.00000000' and len(data['products']) == 2
     latest = client.get(f"/admin/api/tencent/accounts/{account['id']}/cost-dashboard?start_month=2026-10&end_month=2026-10").json()['data']
     assert latest['known_total'] == '12.34567890' and len(latest['products']) == 1
+
+
+def test_committed_complete_costs_remain_comparable_after_organization_epoch_changes(cost_http):
+    from app.persistence.models import TencentSyncJob, TencentCostPeriod
+    client, sessions, account = cost_http
+    enable_cost(client, account)
+    jobs = [run_job(client, sessions, account, 'retained-' + month, month=month)
+        for month in ('2025-10', '2026-09', '2026-10')]
+    assert all(job['status'] == 'succeeded' for job in jobs)
+    base = f"/admin/api/tencent/accounts/{account['id']}"
+    query = '?start_month=2026-09&end_month=2026-10'
+    before = client.get(base + '/cost-dashboard' + query).json()['data']
+    assert before['complete_total'] == '24.00000000'
+    assert before['months'][-1]['mom'] == before['months'][-1]['yoy'] == {'value':'0.000000','reason':None}
+    with sessions.begin() as db:
+        state = db.get(DatasetState, 1)
+        old_epoch = state.dataset_epoch
+        state.dataset_epoch = 'organization-reinitialized'
+        state.initialization_status = 'pending'
+    # 初始化仍是当前请求门槛；保留费用并不绕过门禁。
+    for endpoint in ('cost-dashboard', 'cost-export'):
+        response = client.get(base + '/' + endpoint + query)
+        assert response.status_code == 409
+        assert response.json()['error']['code'] == 'INITIALIZATION_INCOMPLETE'
+    with sessions.begin() as db:
+        db.get(DatasetState, 1).initialization_status = 'complete'
+    def no_cloud(*args):
+        raise AssertionError('重开组织初始化后读取已提交费用不能触发云端重采')
+    app.dependency_overrides[get_tencent_transport] = lambda: no_cloud
+    response = client.get(base + '/cost-dashboard' + query)
+    assert response.status_code == 200, response.text
+    after = response.json()['data']
+    assert after == before
+    assert after['coverage_complete'] is True
+    assert {month['status'] for month in after['months']} == {'complete'}
+    exported = client.get(base + '/cost-export' + query)
+    assert exported.status_code == 200
+    rows = list(csv.DictReader(io.StringIO(exported.content.decode('utf-8-sig'))))
+    assert len(rows) == 4 and {row['覆盖状态'] for row in rows} == {'完整月已覆盖'}
+    with sessions() as db:
+        assert db.query(TencentCostPeriod).count() == 3
+        assert {db.get(TencentSyncJob, int(job['id'])).snapshot['dataset_epoch'] for job in jobs} == {old_epoch}

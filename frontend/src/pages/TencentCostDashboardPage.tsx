@@ -18,9 +18,9 @@ interface Product { key: string; source_name: string; business_code: string | nu
 interface Dashboard { account: {id:string;uin:string;alias:string}; currency:string; known_total:string;
   complete_total:string | null; months:Month[]; products:Product[]; start_month:string; end_month:string }
 const statuses: Record<string,string> = {complete:'完整月已覆盖',missing:'未同步 / 缺口',not_due:'未到同步日',incomplete:'累计未完整',
-  stale_retained:'已保留旧世代费用，待复核',failed_retained:'采集失败，保留上次完整费用',refreshing_retained:'更新中，保留上次完整费用',failed:'采集失败 / 缺口',pending:'等待采集'};
+  failed_retained:'采集失败，保留上次完整费用',refreshing_retained:'更新中，保留上次完整费用',failed:'采集失败 / 缺口',pending:'等待采集'};
 const reasons: Record<string,string> = {incomplete_coverage:'覆盖不完整',zero_denominator:'对照月为零',incomparable_basis:'口径不可比',
-  stale_epoch:'世代已变化',latest_collection_failed:'最近采集失败',latest_collection_pending:'最近采集未完成'};
+  latest_collection_failed:'最近采集失败',latest_collection_pending:'最近采集未完成'};
 function change(value: Change) { return value.value === null ? `-（${reasons[value.reason ?? ''] ?? '暂不可比'}）` : `${value.value}%`; }
 function status(month: Month) { return <Tag color={month.status==='complete' ? 'success' : month.status.includes('failed') ? 'error' : 'warning'}>{statuses[month.status] ?? '待复核'}</Tag>; }
 function units(value: string) { const [whole,fraction=''] = value.split('.'); return BigInt(`${whole}${fraction.padEnd(8,'0')}`); }
