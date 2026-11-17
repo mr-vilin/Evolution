@@ -55,7 +55,7 @@ Total=0/空Detail本身不能清空旧费用。只有辅助 DescribeBillSummaryB
 
 ## 验证与尚待真实联调
 
-隔离目标仅本机13306、MySQL8.4.11专用 `tencent_t03_*_test` 库。夹具自身在任何写入前核验目标、版本、会话、无组织owner/活动任务和无云owner/活动任务；结束前拒绝仍持云owner的清理，测试必须先终结/加入全部worker。未触及本机业务MySQL实例，未迁移开发/测试/生产业务库，未部署Docker。
+隔离目标仅本机13306、MySQL8.4.11专用 `tencent_t03_*_test` 库。夹具自身在任何写入前核验目标、版本、会话、无组织owner/活动任务和无云owner/活动任务；结束前拒绝仍持云owner的清理，测试必须先终结/加入全部worker。公共evaluation reset/seed同样拒绝云owner、active_job_id或running任务，过期owner也不例外；真实MySQL测试覆盖仅owner、过期owner、仅active_job_id及仅running任务的两个公开入口，确认拒绝后账号和任务仍可查。未触及本机业务MySQL实例，未迁移开发/测试/生产业务库，未部署Docker。
 
 真实管理HTTP→实际独立worker→真实MySQL，只模拟腾讯云原始出站传输。已验证完整月受理/发布、消失产品/其他月保留/历史提交回执、可靠幂等、分页超过一页、重复/早空/变计数/尾页多余、负数退款/金额溢出/总计不符、空零未就绪/已确认零、归属错配、在途撤权/停用/改凭据/epoch/初始化、普通data_version不干扰、同配置互斥/到期拒绝、不同配置独立执行及数据库故障回滚。实际结构核验中文注释、引擎/排序、无外键及金额精度。
 

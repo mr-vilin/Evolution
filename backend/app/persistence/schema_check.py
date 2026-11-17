@@ -13,7 +13,7 @@ from app.persistence.models import Base
 
 def _type(value):
     value = str(value).lower().split(' collate ')[0]
-    value = value.replace('numeric', 'decimal')
+    value = re.sub(r'\s*,\s*', ',', value.replace('numeric', 'decimal'))
     value = value.replace('boolean', 'tinyint(1)').replace('bool', 'tinyint(1)').replace('integer', 'int')
     return re.sub(r'\b(bigint|int|smallint)\(\d+\)', r'\1', value)
 

@@ -398,3 +398,43 @@ def test_actual_cost_schema_has_chinese_comments_precise_amounts_and_no_physical
         for name,column_name in (('tencent_cost_period','total'),('tencent_cost_item','amount')):
             col=next(c for c in schema.get_columns(name) if c['name']==column_name)
             assert (col['type'].precision,col['type'].scale)==(24,8)
+
+
+
+@pytest.mark.parametrize('control',['owned','expired','active-id-only','running-job-only'])
+@pytest.mark.parametrize('entry',['reset','seed'])
+def test_public_evaluation_reset_refuses_cloud_execution_and_preserves_the_accepted_job(cost_http,control,entry):
+    import os
+    from app.evaluation.fixtures import reset_test_database,seed_case
+    from app.evaluation.cases import load_case
+    from app.persistence.models import TencentSyncConfig
+    from datetime import timedelta
+    from app.tencent.cost_worker import TencentCostWorker
+    from app.config import get_settings
+    client,sessions,account=cost_http
+    enable_cost(client,account)
+    accepted=client.post(f"/admin/api/tencent/accounts/{account['id']}/cost-jobs",json={'month':'2026-10','idempotency_key':'reset-protection'})
+    def transport(credential,action,params):
+        if action=='DescribeAccountBalance':return b'{"Response":{"Uin":10001,"RequestId":"identity-current"}}'
+        value=wire()
+        if params['PageNo']>1:value['Response']['Detail']=[]
+        return json.dumps(value).encode()
+    worker=TencentCostWorker(sessions,app.dependency_overrides[get_settings](),transport)
+    claim=worker.claim()
+    with sessions.begin() as db:
+        config=db.get(TencentSyncConfig,claim.config_id)
+        if control=='expired':config.lease_expires_at=worker.now()-timedelta(seconds=1)
+        if control in {'active-id-only','running-job-only'}:config.owner=None
+        if control=='running-job-only':config.active_job_id=None
+    try:
+        with pytest.raises(RuntimeError,match='EVALUATION_WORKER_NOT_QUIET'):
+            if entry=='reset':reset_test_database(os.environ['ORG_TEST_DATABASE_URL'])
+            else:seed_case(sessions,load_case(Path(__file__).parents[1]/'evaluation'/'cases'/'ORG_AGENT_READ_PRIMARY_STORE.yaml'))
+        assert client.get(accepted.headers['location']).json()['data']['status']=='running'
+        assert client.get('/admin/api/tencent/accounts').json()['data'][0]['uin']=='10001'
+    finally:
+        with sessions.begin() as db:
+            config=db.get(TencentSyncConfig,claim.config_id)
+            if config is not None:
+                config.owner,config.active_job_id,config.lease_expires_at=claim.owner,claim.job_id,worker.now()+timedelta(seconds=120)
+        worker.execute(claim)
