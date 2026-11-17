@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Alert, App, Button, Card, Form, Input, Modal, Select, Space, Tag } from 'antd';
+import { Alert, App, Button, Card, Form, Input, Modal, Select, Space, Tag, Tooltip } from 'antd';
 import type { TableColumnsType } from 'antd';
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, WalletOutlined } from '@ant-design/icons';
 import { PageHeader } from '../components/PageHeader';
 import { ResourceState } from '../components/ResourceState';
 import { ResourceTable } from '../components/ResourceTable';
@@ -52,6 +52,7 @@ export function TencentAccountsPage() {
     { key:'status',title:'状态',render:(_,row) => <Tag color={row.is_enabled && row.verification_status === 'verified' ? 'success' : 'default'}>{row.is_enabled ? row.verification_status === 'verified' ? '已验证 / 启用' : '待验证' : '已停用'}</Tag>,width:150 },
     { key:'verified',title:'验证时间（北京时间）',dataIndex:'verified_at',render:value => <span style={{fontSize:12,lineHeight:'20px',fontWeight:400,color:'var(--app-muted)'}}>{formatTime(value)}</span>,width:190 },
     { key:'created',title:'登记时间（北京时间）',dataIndex:'create_time',render:value => <span style={{fontSize:12,lineHeight:'20px',fontWeight:400,color:'var(--app-muted)'}}>{formatTime(value)}</span>,width:190 },
+    { key:'actions',title:'操作',fixed:'right',width:96,render:(_,row) => <Tooltip title="实时余额"><Button type="text" aria-label="实时余额" icon={<WalletOutlined />} href={`/tencent/accounts/${encodeURIComponent(row.id)}/balance`} disabled={!row.is_enabled || row.verification_status !== 'verified'} /></Tooltip> },
   ];
   return <PageHeader area="业务管理" title="腾讯云账号" description="登记各自独立的腾讯云账号，分别查看费用和实时余额。">
     <Card>
@@ -60,7 +61,7 @@ export function TencentAccountsPage() {
         <Input.Search aria-label="搜索账号" placeholder="搜索账号名称或 UIN" allowClear value={search} onChange={event => {setSearch(event.target.value);setPage(1);}} style={{width:260}} />
       </Space>
       <ResourceState {...accounts} empty={!accounts.data?.length}>
-        <ResourceTable<TencentAccount> rowKey="id" columns={columns} dataSource={rows} scroll={{x:1090}} pagination={{current:Math.min(page,Math.max(1,Math.ceil(rows.length/20))),pageSize:20,onChange:setPage,showSizeChanger:false}} />
+        <ResourceTable<TencentAccount> rowKey="id" columns={columns} dataSource={rows} scroll={{x:1186}} pagination={{current:Math.min(page,Math.max(1,Math.ceil(rows.length/20))),pageSize:20,onChange:setPage,showSizeChanger:false}} />
       </ResourceState>
     </Card>
     <Modal title="登记腾讯云账号" centered open={open} onCancel={() => {if(!busy) setOpen(false);}} mask={{closable:!busy}} closable={!busy} footer={<Space><Button disabled={busy} onClick={() => setOpen(false)}>取消</Button><Button loading={busy} disabled={!credentials.data?.length} onClick={() => void submit(false)}>验证归属</Button><Button type="primary" loading={busy} disabled={!credentials.data?.length} onClick={() => void submit(true)}>验证并登记</Button></Space>}>

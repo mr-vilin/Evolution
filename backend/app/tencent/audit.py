@@ -105,7 +105,8 @@ class TencentAuditMiddleware:
 
 
 def _route_action(method, route):
-    return {('GET','/admin/api/tencent/accounts'):'tencent.account.read',
+    return {('GET','/admin/api/tencent/accounts/{account_id}/balance'):'tencent.balance.query',
+            ('GET','/admin/api/tencent/accounts'):'tencent.account.read',
             ('GET','/admin/api/tencent/credential-options'):'tencent.account.read',
             ('POST','/admin/api/tencent/accounts'):'tencent.account.create',
             ('POST','/admin/api/tencent/accounts/validate'):'tencent.account.validate'}.get((method,route),'unknown')

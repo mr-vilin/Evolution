@@ -394,4 +394,7 @@ class TencentApiCall(Base):
     returned_at: Mapped[datetime | None] = mapped_column(DateTime, comment='观察到实际响应返回的 UTC 时间，未观测为空')
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, comment='调用结束 UTC 时间，未结束为空')
     duration_ms: Mapped[int | None] = mapped_column(Integer, comment='单调时钟测量的实际耗时毫秒数')
-    __table_args__ = _table_args('腾讯云模块实际请求事实，元信息白名单且不保存财务正文')
+    __table_args__ = (
+        Index('ix_tencent_api_call_rate_window', 'direction', 'action', 'target_id', 'started_at'),
+        _table_args('腾讯云模块实际请求事实，元信息白名单且不保存财务正文'),
+    )

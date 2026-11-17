@@ -26,3 +26,10 @@ describe('腾讯云账号接入', () => {
     expect(screen.queryByRole('textbox',{name:/JSON/})).toBeNull();
   });
 });
+
+it('已登记账号提供余额入口，无须先配置成本同步', async () => {
+  vi.mocked(request).mockImplementation(async path => ({data:path === '/admin/api/tencent/accounts' ? [{id:'42',uin:'10001',alias:'主账号',credential_ref:'finance-a',is_enabled:true,verification_status:'verified'}] : [],meta:{}}));
+  render(<App><TencentAccountsPage /></App>);
+  const link = await screen.findByRole('link',{name:'实时余额'});
+  expect(link.getAttribute('href')).toBe('/tencent/accounts/42/balance');
+});
