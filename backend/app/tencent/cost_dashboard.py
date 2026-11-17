@@ -88,10 +88,10 @@ def read_dashboard(db, account_id, params, *, now=None):
         TencentSyncJob.month <= params.end_month,TencentSyncJob.snapshot['currency'].as_string()==params.currency)
         .order_by(TencentSyncJob.id)).all()
     latest_display={row.month:row for row in jobs}
-    # 尚未实际采集的资格拒绝仍在任务历史显示，不降级成功费用事实。
+    # 资格栅栏只隔离新执行，任务/尝试失败仍展示，不降级已提交费用；源采集失败维持原语义。
     gate_codes={'DATASET_CHANGED','INITIALIZATION_INCOMPLETE','TENCENT_CREDENTIAL_CHANGED',
         'TENCENT_ACCOUNT_UNAVAILABLE','TENCENT_ACTOR_REVOKED','TENCENT_COST_CONFIG_CHANGED','TENCENT_COST_CONTRACT_CHANGED'}
-    collection_jobs=[row for row in jobs if not (row.started_at is None and row.error_code in gate_codes)]
+    collection_jobs=[row for row in jobs if row.error_code not in gate_codes]
     latest_by_key={row.snapshot.get('period_key',row.month):row for row in collection_jobs}
     last_job={}
     for month,group in by_month.items():

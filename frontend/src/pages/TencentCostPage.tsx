@@ -134,7 +134,7 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
             {key:'coverage',label:'覆盖',children:<Tag color={period.data.coverage.status==='complete' ? 'success':'warning'}>{period.data.coverage.status==='complete' ? '完整月已覆盖':'累计未完整'}</Tag>}, {key:'latest',label:'最近成功任务',children:`#${period.data.latest_job_id}`},
             {key:'basis',label:'费用口径',children:'费用账单 / 总费用 / 产品'},
           ]} />
-          <Space style={{display:'flex',justifyContent:'flex-end',marginBottom:16}}><Input.Search aria-label="搜索费用产品" placeholder="搜索产品名称或编码" value={search} allowClear onChange={event => {setSearch(event.target.value);setPage(1);}} style={{width:260}} /></Space>
+          <div style={{display:'flex',justifyContent:'flex-end',marginBottom:16,minWidth:0}}><Input.Search aria-label="搜索费用产品" placeholder="搜索产品名称或编码" value={search} allowClear onChange={event => {setSearch(event.target.value);setPage(1);}} style={{width:260,maxWidth:'100%',minWidth:0,flex:'0 1 260px'}} /></div>
 
         </>}
       </ResourceState>}

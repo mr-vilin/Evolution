@@ -277,3 +277,36 @@ cost_worker.main()
     assert all(row['severity']=='INFO' for row in logs if row['event_name'] in {'tencent.cost_worker_started','tencent.cost_started','tencent.cost_committed','tencent.cost_worker_stopped'})
     assert client.get(accepted.headers['location']).json()['data']['status']=='succeeded'
     assert 'synthetic-key' not in result.stderr
+
+
+@pytest.mark.parametrize('boundary',['identity','cost','timeout'])
+def test_inflight_qualification_rejection_keeps_committed_coverage_but_real_collection_failure_does_not(cost_http,boundary):
+    from app.persistence.models import DatasetState
+    from test_tencent_cost_mysql import enable_cost,run_job
+    client,sessions,account=cost_http;enable_cost(client,account)
+    for month in ('2026-09','2026-10'):
+        assert run_job(client,sessions,account,'inflight-base-'+month,month=month)['status']=='succeeded'
+    base=f"/admin/api/tencent/accounts/{account['id']}"
+    accepted=client.post(base+'/cost-jobs',json={'month':'2026-10','idempotency_key':'inflight-'+boundary})
+    calls=[]
+    def transport(credential,action,params):
+        calls.append(action)
+        if boundary=='timeout' and action=='DescribeCostExplorerSummary':raise TimeoutError('synthetic-private-upstream')
+        value=daily_transport(credential,action,params)
+        if action==('DescribeAccountBalance' if boundary=='identity' else 'DescribeCostExplorerSummary') and boundary!='timeout':
+            with sessions.begin() as db:db.get(DatasetState,1).dataset_epoch='new-inflight-epoch'
+        return value
+    assert TencentCostWorker(sessions,app.dependency_overrides[get_settings](),transport).run_once()
+    job=client.get(accepted.headers['location']).json()['data']
+    view=client.get(base+'/cost-dashboard?start_month=2026-09&end_month=2026-10').json()['data']
+    assert job['started_at'] and len(job['attempts'])==1 and job['status']=='failed'
+    assert view['known_total']=='24.00000000' and view['months'][-1]['latest_task_status']=='failed'
+    if boundary=='timeout':
+        assert job['error_code']=='TENCENT_TIMEOUT'
+        assert view['complete_total'] is None and view['months'][-1]['status']=='failed_retained'
+        assert view['months'][-1]['mom']['value'] is None
+    else:
+        assert job['error_code']=='DATASET_CHANGED'
+        assert view['complete_total']=='24.00000000' and view['months'][-1]['status']=='complete'
+        assert view['months'][-1]['mom']=={'value':'0.000000','reason':None}
+    if boundary=='identity':assert calls==['DescribeAccountBalance']
