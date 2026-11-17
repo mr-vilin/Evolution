@@ -14,7 +14,7 @@ from .access import require_account
 from .credentials import CredentialRegistry
 from .errors import TencentError
 from .gateway import TencentGateway, sdk_transport
-from .cost_collector import collect_month, CONTRACT
+from .cost_collector import collect_period, CONTRACT, PERIOD_CONTRACT
 from .cost_router import utcnow
 from .cost_policy import effective_policy
 from .cost_scheduler import refresh_batch, TencentCostScheduler
@@ -42,8 +42,8 @@ class TencentCostWorker:
     def _config_gate(self, db, snapshot, *, skip_locked=False):
         require_account(db, snapshot['account_id'], epoch=snapshot['dataset_epoch'], revision=snapshot['credential_revision'], lock=True)
         # 异步执行使用可信open_id与当前管理员资格，不冻结HTTP会话有效期。
-        if snapshot.get('execution_identity')=='system-monthly':
-            if snapshot['actor_id']!='system:tencent-monthly':raise TencentError('TENCENT_ACTOR_REVOKED','系统执行身份无效')
+        if snapshot.get('execution_identity') in {'system-monthly','system-daily','system-weekly'}:
+            if snapshot['actor_id']!='system:tencent-'+snapshot['execution_identity'].removeprefix('system-'):raise TencentError('TENCENT_ACTOR_REVOKED','系统执行身份无效')
         else:
             actor = db.scalar(select(AdminAllowlist.open_id).where(AdminAllowlist.open_id==snapshot['actor_id']).with_for_update(read=True))
             if actor is None:
@@ -52,8 +52,10 @@ class TencentCostWorker:
         if config is None and skip_locked: return None
         if config is None or not config.is_enabled or config.control_revision!=snapshot.get('control_revision',snapshot['config_revision']):
             raise TencentError('TENCENT_COST_CONFIG_CHANGED', '费用配置已关闭或变更')
-        if snapshot['handler']!=CONTRACT or config.currency!=snapshot['currency']:
+        if snapshot['handler'] not in {CONTRACT,PERIOD_CONTRACT} or config.currency!=snapshot['currency']:
             raise TencentError('TENCENT_COST_CONTRACT_CHANGED', '费用执行契约已变化')
+        if snapshot['handler']==CONTRACT and snapshot.get('granularity','month')!='month':
+            raise TencentError('TENCENT_COST_CONTRACT_CHANGED','旧月契约不支持日费用')
         return config
 
     def claim(self, now=None):
@@ -222,10 +224,21 @@ class TencentCostWorker:
             attempt = db.scalar(select(TencentSyncAttempt).where(TencentSyncAttempt.id==claim.attempt_id).with_for_update())
             now = self.now()
             self._owned(config, job, attempt, claim, now)
-            period = db.scalar(select(TencentCostPeriod).where(TencentCostPeriod.account_id==job.account_id,
-                TencentCostPeriod.month==job.month, TencentCostPeriod.currency==claim.snapshot['currency']).with_for_update())
+            # 配置锁已由_config_gate持有；在其内统一校验整月范围，唯一键不足以防日/月重叠。
+            key=claim.snapshot.get('period_key',job.month)
+            granularity=claim.snapshot.get('granularity','month')
+            overlaps=list(db.scalars(select(TencentCostPeriod).where(TencentCostPeriod.account_id==job.account_id,
+                TencentCostPeriod.month==job.month,TencentCostPeriod.currency==claim.snapshot['currency']).with_for_update()))
+            if granularity=='day' and any(p.granularity=='month' for p in overlaps):
+                raise TencentError('TENCENT_COST_PERIOD_OVERLAP','该月已有完整月；原冻结日任务不扩大范围，请新建批次复核整月')
+            if granularity=='month':
+                days=[p.id for p in overlaps if p.granularity=='day']
+                if days:
+                    db.execute(delete(TencentCostItem).where(TencentCostItem.period_id.in_(days)))
+                    db.execute(delete(TencentCostPeriod).where(TencentCostPeriod.id.in_(days)))
+            period = next((p for p in overlaps if p.period_key==key),None)
             if period is None:
-                period = TencentCostPeriod(account_id=job.account_id, month=job.month, currency=claim.snapshot['currency'],
+                period = TencentCostPeriod(account_id=job.account_id, month=job.month, granularity=granularity, period_key=key, currency=claim.snapshot['currency'],
                     total=candidate['total'], coverage=candidate['coverage'], latest_job_id=job.id, latest_attempt_id=attempt.id)
                 db.add(period)
                 db.flush()
@@ -235,17 +248,17 @@ class TencentCostWorker:
                 db.execute(delete(TencentCostItem).where(TencentCostItem.period_id==period.id))
             for index, row in enumerate(candidate['rows'], 1):
                 db.add(TencentCostItem(period_id=period.id, row_no=index, **row))
-            receipt = {'contract':CONTRACT, 'status':'committed', 'period_id':str(period.id), 'job_id':str(job.id),
-                'attempt_id':str(attempt.id), 'month':job.month, 'row_count':len(candidate['rows']),
+            receipt = {'contract':claim.snapshot['handler'], 'status':'committed', 'period_id':str(period.id), 'job_id':str(job.id),
+                'attempt_id':str(attempt.id), 'month':job.month, 'granularity':granularity, 'period_key':key, 'row_count':len(candidate['rows']),
                 'total':format(candidate['total'],'.8f'), 'currency':period.currency, 'request_ids':candidate['request_ids'],
                 'coverage':candidate['coverage'], 'committed_at':now.isoformat()+'Z'}
             # 处理器真实返回就是同事务提交回执；不在事务后补写成功历史。
             attempt.execution_output, attempt.status, attempt.finished_at = receipt, 'succeeded', now
             attempt.return_state='VALUE'
             job.status, job.finished_at, job.commit_receipt = 'succeeded', now, receipt
-            config.last_success_month = max(config.last_success_month or job.month,job.month)
+            if granularity=='month':config.last_success_month = max(config.last_success_month or job.month,job.month)
             config.owner, config.active_job_id, config.lease_expires_at = None, None, None
-            db.add(ChangeLog(object_type='tencent_cost_period', object_id=str(period.id), source='tencent_worker', actor=claim.snapshot['actor_id'] if claim.snapshot.get('execution_identity')=='system-monthly' else 'admin:'+claim.snapshot['actor_id'],
+            db.add(ChangeLog(object_type='tencent_cost_period', object_id=str(period.id), source='tencent_worker', actor=claim.snapshot['actor_id'] if claim.snapshot.get('execution_identity','').startswith('system-') else 'admin:'+claim.snapshot['actor_id'],
                 before_data=None, after_data={'status':'committed','job_id':str(job.id),'attempt_id':str(attempt.id),'row_count':len(candidate['rows']),'month':job.month}, committed_at=now))
             refresh_batch(db,job.parent_job_id,now)
         return receipt
@@ -264,14 +277,14 @@ class TencentCostWorker:
             attempt.failure_evidence=evidence or {'reason_code':code}
             policy=effective_policy(claim.snapshot['policy'])
             delay=min(policy['retry_max_seconds'],policy['retry_base_seconds']*2**(attempt.attempt_no-1))+random.uniform(0,policy['retry_jitter_seconds'])
-            retry=(code in {'TENCENT_TIMEOUT','TENCENT_RATE_LIMITED','TENCENT_COST_NOT_READY','TENCENT_UNAVAILABLE'}
+            retry=(code in {'TENCENT_TIMEOUT','TENCENT_RATE_LIMITED','TENCENT_COST_NOT_READY','TENCENT_COST_ZERO_UNCONFIRMED','TENCENT_UNAVAILABLE'}
                 and attempt.attempt_no<policy['max_attempts']
                 and (not job.deadline_at or now+timedelta(seconds=delay)<job.deadline_at))
             job.status, job.error_code, job.finished_at = ('retry_wait',code,None) if retry else ('failed',code,now)
             job.next_attempt_at=now+timedelta(seconds=delay) if retry else None
             config.owner, config.lease_expires_at = None, None
             if not retry:config.active_job_id=None
-            db.add(ChangeLog(object_type='tencent_job', object_id=str(job.id), source='tencent_worker', actor=claim.snapshot['actor_id'] if claim.snapshot.get('execution_identity')=='system-monthly' else 'admin:'+claim.snapshot['actor_id'],
+            db.add(ChangeLog(object_type='tencent_job', object_id=str(job.id), source='tencent_worker', actor=claim.snapshot['actor_id'] if claim.snapshot.get('execution_identity','').startswith('system-') else 'admin:'+claim.snapshot['actor_id'],
                 before_data={'status':'running'}, after_data={'status':job.status,'error_code':code}, committed_at=now))
 
             refresh_batch(db,job.parent_job_id,now)
@@ -317,7 +330,7 @@ class TencentCostWorker:
             gateway.check=check
             pulse=threading.Thread(target=keep_alive,name='tencent-cost-heartbeat',daemon=True)
             pulse.start()
-            try:candidate = collect_month(gateway, credential, claim.snapshot,check=check)
+            try:candidate = collect_period(gateway, credential, claim.snapshot,check=check)
             finally:
                 heartbeat_stop.set()
                 pulse.join()

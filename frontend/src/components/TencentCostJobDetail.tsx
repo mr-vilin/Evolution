@@ -11,7 +11,7 @@ export interface CostAttempt {
   execution_input: Record<string, unknown>; execution_output: Record<string, unknown> | null;
 }
 export interface CostJob {
-  id: string; month: string | null; kind?: 'batch' | 'period'; parent_job_id?: string | null; children?: CostJob[]; deferred_months?: string[]; blocked_months?: Array<{month:string;reason_code:string}>; months?: string[]; scheduled_at?: string | null; status: string; error_code?: string | null; source_job_id?: string | null;
+  id: string; month: string | null; granularity?: 'day' | 'month'; period_key?: string; periods?: Array<{granularity:string;period_key:string;month:string}>; deferred_periods?: string[]; blocked_periods?: Array<{period_key:string;reason_code:string}>; kind?: 'batch' | 'period'; parent_job_id?: string | null; children?: CostJob[]; deferred_months?: string[]; blocked_months?: Array<{month:string;reason_code:string}>; months?: string[]; scheduled_at?: string | null; status: string; error_code?: string | null; source_job_id?: string | null;
   next_attempt_at?: string | null; deadline_at?: string | null; queue_deadline_at?: string | null; attempts?: CostAttempt[];
 }
 export const costStatuses: Record<string, string> = { pending:'等待执行',running:'正在采集',retry_wait:'等待自动重试',succeeded:'已成功提交',failed:'执行失败',unknown:'结果未知',partial_failed:'部分失败，仍有缺口',no_work:'无待同步期间' };
@@ -19,7 +19,7 @@ export function costStatusTag(status: string) {
   return <Tag color={status === 'succeeded' ? 'success' : status === 'failed' ? 'error' : status === 'partial_failed' ? 'warning' : status === 'running' ? 'processing' : status === 'retry_wait' || status === 'unknown' ? 'warning' : 'default'}>{costStatuses[status] ?? '未知状态'}</Tag>;
 }
 const labels: Record<string, string> = {
-  month:'账月',begin:'期间起点',end_exclusive:'期间终点（不含）',policy:'冻结执行策略',max_attempts:'最大总尝试次数',
+  granularity:'原始粒度',period_key:'实际期间',requested_period_key:'请求期间',month:'账月',begin:'期间起点',end_exclusive:'期间终点（不含）',policy:'冻结执行策略',max_attempts:'最大总尝试次数',
   deadline_seconds:'单次预算（秒）',run_deadline_seconds:'执行轮次预算（秒）',retry_base_seconds:'退避基数（秒）',retry_max_seconds:'最大退避（秒）',
   retry_jitter_seconds:'抖动上限（秒）',lease_seconds:'租约（秒）',heartbeat_seconds:'心跳（秒）',queue_limit:'配置队列上限',queue_deadline_seconds:'首次领取等待预算（秒）',max_rows:'单次产品行数上限',
   handler:'处理契约',contract:'返回契约',business:'业务',account_id:'账号标识',uin:'账号 UIN',credential_ref:'受控凭据引用',credential_revision:'凭据修订',
@@ -59,7 +59,7 @@ export function TencentCostJobDetail({ job, canRerun, onRerun }: { job: CostJob;
   }
   return <Space orientation="vertical" size={16} style={{width:'100%'}}>
     <Descriptions column={{xs:1,md:2}} items={[
-      {key:'job',label:'逻辑任务',children:`#${job.id} / ${job.kind === 'batch' ? '月度父批次' : job.month}`},
+      {key:'job',label:'逻辑任务',children:`#${job.id} / ${job.kind === 'batch' ? '费用父批次' : `${job.period_key ?? job.month}${job.granularity==='day' ? '（单日）' : ''}`}`},
       {key:'status',label:'逻辑任务状态',children:costStatusTag(job.status)},
       {key:'source',label:'原任务',children:job.source_job_id ? `#${job.source_job_id}` : '-'},
       {key:'reason',label:'最近原因',children:job.error_code ?? '-'},
@@ -69,13 +69,16 @@ export function TencentCostJobDetail({ job, canRerun, onRerun }: { job: CostJob;
     ]} />
     {job.status === 'retry_wait' && <Alert type="warning" showIcon title="当前尝试失败，任务将按冻结策略自动重试" description="等待重试期间保留本配置串行资格，其他配置可继续执行。" />}
     {job.status === 'failed' && <Alert type="error" showIcon title="任务已结束，将不再自动重试" description="查看逐次原因，修复问题后可人工重跑；重跑会创建关联的新任务。" />}
+    {job.granularity==='day' && job.error_code==='TENCENT_COST_ZERO_UNCONFIRMED' && <Alert type="warning" showIcon title="日零费用尚未确认，原费用已保留" description="腾讯云公开接口没有独立日级就绪证明；请核查后人工重跑，不以整月就绪证明单日为零。" />}
     {job.kind === 'batch' && <>
-      <Alert type="info" showIcon title="父批次仅汇总账月结果，不产生执行尝试" description="各账月独立提交；仅所有子任务成功时批次才成功，失败账月可分别查看和重跑。" />
+      {job.blocked_periods?.map(item=><Alert key={item.period_key} type="warning" showIcon title={`${item.period_key}：已达到自动补漏上限，请核查后人工重跑。`} />)}
+      {!!job.deferred_periods?.length && <Alert type="warning" showIcon title="仍有旧期间缺口等待补漏" description={job.deferred_periods.join('、')} />}
+      <Alert type="info" showIcon title={job.periods ? "父批次仅汇总期间结果，不产生执行尝试" : "父批次仅汇总账月结果，不产生执行尝试"} description="各期间独立提交；仅所有子任务成功时批次才成功，失败期间可分别查看和重跑。" />
       {!!job.blocked_months?.length && <Alert type="warning" showIcon title="部分旧账月已达到自动补漏上限" description={`${job.blocked_months.map(item => item.month).join('、')}：请核查权限或历史可查范围，修复后手动重跑对应账月。`} />}
       {(job.deferred_months?.length ?? 0)>0 && <Alert type="warning" showIcon title={`仍有 ${job.deferred_months!.length} 个旧账月缺口等待后续补漏`} description={job.deferred_months!.join('、')} />}
       <Space orientation="vertical" size={8}>{job.children?.map(child => <Space key={child.id} wrap>
-        <span>{child.month}</span>{costStatusTag(child.status)}<span>{child.error_code ?? ''}</span>
-        <Button aria-label={`查看账月 ${child.month}`} onClick={() => onRerun(child.id)}>查看账月</Button>
+        <span>{child.period_key ?? child.month}{child.granularity==='day' ? '（单日）' : ''}</span>{costStatusTag(child.status)}<span>{child.error_code ?? ''}</span>
+        <Button aria-label={child.period_key ? `查看期间 ${child.period_key}` : `查看账月 ${child.month}`}  onClick={() => onRerun(child.id)}>{child.granularity==='day' ? '查看期间':'查看账月'}</Button>
       </Space>)}</Space>
     </>}
     {job.kind !== 'batch' && (!job.attempts?.length ? <p>任务尚未实际执行，没有尝试输入或返回记录。</p> : <Collapse key={job.id} defaultActiveKey={[job.attempts.at(-1)!.id]} items={job.attempts.map(attempt => ({

@@ -108,3 +108,54 @@ it('管理员编辑北京时间月计划并立即执行，查看父批次的部�
   expect(await screen.findByText('#42 / 2026-09')).toBeVisible();
   expect(screen.queryByRole('textbox',{name:/JSON/})).toBeNull();
 });
+
+it('管理员切换每日与每周日计划并查看真实单日失败', async () => {
+  let frequency='monthly';const puts: Array<Record<string,unknown>>=[];
+  const batch={id:'60',kind:'batch',month:null,status:'partial_failed',attempts:[],
+    blocked_periods:[{period_key:'2026-08-01',reason_code:'TENCENT_PERIOD_AUTO_BUDGET_EXHAUSTED'}],
+    children:[{id:'61',kind:'period',month:'2026-11',period_key:'2026-11-16',granularity:'day',status:'failed',error_code:'TENCENT_COST_ZERO_UNCONFIRMED'}]};
+  vi.stubGlobal('fetch',vi.fn(async(path:string,options:RequestInit)=>{
+    let data:unknown;
+    if(path==='/admin/api/tencent/accounts')data=[{id:'1',alias:'主账号',uin:'10001',is_enabled:true}];
+    else if(path.endsWith('/cost-config')){
+      if(options?.method==='PUT'){const body=JSON.parse(String(options.body));puts.push(body);frequency=body.frequency;}
+      data={revision:puts.length+1,is_enabled:true,frequency,currency:'CNY',execution_time:'13:30',latest_eligible_month:'2026-10',latest_eligible_date:'2026-11-16'};
+    }else if(path.endsWith('/cost-batches'))data=batch;
+    else if(path.endsWith('/cost-jobs'))data=[batch];
+    else if(path.endsWith('/cost-jobs/60'))data=batch;
+    else if(path.endsWith('/cost-jobs/61'))data={...batch.children[0],attempts:[]};
+    else return new Response(JSON.stringify({error:{code:'TENCENT_PERIOD_NOT_FOUND',message:'尚无完整费用'}}),{status:404});
+    return new Response(JSON.stringify({data,meta:{}}),{status:options?.method==='POST'?202:200});
+  }));
+  render(<App><TencentCostPage /></App>);
+  const select=await screen.findByRole('combobox',{name:'采集方式'});
+  fireEvent.mouseDown(select);
+  fireEvent.click(await screen.findByText('每日自动采集，截至昨日'));
+  fireEvent.click(screen.getByRole('button',{name:'保存配置'}));
+  await waitFor(()=>expect(puts[0]).toMatchObject({frequency:'daily'}));
+  await waitFor(()=>expect(screen.getByText('空日与全零日尚缺独立就绪证据，保留原费用并显示未确认缺口。')).toBeVisible());
+  expect(await screen.findByRole('button',{name:'查看期间 2026-11-16'})).toBeVisible();
+  fireEvent.click(screen.getByRole('button',{name:'查看期间 2026-11-16'}));
+  expect(await screen.findByText('#61 / 2026-11-16（单日）')).toBeVisible();
+  expect(screen.getByText('TENCENT_COST_ZERO_UNCONFIRMED')).toBeVisible();
+  fireEvent.mouseDown(screen.getByRole('combobox',{name:'采集方式'}));
+  fireEvent.click(await screen.findByText('每周日自动采集，截至昨日'));
+  fireEvent.click(screen.getByRole('button',{name:'保存配置'}));
+  await waitFor(()=>expect(puts[1]).toMatchObject({frequency:'weekly'}));
+});
+
+it('日模式旧月份详情展示原始日累计和缺口，不误报完整月', async () => {
+  vi.stubGlobal('fetch',vi.fn(async(path:string)=>{
+    let data:unknown;
+    if(path==='/admin/api/tencent/accounts')data=[{id:'1',alias:'主账号',uin:'10001',is_enabled:true}];
+    else if(path.endsWith('/cost-config'))data={revision:1,is_enabled:true,frequency:'daily',currency:'CNY',latest_eligible_month:'2026-10',last_success_period:'2026-10-31'};
+    else if(path.endsWith('/cost-jobs'))data=[];
+    else data={id:'daily:2026-10',month:'2026-10',granularity:'day',currency:'CNY',total:'12.00000000',coverage:{status:'incomplete'},covered_through:'2026-10-31',missing_dates:['2026-10-01'],latest_job_id:'7',items:[]};
+    return new Response(JSON.stringify({data,meta:{}}));
+  }));
+  render(<App><TencentCostPage /></App>);
+  expect(await screen.findByText('原始日费用累计；累计至 2026-10-31，缺 1 日')).toBeVisible();
+  expect(screen.getByText('累计未完整')).toBeVisible();
+  expect(screen.queryByText('完整月已覆盖')).toBeNull();
+  expect(screen.getByText('2026-10-31')).toBeVisible();
+});
