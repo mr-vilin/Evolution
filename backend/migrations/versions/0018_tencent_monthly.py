@@ -1,8 +1,8 @@
 """月度配置与纯汇总批次；业务库执行须另行授权。"""
 from alembic import op, context
 from sqlalchemy import text
-revision = '0017_tencent_monthly'
-down_revision = '0016_tencent_recovery'
+revision = '0018_tencent_monthly'
+down_revision = '0017_tencent_maintenance'
 branch_labels = None
 depends_on = None
 

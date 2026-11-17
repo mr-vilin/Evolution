@@ -1,5 +1,6 @@
 """固定月度事件与期间批次；父批次仅汇总，不拥有执行租约。"""
 from datetime import datetime, timedelta, timezone
+from collections import Counter
 import logging
 import uuid
 from zoneinfo import ZoneInfo
@@ -64,7 +65,7 @@ def refresh_batch(db,parent_id,now):
     parent=db.scalar(select(TencentSyncJob).where(TencentSyncJob.id==parent_id).with_for_update())
     if not parent or parent.kind!='batch':return
     db.flush()
-    states=list(db.scalars(select(TencentSyncJob.status).where(TencentSyncJob.parent_job_id==parent_id)))
+    states=list(db.scalars(select(TencentSyncJob.status).where(TencentSyncJob.parent_job_id==parent_id).with_for_update(read=True)))
     if not states:status='no_work'
     elif all(s=='succeeded' for s in states):status='succeeded'
     elif any(s in {'pending','running','retry_wait'} for s in states):status='partial_failed' if any(s=='failed' for s in states) else 'pending'
@@ -84,7 +85,9 @@ def accept_batch(db,account,config,epoch,key,now,*,actor_id,execution_identity,r
     latest=eligible(point or now)
     recent=[latest,shifted(latest,-1)]
     complete=set(db.scalars(select(TencentCostPeriod.month).where(TencentCostPeriod.account_id==account.id,
-        TencentCostPeriod.currency==config.currency)))
+        TencentCostPeriod.currency==config.currency,TencentCostPeriod.coverage['status'].as_string()=='complete',
+        TencentCostPeriod.coverage['bill_type'].as_string()=='1',TencentCostPeriod.coverage['fee_type'].as_string()=='cost',
+        TencentCostPeriod.coverage['dimensions'].as_string()=='business').with_for_update(read=True)))
     start=config.schedule_start_month or recent[-1]
     gaps=[]; month=start
     while month<=latest:
@@ -92,13 +95,14 @@ def accept_batch(db,account,config,epoch,key,now,*,actor_id,execution_identity,r
         month=shifted(month,1)
     # 保留锚点外已接受的失败期间；初始全历史探测由历史回补能力负责。
     failed=db.scalars(select(TencentSyncJob.month).where(TencentSyncJob.config_id==config.id,
-        TencentSyncJob.kind=='period',TencentSyncJob.status=='failed',TencentSyncJob.month<=latest)).all()
+        TencentSyncJob.kind=='period',TencentSyncJob.status=='failed',TencentSyncJob.month<=latest).with_for_update(read=True)).all()
     gaps=sorted(set(gaps)|{m for m in failed if m not in complete and m not in recent})
-    failures=dict(db.execute(select(TencentSyncJob.month,func.count()).where(
+    failures=Counter(db.scalars(select(TencentSyncJob.month).where(
         TencentSyncJob.config_id==config.id,TencentSyncJob.kind=='period',TencentSyncJob.parent_job_id.is_not(None),
         TencentSyncJob.dataset_epoch==epoch,TencentSyncJob.status=='failed',
+        TencentSyncJob.snapshot['execution_identity'].as_string()=='system-monthly',
         TencentSyncJob.snapshot['credential_revision'].as_integer()==account.credential_revision
-    ).group_by(TencentSyncJob.month)).all())
+    ).with_for_update(read=True)))
     blocked=[{'month':m,'reason_code':'TENCENT_MONTH_AUTO_BUDGET_EXHAUSTED'} for m in gaps if failures.get(m,0)>=3]
     blocked_set={item['month'] for item in blocked}
     available_gaps=[m for m in gaps if m not in blocked_set]

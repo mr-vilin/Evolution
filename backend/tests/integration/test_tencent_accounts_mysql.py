@@ -150,7 +150,7 @@ def test_repeated_account_is_rejected_without_revalidating_and_identity_cannot_b
     first = client.post('/admin/api/tencent/accounts',json=body)
     assert first.status_code == 201
     assert client.post('/admin/api/tencent/accounts',json={**body,'credential_ref':'finance-b'}).status_code == 409
-    assert client.patch('/admin/api/tencent/accounts/'+first.json()['data']['id'],json={'uin':'20002'}).status_code == 404
+    assert client.patch('/admin/api/tencent/accounts/'+first.json()['data']['id'],json={'uin':'20002'}).status_code == 422
     assert len(calls) == 1
     assert len(client.get('/admin/api/tencent/accounts').json()['data']) == 1
 

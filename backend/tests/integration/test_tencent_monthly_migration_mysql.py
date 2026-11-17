@@ -21,7 +21,7 @@ def test_monthly_migration_preserves_legacy_request_namespace_and_refuses_batch_
         assert db.execute(text("SELECT COUNT(*) FROM tencent_sync_job WHERE status IN ('pending','running','retry_wait')")).scalar_one()==0
         assert db.execute(text('SELECT COUNT(*) FROM tencent_sync_config WHERE owner IS NOT NULL OR active_job_id IS NOT NULL')).scalar_one()==0
     try:
-        command.downgrade(config,'0016_tencent_recovery')
+        command.downgrade(config,'0017_tencent_maintenance')
         with sessions.begin() as db:
             db.execute(text("INSERT INTO tencent_sync_config(account_id,business,is_enabled,revision,control_revision,generation,frequency,currency) VALUES (:account,'cost',1,1,1,0,'manual','CNY')"),{'account':account['id']})
             config_id=db.execute(text('SELECT id FROM tencent_sync_config WHERE account_id=:account'),{'account':account['id']}).scalar_one()
@@ -36,7 +36,7 @@ def test_monthly_migration_preserves_legacy_request_namespace_and_refuses_batch_
         assert saved.status_code==200,saved.text
         assert TencentCostScheduler(sessions,app.dependency_overrides[get_settings](),now=lambda:datetime(2026,12,3,5,30)).tick()==1
         with pytest.raises(RuntimeError,match='TENCENT_MONTHLY_DOWNGRADE_EVIDENCE'):
-            command.downgrade(config,'0016_tencent_recovery')
+            command.downgrade(config,'0017_tencent_maintenance')
         assert client.get(f'/admin/api/tencent/cost-jobs/{legacy_id}').json()['data']==legacy
         from app.persistence.schema_check import check_schema
         assert not check_schema(sessions.kw['bind'])['errors']

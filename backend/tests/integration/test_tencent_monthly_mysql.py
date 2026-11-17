@@ -345,3 +345,32 @@ def test_system_monthly_publish_rechecks_epoch_and_does_not_resurrect_old_jobs(c
     original=client.get('/admin/api/tencent/cost-jobs/'+old['id']).json()['data']
     assert original['status']=='failed'
     assert all(j['status']=='failed' for j in original['children'])
+
+
+def test_manual_failed_batches_do_not_spend_automatic_old_gap_budget(cost_http,monkeypatch):
+    from app.tencent import cost_router
+    from app.tencent.cost_scheduler import TencentCostScheduler
+    from app.tencent.cost_worker import TencentCostWorker
+    client,sessions,account=cost_http
+    monthly(client,account)
+    now=datetime(2027,3,3,5,30)
+    monkeypatch.setattr(cost_router,'utcnow',lambda:now)
+    def unavailable(credential,action,params):
+        if action=='DescribeCostExplorerSummary' and params['BeginTime'].startswith('2026-09'):
+            return b'{"Response":{"Error":{"Code":"UnauthorizedOperation"},"RequestId":"manual-gap"}}'
+        return transport(credential,action,params)
+    worker=TencentCostWorker(sessions,app.dependency_overrides[get_settings](),unavailable,now=lambda:now)
+    base=f"/admin/api/tencent/accounts/{account['id']}"
+    for attempt in range(3):
+        response=client.post(base+'/cost-batches',json={'idempotency_key':f'manual-gap-{attempt}'})
+        assert response.status_code==202,response.text
+        drain(worker)
+        failed=client.get(response.headers['location']).json()['data']
+        assert next(child for child in failed['children'] if child['month']=='2026-09')['status']=='failed'
+    scheduler=TencentCostScheduler(sessions,app.dependency_overrides[get_settings](),now=lambda:now)
+    assert scheduler.tick()==1
+    newest=next(job for job in client.get(base+'/cost-jobs').json()['data'] if job['kind']=='batch')
+    batch=client.get('/admin/api/tencent/cost-jobs/'+newest['id']).json()['data']
+    assert '2026-09' in [child['month'] for child in batch['children']]
+    assert batch['blocked_months']==[]
+    drain(worker)
