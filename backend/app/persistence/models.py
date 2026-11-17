@@ -409,7 +409,9 @@ class TencentSyncConfig(Base):
     revision: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), 'mysql'), default=1, server_default='1', comment='配置并发修订号，普通编辑仅影响新轮次')
     control_revision: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), 'mysql'), default=1, server_default='1', comment='启停控制修订号，隔离停用前旧任务')
     run_policy: Mapped[dict | None] = mapped_column(JSON, comment='经过校验的重试预算、租约心跳及排队策略')
-    frequency: Mapped[str] = mapped_column(String(32), default='manual', comment='执行频率，本阶段仅manual手动')
+    frequency: Mapped[str] = mapped_column(String(32), default='manual', comment='执行频率：manual手动或monthly每月三日')
+    execution_time: Mapped[str] = mapped_column(String(5), default='13:30', server_default='13:30', comment='月度计划的北京时间时分，默认建议13:30可修改')
+    schedule_start_month: Mapped[str | None] = mapped_column(String(7), comment='首次启用月模式时的补漏起点，不代表已核验历史起点')
     currency: Mapped[str] = mapped_column(String(3), default='CNY', comment='境内账单声明币种，不由源接口返回')
     owner: Mapped[str | None] = mapped_column(String(36, collation='utf8mb4_bin'), comment='本配置当前执行者标识')
     generation: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), 'mysql'), default=0, server_default='0', comment='配置执行资格递增代次')
@@ -428,7 +430,9 @@ class TencentSyncJob(Base):
     account_id: Mapped[int] = mapped_column(Integer, comment='所属腾讯云账号标识')
     dataset_epoch: Mapped[str] = mapped_column(SOURCE_ID, comment='受理时冻结的初始化世代，用于隔离幂等键')
     idempotency_key: Mapped[str] = mapped_column(String(128, collation='utf8mb4_bin'), comment='配置内可靠请求幂等键')
-    month: Mapped[str] = mapped_column(String(7), comment='固定完整账月YYYY-MM')
+    kind: Mapped[str] = mapped_column(String(16), default='period', server_default='period', comment='任务种类：batch纯汇总父批次或period实际期间')
+    parent_job_id: Mapped[int | None] = mapped_column(Integer, index=True, comment='期间所属父批次标识，独立手动期间为空')
+    month: Mapped[str | None] = mapped_column(String(7), comment='固定完整账月YYYY-MM，纯汇总父批次为空')
     status: Mapped[str] = mapped_column(String(32), comment='任务状态pending、running、retry_wait、succeeded或failed')
     snapshot: Mapped[dict] = mapped_column(JSON, comment='冻结配置、口径、范围、可信发起身份及初始化世代，不含秘密')
     request_id: Mapped[str] = mapped_column(String(36, collation='utf8mb4_bin'), comment='受理请求的服务端关联标识')
@@ -442,7 +446,7 @@ class TencentSyncJob(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, comment='任务终结UTC时刻')
     create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text('CURRENT_TIMESTAMP'), comment='任务可靠受理UTC时间')
     update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='任务状态更新UTC时间')
-    __table_args__ = (UniqueConstraint('config_id','dataset_epoch','idempotency_key',name='uk_tencent_job_request'), Index('idx_tencent_job_claim','status','config_id','id'), _table_args('腾讯云单月逻辑执行任务，不依赖浏览器会话存活'))
+    __table_args__ = (UniqueConstraint('config_id','dataset_epoch','kind','idempotency_key',name='uk_tencent_job_request'), Index('idx_tencent_job_claim','status','config_id','id'), _table_args('腾讯云单月逻辑执行任务，不依赖浏览器会话存活'))
 
 
 class TencentSyncAttempt(Base):

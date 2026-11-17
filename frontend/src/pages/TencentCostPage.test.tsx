@@ -73,3 +73,38 @@ it('管理员用结构化数值设置执行预算并在保存前看到心跳字�
   expect(puts[0]).toMatchObject({run_policy:{heartbeat_seconds:20,max_attempts:3,queue_deadline_seconds:86400}});
   expect(screen.queryByRole('textbox',{name:/JSON/})).toBeNull();
 });
+
+it('管理员编辑北京时间月计划并立即执行，查看父批次的部分失败和逐月结果', async () => {
+  const puts: Array<Record<string,unknown>>=[];
+  let accepted=false;
+  const batch={id:'40',kind:'batch',month:null,status:'partial_failed',attempts:[],deferred_months:['2024-01'],
+    children:[{id:'41',kind:'period',month:'2026-10',status:'succeeded'},{id:'42',kind:'period',month:'2026-09',status:'failed',error_code:'TENCENT_PERMISSION_DENIED'}]};
+  vi.stubGlobal('fetch',vi.fn(async (path: string,options: RequestInit) => {
+    let data: unknown;
+    if (path==='/admin/api/tencent/accounts') data=[{id:'1',alias:'主账号',uin:'10001',is_enabled:true}];
+    else if (path.endsWith('/cost-config')) {
+      if(options?.method==='PUT')puts.push(JSON.parse(String(options.body)));
+      data={revision:1,is_enabled:true,frequency:'monthly',currency:'CNY',execution_time:'13:30',latest_eligible_month:'2026-10',last_success_month:'2026-09',next_execution_at:'2026-12-03T05:30:00+00:00'};
+    } else if(path.endsWith('/cost-batches')) {accepted=true;data=batch;}
+    else if(path.endsWith('/cost-jobs'))data=accepted?[batch]:[];
+    else if(path.endsWith('/cost-jobs/40'))data=batch;
+    else if(path.endsWith('/cost-jobs/42'))data={...batch.children[1],attempts:[]};
+    else return new Response(JSON.stringify({error:{code:'TENCENT_PERIOD_NOT_FOUND',message:'尚无完整费用'}}),{status:404});
+    return new Response(JSON.stringify({data,meta:{}}),{status:options?.method==='POST'?202:200});
+  }));
+  render(<App><TencentCostPage /></App>);
+  const time=await screen.findByLabelText('北京时间执行时刻');
+  fireEvent.change(time,{target:{value:'14:20'}});
+  fireEvent.click(screen.getByRole('button',{name:'保存配置'}));
+  await waitFor(()=>expect(puts[0]).toMatchObject({frequency:'monthly',execution_time:'14:20'}));
+  await waitFor(()=>expect(screen.getByLabelText('北京时间执行时刻')).toHaveValue('13:30'));
+  expect(screen.getByText('最近成功账月')).toBeVisible();
+  await waitFor(()=>expect(screen.getByRole('button',{name:'立即执行月度复核'})).toBeEnabled());
+  fireEvent.click(screen.getByRole('button',{name:'立即执行月度复核'}));
+  await waitFor(()=>expect(accepted).toBe(true));
+  expect(await screen.findByText('父批次仅汇总账月结果，不产生执行尝试')).toBeVisible();
+  expect(screen.getAllByText('部分失败，仍有缺口')[0]).toBeVisible();
+  fireEvent.click(screen.getByRole('button',{name:'查看账月 2026-09'}));
+  expect(await screen.findByText('#42 / 2026-09')).toBeVisible();
+  expect(screen.queryByRole('textbox',{name:/JSON/})).toBeNull();
+});

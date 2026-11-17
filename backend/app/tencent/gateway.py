@@ -50,12 +50,13 @@ def sdk_transport(credential, action, params):
 
 
 class TencentGateway:
-    def __init__(self, transport, sessions=None, request_id=None):
+    def __init__(self, transport, sessions=None, request_id=None, *, check=None):
         self.transport, self.sessions, self.request_id = transport, sessions, request_id
+        self.check=check
 
     def call(self, credential, action, params, *, target=None):
         from .audit import outgoing_call
-        with outgoing_call(self.sessions, self.request_id, action, target) as evidence:
+        with outgoing_call(self.sessions, self.request_id, action, target, check=self.check) as evidence:
             try:
                 raw = self.transport(credential, action, params)
                 value = json.loads(raw, parse_float=Decimal)

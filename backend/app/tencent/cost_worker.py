@@ -17,6 +17,7 @@ from .gateway import TencentGateway, sdk_transport
 from .cost_collector import collect_month, CONTRACT
 from .cost_router import utcnow
 from .cost_policy import effective_policy
+from .cost_scheduler import refresh_batch, TencentCostScheduler
 
 log = logging.getLogger('organization.tencent.cost_worker')
 
@@ -41,9 +42,12 @@ class TencentCostWorker:
     def _config_gate(self, db, snapshot, *, skip_locked=False):
         require_account(db, snapshot['account_id'], epoch=snapshot['dataset_epoch'], revision=snapshot['credential_revision'], lock=True)
         # 异步执行使用可信open_id与当前管理员资格，不冻结HTTP会话有效期。
-        actor = db.scalar(select(AdminAllowlist.open_id).where(AdminAllowlist.open_id==snapshot['actor_id']).with_for_update(read=True))
-        if actor is None:
-            raise TencentError('TENCENT_ACTOR_REVOKED', '发起管理员已被撤权')
+        if snapshot.get('execution_identity')=='system-monthly':
+            if snapshot['actor_id']!='system:tencent-monthly':raise TencentError('TENCENT_ACTOR_REVOKED','系统执行身份无效')
+        else:
+            actor = db.scalar(select(AdminAllowlist.open_id).where(AdminAllowlist.open_id==snapshot['actor_id']).with_for_update(read=True))
+            if actor is None:
+                raise TencentError('TENCENT_ACTOR_REVOKED', '发起管理员已被撤权')
         config = db.scalar(select(TencentSyncConfig).where(TencentSyncConfig.id==snapshot['config_id']).with_for_update(skip_locked=skip_locked).execution_options(populate_existing=True))
         if config is None and skip_locked: return None
         if config is None or not config.is_enabled or config.control_revision!=snapshot.get('control_revision',snapshot['config_revision']):
@@ -62,7 +66,7 @@ class TencentCostWorker:
             # 每个可领取配置只贡献最早一条候选；被同配置占用的积压不消耗全局候选窗口。
             candidates = list(db.scalars(select(func.min(TencentSyncJob.id)).join(
                 TencentSyncConfig,TencentSyncConfig.id==TencentSyncJob.config_id).where(
-                TencentSyncJob.status.in_(['pending','retry_wait']),
+                TencentSyncJob.kind=='period',TencentSyncJob.status.in_(['pending','retry_wait']),
                 TencentSyncConfig.owner.is_(None),
                 or_(TencentSyncConfig.active_job_id.is_(None),TencentSyncConfig.active_job_id==TencentSyncJob.id),
                 or_(TencentSyncJob.next_attempt_at.is_(None),TencentSyncJob.next_attempt_at<=now)
@@ -81,10 +85,12 @@ class TencentCostWorker:
                     if job.started_at is None and job.queue_deadline_at and job.queue_deadline_at<=now:
                         job.status,job.error_code,job.finished_at='failed','TENCENT_COST_QUEUE_DEADLINE',now
                         if config.active_job_id==job.id:config.active_job_id=None
+                        refresh_batch(db,job.parent_job_id,now)
                         continue
                     if job.deadline_at and job.deadline_at<=now:
                         job.status,job.error_code,job.finished_at='failed','TENCENT_COST_RUN_DEADLINE',now
                         config.active_job_id=None
+                        refresh_batch(db,job.parent_job_id,now)
                         continue
                     config.generation += 1
                     config.owner, config.active_job_id = self.owner, job.id
@@ -99,7 +105,7 @@ class TencentCostWorker:
                         request_id=attempt_request_id,
                         status='running', execution_input={**snapshot, 'attempt_no':attempt_no,'generation':config.generation,
                             'trigger_request_id':job.request_id,'attempt_request_id':attempt_request_id,
-                            'execution_identity':'current-admin-allowlist'}, started_at=now)
+                            'execution_identity':snapshot.get('execution_identity','current-admin-allowlist')}, started_at=now)
                     db.add(attempt)
                     db.flush()
                     claimed = CostClaim(job.id, config.id, attempt.id, config.generation, self.owner, snapshot, attempt_request_id)
@@ -114,6 +120,7 @@ class TencentCostWorker:
                         job.status, job.error_code, job.finished_at = 'failed', exc.code, now
                         if config and config.active_job_id==job.id:
                             config.active_job_id,config.owner,config.lease_expires_at=None,None,None
+                        refresh_batch(db,job.parent_job_id,now)
                 log.info('tencent.cost_rejected job_id=%s reason_code=%s', job_id, exc.code)
         return None
 
@@ -180,6 +187,7 @@ class TencentCostWorker:
                 if not retry:config.active_job_id=None
                 db.add(ChangeLog(object_type='tencent_job',object_id=str(job.id),source='tencent_worker',actor='system:tencent-recovery',
                     before_data={'status':'running'},after_data={'status':job.status,'error_code':job.error_code,'generation':config.generation},committed_at=now))
+                refresh_batch(db,job.parent_job_id,now)
                 recovered+=1
             log.warning('tencent.cost_recovered config_id=%s reason_code=%s',config_id,code or 'TENCENT_COST_EXECUTOR_LOST')
         return recovered
@@ -235,10 +243,11 @@ class TencentCostWorker:
             attempt.execution_output, attempt.status, attempt.finished_at = receipt, 'succeeded', now
             attempt.return_state='VALUE'
             job.status, job.finished_at, job.commit_receipt = 'succeeded', now, receipt
-            config.last_success_month = job.month
+            config.last_success_month = max(config.last_success_month or job.month,job.month)
             config.owner, config.active_job_id, config.lease_expires_at = None, None, None
-            db.add(ChangeLog(object_type='tencent_cost_period', object_id=str(period.id), source='tencent_worker', actor='admin:'+claim.snapshot['actor_id'],
+            db.add(ChangeLog(object_type='tencent_cost_period', object_id=str(period.id), source='tencent_worker', actor=claim.snapshot['actor_id'] if claim.snapshot.get('execution_identity')=='system-monthly' else 'admin:'+claim.snapshot['actor_id'],
                 before_data=None, after_data={'status':'committed','job_id':str(job.id),'attempt_id':str(attempt.id),'row_count':len(candidate['rows']),'month':job.month}, committed_at=now))
+            refresh_batch(db,job.parent_job_id,now)
         return receipt
 
     def _fail(self, claim, code, evidence=None):
@@ -262,8 +271,10 @@ class TencentCostWorker:
             job.next_attempt_at=now+timedelta(seconds=delay) if retry else None
             config.owner, config.lease_expires_at = None, None
             if not retry:config.active_job_id=None
-            db.add(ChangeLog(object_type='tencent_job', object_id=str(job.id), source='tencent_worker', actor='admin:'+claim.snapshot['actor_id'],
+            db.add(ChangeLog(object_type='tencent_job', object_id=str(job.id), source='tencent_worker', actor=claim.snapshot['actor_id'] if claim.snapshot.get('execution_identity')=='system-monthly' else 'admin:'+claim.snapshot['actor_id'],
                 before_data={'status':'running'}, after_data={'status':job.status,'error_code':code}, committed_at=now))
+
+            refresh_batch(db,job.parent_job_id,now)
 
     def committed_receipt(self, claim):
         """只核实原任务原尝试；原始回执同事务存档，缺口仅修归档。"""
@@ -303,6 +314,7 @@ class TencentCostWorker:
             def check():
                 if heartbeat_error:raise TencentError(heartbeat_error[0],'执行资格或预算已失效')
                 self.heartbeat(claim)
+            gateway.check=check
             pulse=threading.Thread(target=keep_alive,name='tencent-cost-heartbeat',daemon=True)
             pulse.start()
             try:candidate = collect_month(gateway, credential, claim.snapshot,check=check)
@@ -332,7 +344,10 @@ class TencentCostWorker:
             raise ValueError('max_concurrency must be between 1 and 8')
         with ThreadPoolExecutor(max_workers=max_concurrency,thread_name_prefix='tencent-cost') as pool:
             active=set()
+            scheduler=TencentCostScheduler(self.sessions,self.settings,now=self.now)
             while not stop.is_set():
+                try:scheduler.tick()
+                except Exception:log.error('tencent.monthly_schedule_unavailable')
                 for future in list(active):
                     if future.done():
                         active.remove(future)
