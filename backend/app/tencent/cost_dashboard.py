@@ -19,7 +19,7 @@ from .errors import TencentError
 router = APIRouter(prefix='/admin/api/tencent', tags=['腾讯云费用看板'])
 
 STATUS_LABELS = {'complete': '完整月已覆盖', 'missing': '未同步 / 缺口', 'not_due': '未到同步日',
-    'incomplete': '累计未完整', 'stale_retained': '已保留旧世代费用，待复核', 'failed_retained': '采集失败，保留上次完整费用',
+    'incomplete': '累计未完整', 'failed_retained': '采集失败，保留上次完整费用',
     'refreshing_retained': '更新中，保留上次完整费用', 'failed': '采集失败 / 缺口', 'pending': '等待采集'}
 
 
@@ -48,8 +48,8 @@ def money(value):
     return format(value, '.8f')
 
 
-def read_dashboard(db, account_id, params, epoch, *, now=None):
-    """同一调用方事务内读取费用、产品、覆盖与最新任务；T07在此扩展日聚合。"""
+def read_dashboard(db, account_id, params, *, now=None):
+    """读取已提交财务当前值；组织世代只约束在途资格，不使成功账期失效。"""
     current = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo('Asia/Shanghai'))
     this_month = current.strftime('%Y-%m')
     if not '1970-01' <= params.start_month <= params.end_month <= this_month:
@@ -96,9 +96,6 @@ def read_dashboard(db, account_id, params, epoch, *, now=None):
             if latest and latest.id > value.latest_job_id:
                 return {'value': None, 'reason': 'latest_collection_failed'
                     if latest.status in {'failed', 'blocked', 'isolated'} else 'latest_collection_pending'}
-            success = db.get(TencentSyncJob, value.latest_job_id)
-            if success and success.snapshot.get('dataset_epoch') != epoch:
-                return {'value': None, 'reason': 'stale_epoch'}
         keys = ('bill_type', 'fee_type', 'dimensions', 'currency_source')
         if any(period.coverage.get(key) != other.coverage.get(key) for key in keys):
             return {'value': None, 'reason': 'incomparable_basis'}
@@ -118,8 +115,6 @@ def read_dashboard(db, account_id, params, epoch, *, now=None):
             status = 'complete' if complete(period) else 'missing'
             if period:
                 if not complete(period): status = 'incomplete'
-                success_job = db.get(TencentSyncJob, period.latest_job_id)
-                if success_job and success_job.snapshot.get('dataset_epoch') != epoch: status = 'stale_retained'
                 if job and job.id > period.latest_job_id:
                     if job.status in {'failed', 'blocked', 'isolated'}: status = 'failed_retained'
                     elif job.status in {'pending', 'running', 'retry_wait', 'queued'}: status = 'refreshing_retained'
@@ -160,9 +155,9 @@ def read_dashboard(db, account_id, params, epoch, *, now=None):
 def get_dashboard(account_id: int, params: Annotated[DashboardQuery, Query()], request: Request,
     identity=Depends(require_action('tencent.cost.read')), runtime=Depends(get_runtime)):
     with runtime.sessions.begin() as db:
-        epoch = require_dataset(db, lock=True)
+        require_dataset(db, lock=True)
         require_actor(db, identity)
-        data = read_dashboard(db, account_id, params, epoch)
+        data = read_dashboard(db, account_id, params)
         request.state.tencent_target = data['account']['uin']
     return {'data': data, 'meta': {}}
 
@@ -178,9 +173,9 @@ def csv_cell(value):
 def export_cost(account_id: int, params: Annotated[DashboardQuery, Query()], request: Request,
     identity=Depends(require_action('tencent.cost.export')), runtime=Depends(get_runtime)):
     with runtime.sessions.begin() as db:
-        epoch = require_dataset(db, lock=True)
+        require_dataset(db, lock=True)
         require_actor(db, identity)
-        data = read_dashboard(db, account_id, params, epoch)
+        data = read_dashboard(db, account_id, params)
         request.state.tencent_target = data['account']['uin']
     output = io.StringIO(newline='')
     writer = csv.writer(output)
