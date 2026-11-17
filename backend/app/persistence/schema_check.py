@@ -13,6 +13,7 @@ from app.persistence.models import Base
 
 def _type(value):
     value = str(value).lower().split(' collate ')[0]
+    value = value.replace('numeric', 'decimal')
     value = value.replace('boolean', 'tinyint(1)').replace('bool', 'tinyint(1)').replace('integer', 'int')
     return re.sub(r'\b(bigint|int|smallint)\(\d+\)', r'\1', value)
 
@@ -64,14 +65,22 @@ def check_schema(engine):
             observed = columns.get(col.name)
             if observed is None:
                 continue
+            raw_default = col.server_default.arg if col.server_default is not None else None
+            if hasattr(raw_default, 'compile'):
+                raw_default = str(raw_default.compile(dialect=engine.dialect))
+            expected_extra = ''
+            if is_mysql and raw_default and ' ON UPDATE ' in str(raw_default).upper():
+                raw_default, update_value = re.split(r' ON UPDATE ', str(raw_default), flags=re.I)
+                expected_extra = 'on update ' + update_value.lower().replace('()', '')
             expected = {'type': _type(col.type.compile(dialect=engine.dialect)), 'nullable': col.nullable,
-                        'default': _default(col.server_default.arg) if col.server_default is not None else None}
+                        'default': _default(raw_default)}
             values = dict(observed, type=_type(observed['type']), default=_default(observed['default']))
             if is_mysql:
                 expected.update(comment=col.comment, autoincrement=table.autoincrement_column is col, computed=None)
                 if isinstance(col.type, (String, Text)):
                     expected.update(collation=col.type.collation or 'utf8mb4_general_ci', charset='utf8mb4')
-                if (observed.get('extra') or '').lower().replace('auto_increment', '').replace('default_generated', '').strip():
+                observed_extra = (observed.get('extra') or '').lower().replace('auto_increment', '').replace('default_generated', '').replace('()', '').strip()
+                if observed_extra != expected_extra:
                     errors.append(f'{table.name}.{col.name}.extra')
             for key, value in expected.items():
                 if values.get(key) != value:

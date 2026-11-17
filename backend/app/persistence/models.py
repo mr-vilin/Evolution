@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text as sql_text
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text as sql_text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql.elements import TextClause
 from sqlalchemy.ext.compiler import compiles
@@ -395,3 +395,87 @@ class TencentApiCall(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, comment='调用结束 UTC 时间，未结束为空')
     duration_ms: Mapped[int | None] = mapped_column(Integer, comment='单调时钟测量的实际耗时毫秒数')
     __table_args__ = _table_args('腾讯云模块实际请求事实，元信息白名单且不保存财务正文')
+
+
+class TencentSyncConfig(Base):
+    __tablename__ = 'tencent_sync_config'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment='腾讯云业务配置标识')
+    account_id: Mapped[int] = mapped_column(Integer, comment='所属腾讯云账号标识')
+    business: Mapped[str] = mapped_column(String(32), default='cost', comment='业务类型，cost表示成本')
+    is_enabled: Mapped[bool] = mapped_column(Boolean().with_variant(TINYINT(unsigned=True), 'mysql'), default=False, server_default='0', comment='成本能力开关，默认关闭')
+    revision: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), 'mysql'), default=1, server_default='1', comment='配置修订号，变更使旧执行失效')
+    frequency: Mapped[str] = mapped_column(String(32), default='manual', comment='执行频率，本阶段仅manual手动')
+    currency: Mapped[str] = mapped_column(String(3), default='CNY', comment='境内账单声明币种，不由源接口返回')
+    owner: Mapped[str | None] = mapped_column(String(36, collation='utf8mb4_bin'), comment='本配置当前执行者标识')
+    generation: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), 'mysql'), default=0, server_default='0', comment='配置执行资格递增代次')
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, comment='执行资格到期UTC时刻')
+    active_job_id: Mapped[int | None] = mapped_column(Integer, comment='本配置正在执行的任务标识')
+    last_success_month: Mapped[str | None] = mapped_column(String(7), comment='最近一次完整提交的账月')
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text('CURRENT_TIMESTAMP'), comment='配置创建UTC时间')
+    update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='配置更新UTC时间')
+    __table_args__ = (UniqueConstraint('account_id', 'business', name='uk_tencent_config_business'), _table_args('腾讯云账号按业务独立配置及执行互斥'))
+
+
+class TencentSyncJob(Base):
+    __tablename__ = 'tencent_sync_job'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment='一次逻辑成本任务标识')
+    config_id: Mapped[int] = mapped_column(Integer, comment='所属业务配置标识')
+    account_id: Mapped[int] = mapped_column(Integer, comment='所属腾讯云账号标识')
+    idempotency_key: Mapped[str] = mapped_column(String(128, collation='utf8mb4_bin'), comment='配置内可靠请求幂等键')
+    month: Mapped[str] = mapped_column(String(7), comment='固定完整账月YYYY-MM')
+    status: Mapped[str] = mapped_column(String(32), comment='任务状态pending、running、succeeded或failed')
+    snapshot: Mapped[dict] = mapped_column(JSON, comment='冻结配置、口径、范围、可信发起身份及初始化世代，不含秘密')
+    request_id: Mapped[str] = mapped_column(String(36, collation='utf8mb4_bin'), comment='受理请求的服务端关联标识')
+    error_code: Mapped[str | None] = mapped_column(String(64), comment='最终稳定失败编码')
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, comment='首次实际执行UTC时刻')
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, comment='任务终结UTC时刻')
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text('CURRENT_TIMESTAMP'), comment='任务可靠受理UTC时间')
+    update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='任务状态更新UTC时间')
+    __table_args__ = (UniqueConstraint('config_id','idempotency_key',name='uk_tencent_job_request'), Index('idx_tencent_job_claim','status','config_id','id'), _table_args('腾讯云单月逻辑执行任务，不依赖浏览器会话存活'))
+
+
+class TencentSyncAttempt(Base):
+    __tablename__ = 'tencent_sync_attempt'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment='一次真实执行尝试标识')
+    job_id: Mapped[int] = mapped_column(Integer, comment='所属逻辑任务标识')
+    attempt_no: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), 'mysql'), comment='任务内实际尝试序号，从1开始')
+    generation: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), 'mysql'), comment='领取时的配置执行资格代次')
+    owner: Mapped[str] = mapped_column(String(36, collation='utf8mb4_bin'), comment='本次执行者标识')
+    status: Mapped[str] = mapped_column(String(32), comment='尝试状态running、succeeded或failed')
+    execution_input: Mapped[dict] = mapped_column(JSON, comment='执行前可靠保存的完整脱敏实际入参')
+    execution_output: Mapped[dict | None] = mapped_column(JSON, comment='处理器实际返回的原子提交回执，不保存账单原文')
+    error_code: Mapped[str | None] = mapped_column(String(64), comment='明确失败或未知的稳定原因编码')
+    started_at: Mapped[datetime] = mapped_column(DateTime, comment='尝试开始UTC时刻')
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, comment='尝试终结UTC时刻')
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text('CURRENT_TIMESTAMP'), comment='尝试事实创建UTC时间')
+    update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='尝试事实更新UTC时间')
+    __table_args__ = (UniqueConstraint('job_id','attempt_no',name='uk_tencent_attempt_number'), _table_args('腾讯云真实尝试事实，失败记录独立于费用回滚'))
+
+
+class TencentCostPeriod(Base):
+    __tablename__ = 'tencent_cost_period'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment='当前完整费用期间标识')
+    account_id: Mapped[int] = mapped_column(Integer, comment='所属腾讯云账号标识')
+    month: Mapped[str] = mapped_column(String(7), comment='Asia/Shanghai完整账月YYYY-MM')
+    currency: Mapped[str] = mapped_column(String(3), comment='独立金额维度的账单声明币种')
+    total: Mapped[object] = mapped_column(Numeric(24,8), comment='费用账单总费用，保留8位小数及负退款')
+    coverage: Mapped[dict] = mapped_column(JSON, comment='完整边界、费用口径及零值和完整性证明摘要')
+    latest_job_id: Mapped[int] = mapped_column(Integer, comment='最近成功提交本期间的任务标识')
+    latest_attempt_id: Mapped[int] = mapped_column(Integer, comment='最近成功提交本期间的尝试标识')
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text('CURRENT_TIMESTAMP'), comment='期间首次创建UTC时间')
+    update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='完整期间最后替换UTC时间')
+    __table_args__ = (UniqueConstraint('account_id','month','currency',name='uk_tencent_period_scope'), _table_args('腾讯云当前完整月费用及一致覆盖回执'))
+
+
+class TencentCostItem(Base):
+    __tablename__ = 'tencent_cost_item'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment='期间内费用产品行标识，不假设跨期稳定')
+    period_id: Mapped[int] = mapped_column(Integer, comment='所属完整费用期间标识')
+    row_no: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), 'mysql'), comment='本次全量结果内产品行序号')
+    business_code: Mapped[str | None] = mapped_column(String(191, collation='utf8mb4_bin'), comment='可靠映射的产品BusinessCode，不是子产品ProductCode')
+    source_name: Mapped[str] = mapped_column(String(255), comment='源接口原始产品显示名称')
+    mapping_status: Mapped[str] = mapped_column(String(32), comment='产品映射状态mapped、ambiguous或unmapped')
+    amount: Mapped[object] = mapped_column(Numeric(24,8), comment='该完整账月的产品总费用，保留负退款')
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text('CURRENT_TIMESTAMP'), comment='当前产品行创建UTC时间')
+    update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='当前产品行最后更新UTC时间')
+    __table_args__ = (UniqueConstraint('period_id','row_no',name='uk_tencent_item_row'), _table_args('完整月全量产品行，未映射和同名行保持独立'))

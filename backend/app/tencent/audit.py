@@ -108,4 +108,10 @@ def _route_action(method, route):
     return {('GET','/admin/api/tencent/accounts'):'tencent.account.read',
             ('GET','/admin/api/tencent/credential-options'):'tencent.account.read',
             ('POST','/admin/api/tencent/accounts'):'tencent.account.create',
-            ('POST','/admin/api/tencent/accounts/validate'):'tencent.account.validate'}.get((method,route),'unknown')
+            ('POST','/admin/api/tencent/accounts/validate'):'tencent.account.validate',
+            ('GET','/admin/api/tencent/accounts/{account_id}/cost-config'):'tencent.cost.read',
+            ('PUT','/admin/api/tencent/accounts/{account_id}/cost-config'):'tencent.config.update',
+            ('POST','/admin/api/tencent/accounts/{account_id}/cost-jobs'):'tencent.cost.rerun',
+            ('GET','/admin/api/tencent/accounts/{account_id}/cost-jobs'):'tencent.job.read',
+            ('GET','/admin/api/tencent/cost-jobs/{job_id}'):'tencent.job.read',
+            ('GET','/admin/api/tencent/accounts/{account_id}/cost-periods/{month}'):'tencent.cost.read'}.get((method,route),'unknown')
