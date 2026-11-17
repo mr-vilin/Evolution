@@ -1,10 +1,11 @@
 """腾讯云手动完整月的可靠受理和一致查询接口。"""
 from datetime import datetime, timedelta, timezone
+import hashlib
 from typing import Literal
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_, or_
 from sqlalchemy.exc import IntegrityError
 from app.config import get_settings
 from app.dependencies import get_runtime
@@ -13,9 +14,9 @@ from app.persistence.models import (TencentAccount, TencentSyncConfig, TencentSy
 from app.web import utc_datetime
 from .access import require_action, require_dataset, require_account, require_actor
 from .errors import TencentError
-from .cost_collector import CONTRACT
 from .credentials import CredentialRegistry
 from .cost_policy import CostRunPolicy, effective_policy
+from .cost_scheduler import period_snapshot, accept_batch, shifted, next_point
 
 router = APIRouter(prefix='/admin/api/tencent', tags=['腾讯云成本'])
 
@@ -48,7 +49,8 @@ class CostConfigBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
     revision: int = Field(ge=0, strict=True)
     is_enabled: bool = Field(strict=True)
-    frequency: Literal['manual']
+    frequency: Literal['manual','monthly']
+    execution_time: str = Field(default='13:30',pattern=r'^([01][0-9]|2[0-3]):[0-5][0-9]$',strict=True)
     currency: Literal['CNY']
     run_policy: CostRunPolicy | None = None
 
@@ -59,12 +61,18 @@ class CostJobBody(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=128, pattern=r'^[A-Za-z0-9][A-Za-z0-9_.:-]*$', strict=True)
 
 
-def config_data(row):
+def config_data(row,db=None):
+    last_success=db.scalar(select(func.max(TencentSyncJob.finished_at)).where(TencentSyncJob.account_id==row.account_id,
+        TencentSyncJob.kind=='period',TencentSyncJob.status=='succeeded')) if row and db else None
     return {'id': str(row.id) if row else None, 'revision': row.revision if row else 0,
         'is_enabled': bool(row.is_enabled) if row else False, 'frequency': row.frequency if row else 'manual',
         'currency': row.currency if row else 'CNY', 'latest_eligible_month': latest_month(),
+        'execution_time':row.execution_time if row else '13:30','timezone':'Asia/Shanghai',
+        'schedule_start_month':row.schedule_start_month if row else None,
+        'next_execution_at':utc_datetime(next_point(utcnow(),row.execution_time)).isoformat() if row and row.is_enabled and row.frequency=='monthly' else None,
         'run_policy': effective_policy(row.run_policy if row else None),
-        'last_success_month': row.last_success_month if row else None}
+        'last_success_month': row.last_success_month if row else None,
+        'last_success_at':utc_datetime(last_success).isoformat() if last_success else None}
 
 
 def readable_account(db, account_id):
@@ -80,7 +88,7 @@ def get_config(account_id: int, request: Request, identity=Depends(require_actio
     with runtime.sessions() as db:
         request.state.tencent_target=readable_account(db, account_id).uin
         row = db.scalar(select(TencentSyncConfig).where(TencentSyncConfig.account_id==account_id, TencentSyncConfig.business=='cost'))
-        return {'data': config_data(row), 'meta': {}}
+        return {'data': config_data(row,db), 'meta': {}}
 
 
 @router.put('/accounts/{account_id}/cost-config', operation_id='tencent_cost_config_update')
@@ -107,9 +115,12 @@ def update_config(account_id: int, body: CostConfigBody, request: Request, ident
             else:
                 if row.is_enabled != body.is_enabled:
                     row.control_revision += 1
-                if row.is_enabled != body.is_enabled or effective_policy(row.run_policy)!=policy:
+                if row.is_enabled != body.is_enabled or effective_policy(row.run_policy)!=policy or row.frequency!=body.frequency or row.execution_time!=body.execution_time:
                     row.revision += 1
             row.is_enabled, row.frequency, row.currency = body.is_enabled, body.frequency, body.currency
+            row.execution_time=body.execution_time
+            if body.is_enabled and body.frequency=='monthly' and not row.schedule_start_month:
+                row.schedule_start_month=shifted(latest_month(),-1)
             row.run_policy=policy
             db.flush()
             result = config_data(row)
@@ -121,7 +132,12 @@ def update_config(account_id: int, body: CostConfigBody, request: Request, ident
 
 
 def job_data(job):
-    return {'id': str(job.id), 'account_id': str(job.account_id), 'config_id': str(job.config_id), 'month': job.month,
+    return {'kind':job.kind,'parent_job_id':str(job.parent_job_id) if job.parent_job_id else None,
+        'months':job.snapshot.get('months') if job.kind=='batch' else None,
+        'deferred_months':job.snapshot.get('deferred_months') if job.kind=='batch' else None,
+        'scheduled_at':job.snapshot.get('scheduled_at') if job.kind=='batch' else None,
+        'blocked_months':job.snapshot.get('blocked_months',[]) if job.kind=='batch' else None,
+        'id': str(job.id), 'account_id': str(job.account_id), 'config_id': str(job.config_id), 'month': job.month,
         'status': job.status, 'error_code': job.error_code, 'create_time': utc_datetime(job.create_time),
         'started_at': utc_datetime(job.started_at), 'finished_at': utc_datetime(job.finished_at),
         'next_attempt_at':utc_datetime(job.next_attempt_at),'deadline_at':utc_datetime(job.deadline_at),
@@ -148,13 +164,14 @@ def rerun_job(job_id: int,body: CostRerunBody,request: Request,response: Respons
         require_dataset(db)
         source=db.get(TencentSyncJob,job_id)
         if source is None:raise TencentError('TENCENT_JOB_NOT_FOUND','费用任务不存在',404)
+        if source.kind=='batch':raise TencentError('TENCENT_BATCH_RERUN_PERIOD','请分别重跑失败账月或新建立即执行批次',422)
         account_id,month=source.account_id,source.month
     return accept_job(account_id,CostJobBody(month=month,idempotency_key=body.idempotency_key),request,response,identity,runtime,
         source_job_id=job_id,reason=body.reason)
 
 
 def accept_job(account_id,body,request,response,identity,runtime,*,source_job_id=None,reason=None):
-    begin, end = month_scope(body.month)
+    month_scope(body.month)
     with runtime.sessions.begin() as db:
         epoch = require_dataset(db, lock=True)
         account = require_account(db, account_id, epoch=epoch, lock=True)
@@ -167,9 +184,10 @@ def accept_job(account_id,body,request,response,identity,runtime,*,source_job_id
             if source.status not in {'succeeded','failed'}:
                 raise TencentError('TENCENT_JOB_NOT_TERMINAL','请等待原任务结束后重跑',409)
         config = db.scalar(select(TencentSyncConfig).where(TencentSyncConfig.account_id==account_id, TencentSyncConfig.business=='cost').with_for_update())
-        if config is None or not config.is_enabled or config.frequency!='manual' or config.currency!='CNY':
-            raise TencentError('TENCENT_COST_DISABLED', '请先启用有效的手动月成本配置')
-        existing = db.scalar(select(TencentSyncJob).where(TencentSyncJob.config_id==config.id, TencentSyncJob.dataset_epoch==epoch, TencentSyncJob.idempotency_key==body.idempotency_key))
+        if config is None or not config.is_enabled or config.frequency not in {'manual','monthly'} or config.currency!='CNY':
+            raise TencentError('TENCENT_COST_DISABLED', '请先启用有效的成本配置')
+        existing = db.scalar(select(TencentSyncJob).where(TencentSyncJob.config_id==config.id, TencentSyncJob.dataset_epoch==epoch, TencentSyncJob.kind=='period',or_(TencentSyncJob.idempotency_key=='manual-period:'+hashlib.sha256(body.idempotency_key.encode()).hexdigest(),
+            and_(TencentSyncJob.idempotency_key==body.idempotency_key,TencentSyncJob.snapshot['request_namespace'].as_string().is_(None)))).with_for_update())
         if existing:
             if existing.month != body.month or existing.source_job_id!=source_job_id:
                 raise TencentError('TENCENT_IDEMPOTENCY_CONFLICT', '该请求标识已用于不同账月', 409)
@@ -181,18 +199,9 @@ def accept_job(account_id,body,request,response,identity,runtime,*,source_job_id
                 TencentSyncJob.status.in_(['pending','running','retry_wait'])))
             if queued>=policy['queue_limit']:
                 raise TencentError('TENCENT_COST_QUEUE_FULL','本配置待处理任务已达上限，请等待任务完成',429)
-            snapshot = {'handler': CONTRACT, 'business': 'cost', 'account_id': account.id, 'uin': account.uin,
-                'credential_ref': account.credential_ref, 'credential_revision': account.credential_revision,
-                'config_id': config.id, 'config_revision': config.revision, 'control_revision':config.control_revision, 'frequency': config.frequency,
-                'currency': config.currency, 'dataset_epoch': epoch,
-                'actor_id': identity.open_id, 'execution_identity': 'current-admin-allowlist',
-                'month': body.month, 'begin': begin.isoformat()+'+08:00', 'end_exclusive': end.isoformat()+'+08:00',
-                'policy': effective_policy(config.run_policy),
-                'source_job_id':str(source_job_id) if source_job_id is not None else None,'rerun_reason':reason,
-                'upstream_params': {'BeginTime': begin.strftime('%Y-%m-%d %H:%M:%S'),
-                    'EndTime': (end-timedelta(seconds=1)).strftime('%Y-%m-%d %H:%M:%S'),
-                    'PeriodType': 'month', 'BillType': '1', 'FeeType': 'cost', 'Dimensions': 'business', 'NeedConditionValue': '1'}}
-            job = TencentSyncJob(config_id=config.id, account_id=account.id, dataset_epoch=epoch, idempotency_key=body.idempotency_key,
+            snapshot=period_snapshot(account,config,epoch,body.month,actor_id=identity.open_id,
+                execution_identity='current-admin-allowlist',source_job_id=source_job_id,reason=reason)
+            job = TencentSyncJob(config_id=config.id, account_id=account.id, dataset_epoch=epoch, idempotency_key='manual-period:'+hashlib.sha256(body.idempotency_key.encode()).hexdigest(),
                 month=body.month, source_job_id=source_job_id, status='pending', snapshot=snapshot, request_id=request.state.tencent_request_id,
                 queue_deadline_at=utcnow()+timedelta(seconds=snapshot['policy']['queue_deadline_seconds']))
             db.add(job)
@@ -214,7 +223,7 @@ def get_job(job_id: int, request: Request, identity=Depends(require_action('tenc
         if job is None: raise TencentError('TENCENT_JOB_NOT_FOUND', '费用任务不存在', 404)
         request.state.tencent_target=readable_account(db,job.account_id).uin
         attempts = db.scalars(select(TencentSyncAttempt).where(TencentSyncAttempt.job_id==job.id).order_by(TencentSyncAttempt.attempt_no)).all()
-        return {'data': {**job_data(job), 'attempts': [{'id':str(row.id), 'attempt_no':row.attempt_no,
+        return {'data': {**job_data(job), 'children':[job_data(row) for row in db.scalars(select(TencentSyncJob).where(TencentSyncJob.parent_job_id==job.id).order_by(TencentSyncJob.id))] if job.kind=='batch' else [], 'attempts': [{'id':str(row.id), 'attempt_no':row.attempt_no,
             'status':row.status, 'execution_input':row.execution_input, 'execution_output':row.execution_output,
             'return_state':row.return_state,
             'input_capture_status':'CAPTURED',
@@ -243,3 +252,27 @@ def get_period(account_id: int, month: str, request: Request, identity=Depends(r
             'coverage':row.coverage, 'latest_job_id':str(row.latest_job_id),'latest_attempt_id':str(row.latest_attempt_id),
             'items':[{'id':str(item.id),'row_no':item.row_no,'source_name':item.source_name,
                 'business_code':item.business_code,'mapping_status':item.mapping_status,'amount':format(item.amount,'.8f')} for item in items]}, 'meta': {}}
+
+
+class CostBatchBody(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    idempotency_key: str = Field(min_length=1,max_length=112,pattern=r'^[A-Za-z0-9][A-Za-z0-9_.:-]*$',strict=True)
+
+
+@router.post('/accounts/{account_id}/cost-batches',status_code=202,operation_id='tencent_cost_batch_create')
+def create_batch(account_id: int,body: CostBatchBody,request: Request,response: Response,
+    identity=Depends(require_action('tencent.cost.rerun',write=True)),runtime=Depends(get_runtime)):
+    with runtime.sessions.begin() as db:
+        epoch=require_dataset(db,lock=True)
+        account=require_account(db,account_id,epoch=epoch,lock=True)
+        require_actor(db,identity)
+        request.state.tencent_target=account.uin
+        config=db.scalar(select(TencentSyncConfig).where(TencentSyncConfig.account_id==account_id,TencentSyncConfig.business=='cost').with_for_update())
+        if not config or not config.is_enabled or config.frequency!='monthly':
+            raise TencentError('TENCENT_MONTHLY_DISABLED','请先启用月度成本配置')
+        job,_=accept_batch(db,account,config,epoch,'manual-batch:'+body.idempotency_key,utcnow(),
+            actor_id=identity.open_id,execution_identity='current-admin-allowlist',request_id=request.state.tencent_request_id)
+        result=job_data(job)
+    location='/admin/api/tencent/cost-jobs/'+result['id']
+    response.headers['Location']=location
+    return {'data':{**result,'status_url':location},'meta':{}}

@@ -11,12 +11,12 @@ export interface CostAttempt {
   execution_input: Record<string, unknown>; execution_output: Record<string, unknown> | null;
 }
 export interface CostJob {
-  id: string; month: string; status: string; error_code?: string | null; source_job_id?: string | null;
+  id: string; month: string | null; kind?: 'batch' | 'period'; parent_job_id?: string | null; children?: CostJob[]; deferred_months?: string[]; blocked_months?: Array<{month:string;reason_code:string}>; months?: string[]; scheduled_at?: string | null; status: string; error_code?: string | null; source_job_id?: string | null;
   next_attempt_at?: string | null; deadline_at?: string | null; queue_deadline_at?: string | null; attempts?: CostAttempt[];
 }
-export const costStatuses: Record<string, string> = { pending:'等待执行',running:'正在采集',retry_wait:'等待自动重试',succeeded:'已成功提交',failed:'执行失败',unknown:'结果未知' };
+export const costStatuses: Record<string, string> = { pending:'等待执行',running:'正在采集',retry_wait:'等待自动重试',succeeded:'已成功提交',failed:'执行失败',unknown:'结果未知',partial_failed:'部分失败，仍有缺口',no_work:'无待同步期间' };
 export function costStatusTag(status: string) {
-  return <Tag color={status === 'succeeded' ? 'success' : status === 'failed' ? 'error' : status === 'running' ? 'processing' : status === 'retry_wait' || status === 'unknown' ? 'warning' : 'default'}>{costStatuses[status] ?? '未知状态'}</Tag>;
+  return <Tag color={status === 'succeeded' ? 'success' : status === 'failed' ? 'error' : status === 'partial_failed' ? 'warning' : status === 'running' ? 'processing' : status === 'retry_wait' || status === 'unknown' ? 'warning' : 'default'}>{costStatuses[status] ?? '未知状态'}</Tag>;
 }
 const labels: Record<string, string> = {
   month:'账月',begin:'期间起点',end_exclusive:'期间终点（不含）',policy:'冻结执行策略',max_attempts:'最大总尝试次数',
@@ -29,7 +29,7 @@ const labels: Record<string, string> = {
   status:'返回状态',period_id:'费用期间标识',job_id:'逻辑任务标识',attempt_id:'尝试标识',row_count:'产品条数',total:'精确总费用',request_ids:'实际上游请求标识',coverage:'覆盖证据',committed_at:'原提交时间',
   reason_code:'原因编码',upstream_request_id:'上游请求标识',upstream_response_state:'上游响应观察状态',observed_at:'失联观察时间',isolation_generation:'接管隔离代次',
   archive_repaired:'归档已修复',archive_repaired_at:'归档修复时间',source:'恢复依据',source_job_id:'原任务标识',rerun_reason:'重跑原因',
-  timezone:'业务时区',bill_type:'账单类型',fee_type:'费用口径',dimensions:'聚合维度',currency_source:'币种声明依据',zero_evidence:'零费用证据',
+  request_namespace:'受理命名空间',timezone:'业务时区',bill_type:'账单类型',fee_type:'费用口径',dimensions:'聚合维度',currency_source:'币种声明依据',zero_evidence:'零费用证据',
 };
 function EvidenceValue({ value }: { value: unknown }) {
   if (value === null || value === undefined) return <span>-</span>;
@@ -59,7 +59,7 @@ export function TencentCostJobDetail({ job, canRerun, onRerun }: { job: CostJob;
   }
   return <Space orientation="vertical" size={16} style={{width:'100%'}}>
     <Descriptions column={{xs:1,md:2}} items={[
-      {key:'job',label:'逻辑任务',children:`#${job.id} / ${job.month}`},
+      {key:'job',label:'逻辑任务',children:`#${job.id} / ${job.kind === 'batch' ? '月度父批次' : job.month}`},
       {key:'status',label:'逻辑任务状态',children:costStatusTag(job.status)},
       {key:'source',label:'原任务',children:job.source_job_id ? `#${job.source_job_id}` : '-'},
       {key:'reason',label:'最近原因',children:job.error_code ?? '-'},
@@ -69,7 +69,16 @@ export function TencentCostJobDetail({ job, canRerun, onRerun }: { job: CostJob;
     ]} />
     {job.status === 'retry_wait' && <Alert type="warning" showIcon title="当前尝试失败，任务将按冻结策略自动重试" description="等待重试期间保留本配置串行资格，其他配置可继续执行。" />}
     {job.status === 'failed' && <Alert type="error" showIcon title="任务已结束，将不再自动重试" description="查看逐次原因，修复问题后可人工重跑；重跑会创建关联的新任务。" />}
-    {!job.attempts?.length ? <p>任务尚未实际执行，没有尝试输入或返回记录。</p> : <Collapse key={job.id} defaultActiveKey={[job.attempts.at(-1)!.id]} items={job.attempts.map(attempt => ({
+    {job.kind === 'batch' && <>
+      <Alert type="info" showIcon title="父批次仅汇总账月结果，不产生执行尝试" description="各账月独立提交；仅所有子任务成功时批次才成功，失败账月可分别查看和重跑。" />
+      {!!job.blocked_months?.length && <Alert type="warning" showIcon title="部分旧账月已达到自动补漏上限" description={`${job.blocked_months.map(item => item.month).join('、')}：请核查权限或历史可查范围，修复后手动重跑对应账月。`} />}
+      {(job.deferred_months?.length ?? 0)>0 && <Alert type="warning" showIcon title={`仍有 ${job.deferred_months!.length} 个旧账月缺口等待后续补漏`} description={job.deferred_months!.join('、')} />}
+      <Space orientation="vertical" size={8}>{job.children?.map(child => <Space key={child.id} wrap>
+        <span>{child.month}</span>{costStatusTag(child.status)}<span>{child.error_code ?? ''}</span>
+        <Button aria-label={`查看账月 ${child.month}`} onClick={() => onRerun(child.id)}>查看账月</Button>
+      </Space>)}</Space>
+    </>}
+    {job.kind !== 'batch' && (!job.attempts?.length ? <p>任务尚未实际执行，没有尝试输入或返回记录。</p> : <Collapse key={job.id} defaultActiveKey={[job.attempts.at(-1)!.id]} items={job.attempts.map(attempt => ({
       key:attempt.id,label:`第 ${attempt.attempt_no} 次尝试 · ${costStatuses[attempt.status] ?? attempt.status}`,
       children:<Space orientation="vertical" size={16} style={{width:'100%'}}>
         <Descriptions column={{xs:1,md:2}} items={[
@@ -85,8 +94,8 @@ export function TencentCostJobDetail({ job, canRerun, onRerun }: { job: CostJob;
         <section aria-label={`第 ${attempt.attempt_no} 次真实返回`}><h3 className="section-title">真实返回</h3>{attempt.execution_output === null ? <p>{attempt.return_state === 'VALUE' ? '已观察到返回，当前归档存在缺口，等待原事务回执修复' : returns[attempt.return_state ?? 'UNKNOWN']}</p> : <EvidenceValue value={attempt.execution_output} />}</section>
         {attempt.failure_evidence && <section aria-label="安全失败或恢复证据"><h3 className="section-title">安全失败或恢复证据</h3><EvidenceValue value={attempt.failure_evidence} /></section>}
       </Space>,
-    }))} />}
-    {['succeeded','failed'].includes(job.status) && <Form layout="vertical">
+    }))} />)}
+    {job.kind !== 'batch' && ['succeeded','failed'].includes(job.status) && <Form layout="vertical">
       <Form.Item label="重跑原因"><Select aria-label="重跑原因" value={reason} disabled={busy || !canRerun} onChange={setReason} style={{maxWidth:320}} options={[{value:'after_fix',label:'已修复失败原因'},{value:'refresh_result',label:'重新获取该期间最新结果'}]} /></Form.Item>
       <Button aria-label="人工重跑" loading={busy} disabled={!canRerun} onClick={() => void rerun()}>人工重跑</Button>
     </Form>}

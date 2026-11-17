@@ -1,5 +1,5 @@
 """即时余额查询：仅返回当前请求结果，不落财务快照。"""
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from contextlib import contextmanager
 import hashlib
 from sqlalchemy import text, select, func
@@ -11,6 +11,7 @@ from app.dependencies import get_runtime
 from .access import require_action, require_account, require_dataset, require_actor
 from .credentials import CredentialRegistry
 from .errors import TencentError
+from .audit import rate_window_cutoff
 from .gateway import TencentGateway, get_tencent_transport
 
 router = APIRouter(prefix='/admin/api/tencent', tags=['腾讯云'])
@@ -75,7 +76,7 @@ def balance_slot(sessions, uin):
         if acquired != 1:
             raise TencentError('TENCENT_BALANCE_BUSY', '该账号正在查询余额，请稍后刷新', 429)
         try:
-            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)
+            cutoff = rate_window_cutoff(datetime.now(timezone.utc).replace(tzinfo=None))
             recent = connection.execute(select(func.count()).select_from(TencentApiCall).where(
                 TencentApiCall.direction=='outbound', TencentApiCall.action=='DescribeAccountBalance',
                 TencentApiCall.target_id==uin, TencentApiCall.started_at>=cutoff)).scalar_one()

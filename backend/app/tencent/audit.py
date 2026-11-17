@@ -1,6 +1,11 @@
 """腾讯云模块局部实际请求审计；只保存服务端元信息，不接触请求/财务正文。"""
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from time import sleep
+import hashlib
+from sqlalchemy import select,func,text
+from sqlalchemy.orm import sessionmaker
+from .errors import TencentError
 import logging
 import time
 import uuid
@@ -12,16 +17,52 @@ def now():
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def rate_window_cutoff(value):
+    # DATETIME(0) 可舍入/截断小数秒，窗口向整秒外扩，禁止早排同秒事实。
+    return value.replace(microsecond=0)-timedelta(seconds=1)
+
+
 @contextmanager
-def outgoing_call(sessions, request_id, action, target):
+def outgoing_call(sessions, request_id, action, target, *, check=None):
     evidence = {}
     if sessions is None:
         yield evidence
         return
     event_id, started = str(uuid.uuid4()), time.monotonic()
-    with sessions.begin() as db:
-        db.add(TencentApiCall(id=event_id, request_id=request_id or str(uuid.uuid4()), direction='outbound',
-            action=action, method='POST', route=action, outcome='running', target_id=target, started_at=now()))
+    # 同数据库多进程共用账号/动作许可。等待不持事务或业务锁，也不写虚构出站。
+    # DATETIME(0) 事实保守覆盖前一整秒，避免微秒cutoff提前排除同秒请求。
+    lock_name='tencent-rate:'+hashlib.sha256(f'{target}:{action}'.encode()).hexdigest()[:40]
+    wait_started=time.monotonic()
+    while True:
+        if check:check()
+        admitted=False
+        with sessions.kw['bind'].connect() as connection:
+            locked=connection.execute(text('SELECT GET_LOCK(:name,0)'),{'name':lock_name}).scalar_one()
+            connection.commit()
+            if locked:
+                try:
+                    with sessionmaker(bind=connection).begin() as db:
+                        cutoff=rate_window_cutoff(now())
+                        count=db.scalar(select(func.count()).select_from(TencentApiCall).where(TencentApiCall.direction=='outbound',
+                            TencentApiCall.action==action,TencentApiCall.target_id==target,TencentApiCall.started_at>=cutoff))
+                        if count<20:
+                            db.add(TencentApiCall(id=event_id, request_id=request_id or str(uuid.uuid4()), direction='outbound',
+                                action=action, method='POST', route=action, outcome='running', target_id=target, started_at=now()))
+                            admitted=True
+                    # 开始事实可靠提交后，仍在同一连接释放全节点许可锁。
+                finally:
+                    try:
+                        released=connection.execute(text('SELECT RELEASE_LOCK(:name)'),{'name':lock_name}).scalar_one()
+                        connection.commit()
+                        if released!=1:connection.invalidate()
+                    except BaseException:
+                        connection.invalidate()
+                        raise
+        if admitted:break
+        if time.monotonic()-wait_started>=10:
+            raise TencentError('TENCENT_RATE_LIMITED','本账号接口许可等待已达上限，请稍后重试',429)
+        sleep(0.05)
+    started=time.monotonic()
     try:
         yield evidence
     except BaseException as exc:
@@ -113,6 +154,7 @@ def _route_action(method, route):
             ('POST','/admin/api/tencent/accounts/validate'):'tencent.account.validate',
             ('GET','/admin/api/tencent/accounts/{account_id}/cost-config'):'tencent.cost.read',
             ('PUT','/admin/api/tencent/accounts/{account_id}/cost-config'):'tencent.config.update',
+            ('POST','/admin/api/tencent/accounts/{account_id}/cost-batches'):'tencent.cost.rerun',
             ('POST','/admin/api/tencent/accounts/{account_id}/cost-jobs'):'tencent.cost.rerun',
             ('GET','/admin/api/tencent/accounts/{account_id}/cost-jobs'):'tencent.job.read',
             ('POST','/admin/api/tencent/cost-jobs/{job_id}/rerun'):'tencent.cost.rerun',
