@@ -1,16 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Alert, App, Button, Card, Form, Input, Modal, Select, Space, Tag, Tooltip } from 'antd';
 import type { TableColumnsType } from 'antd';
-import { PlusOutlined, ReloadOutlined, WalletOutlined } from '@ant-design/icons';
+import { EditOutlined, PlusOutlined, ReloadOutlined, WalletOutlined } from '@ant-design/icons';
 import { PageHeader } from '../components/PageHeader';
 import { ResourceState } from '../components/ResourceState';
 import { ResourceTable } from '../components/ResourceTable';
 import { ApiError, request } from '../services/http';
 import { useResource } from '../services/useResource';
 import { formatTime } from '../domain';
+import { TencentAccountMaintenance } from './TencentAccountMaintenance';
 
 export interface TencentAccount {
-  id: string; uin: string; alias: string; credential_ref: string; credential_revision: number;
+  id: string; uin: string; alias: string; credential_ref: string; revision: number; credential_revision: number;
   is_enabled: boolean; verification_status: string; verified_at: string; create_time: string; update_time: string;
 }
 interface CredentialOption { value: string; label: string }
@@ -22,6 +23,8 @@ export function TencentAccountsPage() {
   const { message } = App.useApp();
   const [form] = Form.useForm<AccountForm>();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<TencentAccount | null>(null);
+  const [maintenanceNotice, setMaintenanceNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [search, setSearch] = useState('');
@@ -52,9 +55,10 @@ export function TencentAccountsPage() {
     { key:'status',title:'状态',render:(_,row) => <Tag color={row.is_enabled && row.verification_status === 'verified' ? 'success' : 'default'}>{row.is_enabled ? row.verification_status === 'verified' ? '已验证 / 启用' : '待验证' : '已停用'}</Tag>,width:150 },
     { key:'verified',title:'验证时间（北京时间）',dataIndex:'verified_at',render:value => <span style={{fontSize:12,lineHeight:'20px',fontWeight:400,color:'var(--app-muted)'}}>{formatTime(value)}</span>,width:190 },
     { key:'created',title:'登记时间（北京时间）',dataIndex:'create_time',render:value => <span style={{fontSize:12,lineHeight:'20px',fontWeight:400,color:'var(--app-muted)'}}>{formatTime(value)}</span>,width:190 },
-    { key:'actions',title:'操作',fixed:'right',width:96,render:(_,row) => <Tooltip title="实时余额"><Button type="text" aria-label="实时余额" icon={<WalletOutlined />} href={`/tencent/accounts/${encodeURIComponent(row.id)}/balance`} disabled={!row.is_enabled || row.verification_status !== 'verified'} /></Tooltip> },
+    { key:'actions',title:'操作',fixed:'right',width:96,render:(_,row) => <Space size={8}><Tooltip title="实时余额"><Button type="text" aria-label="实时余额" icon={<WalletOutlined />} href={`/tencent/accounts/${encodeURIComponent(row.id)}/balance`} disabled={!row.is_enabled || row.verification_status !== 'verified'} /></Tooltip><Tooltip title="维护账号"><Button type="text" aria-label="维护账号" icon={<EditOutlined />} onClick={() => setEditing(row)} /></Tooltip></Space> },
   ];
   return <PageHeader area="业务管理" title="腾讯云账号" description="登记各自独立的腾讯云账号，分别查看费用和实时余额。">
+    {maintenanceNotice && <Alert type="warning" showIcon title={maintenanceNotice} style={{marginBottom:16}} />}
     <Card>
       <Space wrap style={{display:'flex',justifyContent:'space-between',marginBottom:16}}>
         <Space><Button type="primary" aria-label="登记账号" icon={<PlusOutlined />} onClick={() => {setFeedback(null);setOpen(true);}}>登记账号</Button><Button aria-label="刷新" icon={<ReloadOutlined />} onClick={() => {accounts.reload();credentials.reload();}}>刷新</Button></Space>
@@ -76,6 +80,7 @@ export function TencentAccountsPage() {
       </ResourceState>
       {feedback && <Alert showIcon type={feedback.type} title={feedback.text} />}
     </Modal>
+    {editing && <TencentAccountMaintenance account={editing} onReload={() => {setEditing(null);accounts.reload();credentials.reload();}} credentialOptions={credentials.data ?? []} onCancel={() => setEditing(null)} onSaved={warning => {setMaintenanceNotice(warning ?? '');setEditing(null);accounts.reload();}} />}
   </PageHeader>;
 }
 

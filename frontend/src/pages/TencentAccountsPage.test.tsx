@@ -33,3 +33,18 @@ it('已登记账号提供余额入口，无须先配置成本同步', async () =
   const link = await screen.findByRole('link',{name:'实时余额'});
   expect(link.getAttribute('href')).toBe('/tencent/accounts/42/balance');
 });
+
+it('维护别名时固定 UIN，并以当前维护修订保存，不轮换凭据', async () => {
+  const account = {id:'42',uin:'10001',alias:'原别名',credential_ref:'finance-a',revision:3,credential_revision:2,is_enabled:true,verification_status:'verified'};
+  vi.mocked(request).mockImplementation(async (path, options) => {
+    if (path === '/admin/api/tencent/credential-options') return {data:[{value:'finance-a',label:'财务只读凭据 A'}],meta:{}};
+    if (options?.method === 'PATCH') return {data:{...account,alias:'新别名',revision:4},meta:{}};
+    return {data:[account],meta:{}};
+  });
+  render(<App><TencentAccountsPage /></App>);
+  fireEvent.click(await screen.findByRole('button',{name:'维护账号'}));
+  expect(screen.getByLabelText('账号 UIN').getAttribute('readonly')).not.toBeNull();
+  fireEvent.change(screen.getByLabelText('中文别名'), {target:{value:'新别名'}});
+  fireEvent.click(screen.getByRole('button',{name:'保存维护'}));
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/admin/api/tencent/accounts/42', {method:'PATCH',body:{revision:3,alias:'新别名'}}));
+});
