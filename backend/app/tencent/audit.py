@@ -115,4 +115,6 @@ def _route_action(method, route):
             ('POST','/admin/api/tencent/accounts/{account_id}/cost-jobs'):'tencent.cost.rerun',
             ('GET','/admin/api/tencent/accounts/{account_id}/cost-jobs'):'tencent.job.read',
             ('GET','/admin/api/tencent/cost-jobs/{job_id}'):'tencent.job.read',
-            ('GET','/admin/api/tencent/accounts/{account_id}/cost-periods/{month}'):'tencent.cost.read'}.get((method,route),'unknown')
+            ('GET','/admin/api/tencent/accounts/{account_id}/cost-periods/{month}'):'tencent.cost.read',
+            ('GET','/admin/api/tencent/accounts/{account_id}/cost-dashboard'):'tencent.cost.read',
+            ('GET','/admin/api/tencent/accounts/{account_id}/cost-export'):'tencent.cost.export'}.get((method,route),'unknown')
