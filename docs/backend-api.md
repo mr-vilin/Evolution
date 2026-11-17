@@ -173,3 +173,18 @@ worker 通过 `SqlSyncJobRepository.claim_next()` 认领任务；全局租约、
 门店 changes 为 `[{department_id,is_store,store_code?,notes?}]`，其中 `is_store` 必须为 JSON 布尔值。省略编码/备注保留原值，显式 null 清空；保留门店业务规则。apply 的 expected_version 必须为非负 JSON 整数，expected_epoch 必须非空，idempotency_key 为非空且最长 191 字符。相同主体/环境/幂等键及相同请求重放原回执，不再次写入；相同键但请求不同返回 `409 OPERATION_CONFLICT`。历史世代重放仍保留原提交证据，观察会说明当前世代差异。
 
 写请求超时或响应丢失时，先以相同身份通过 operation_id 或原 idempotency_key 观察回执，再依据证据决定后续动作。不要生成新幂等键盲目重发写请求。现有普通管理 API 的请求与响应格式保持原约定。
+
+
+## 腾讯云财务接口索引
+
+前缀 `/admin/api/tencent`，仅当前管理员且组织初始化完成后开放；写操作继续要求会话与 CSRF。每个账号使用自身受控凭据，金额以十进制字符串返回。余额不落历史；成本任务 202 仅表示受理，需查询任务与逐次尝试。实际期间的起止时间包含明确时区偏移，执行与审计时间为 UTC。
+
+| 能力 | 主要入口（相对前缀） | 详细契约与边界 |
+| --- | --- | --- |
+| 账号与凭据 | `GET /credential-options`；`GET/POST /accounts`；`POST /accounts/validate`；`PATCH /accounts/{id}` | [账号与余额实现](architecture/tencent-finance-implementation.md)、[维护与轮换](architecture/tencent-account-maintenance-implementation-2026-11-17.md) |
+| 实时余额 | `GET /accounts/{id}/balance` | [余额实现](architecture/tencent-finance-implementation.md#t02实时余额issue-17) |
+| 成本配置与任务 | `GET/PUT /accounts/{id}/cost-config`；`POST /accounts/{id}/cost-jobs`；`POST /accounts/{id}/cost-batches`；`GET /accounts/{id}/cost-jobs`；`GET /cost-jobs/{job_id}`；`POST /cost-jobs/{job_id}/rerun` | [完整月](architecture/tencent-cost-month-implementation-2026-11-17.md)、[恢复与尝试](architecture/tencent-cost-recovery-implementation-2026-11-17.md)、[月计划](architecture/tencent-cost-monthly-implementation-2026-11-17.md)、[日周计划](architecture/tencent-cost-daily-implementation-2026-11-17.md) |
+| 已提交费用、看板与导出 | `GET /accounts/{id}/cost-periods/{period}`；`GET /accounts/{id}/cost-dashboard`；`GET /accounts/{id}/cost-export` | [看板验收与契约](architecture/tencent-cost-dashboard-acceptance-2026-11-17.md) |
+| 历史范围 | `GET /accounts/{id}/cost-history`；`POST /accounts/{id}/cost-range-preview`；`POST /accounts/{id}/cost-range-batches` | [历史回溯与范围重拉](architecture/tencent-cost-history-implementation-2026-11-17.md) |
+
+日参数仅用于 daily/weekly 模式；manual/monthly 采集完整到期月。小队列延期沿原父批次和冻结输入推进，延期、阻止和窗口外分别展示；周中发现不扩大上个周日的自动目标，人工范围仍按本次受理时刻。未采集的资格拒绝保留任务失败事实，但不使已提交完整费用失去可比性。空月零值证明还须在采集和发布时处于实际来源窗口内。修复证据见[本轮审查验证](architecture/tencent-finance-review-fixes-2026-11-17.md)。

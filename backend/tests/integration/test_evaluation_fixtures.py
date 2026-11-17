@@ -148,6 +148,24 @@ def test_reset_clears_all_runtime_audit_identity_and_self_referencing_rows(evalu
             m.AdminSession(id='test-session', token_digest='f' * 64, open_id='test-open', csrf_hash='0' * 64, expires_at=now),
             m.ApiClient(id='test-client', name='合成客户端', secret_hash='0' * 64, created_at=now),
         ])
+        # 全表清理用终态合成财务数据；不是业务初始化清理边界。
+        account=m.TencentAccount(uin='100000001',alias='清理测试账号',credential_ref='synthetic-reset',
+            revision=1,credential_revision=1,is_enabled=False,verification_status='verified',verified_at=now)
+        db.add(account);db.flush()
+        config=m.TencentSyncConfig(account_id=account.id,business='cost',is_enabled=False,frequency='manual',currency='CNY')
+        db.add(config);db.flush()
+        job=m.TencentSyncJob(config_id=config.id,account_id=account.id,dataset_epoch='test-baseline',
+            idempotency_key='reset-cost',kind='period',month='2026-09',status='succeeded',snapshot={},request_id='reset-request',finished_at=now)
+        db.add(job);db.flush()
+        attempt=m.TencentSyncAttempt(job_id=job.id,attempt_no=1,generation=1,owner='synthetic-ended',
+            status='succeeded',execution_input={},execution_output={},return_state='VALUE',started_at=now,finished_at=now)
+        db.add(attempt);db.flush()
+        period=m.TencentCostPeriod(account_id=account.id,month='2026-09',period_key='2026-09',granularity='month',
+            currency='CNY',total='12.00000000',coverage={'status':'complete'},latest_job_id=job.id,latest_attempt_id=attempt.id)
+        db.add(period);db.flush()
+        db.add(m.TencentCostItem(period_id=period.id,row_no=1,source_name='合成产品',business_code='synthetic',mapping_status='mapped',amount='12.00000000'))
+        db.add(m.TencentApiCall(id='reset-api-call',request_id='reset-request',direction='outbound',action='synthetic',
+            method='SDK',route='synthetic',outcome='succeeded',started_at=now,returned_at=now,finished_at=now,duration_ms=0))
         db.get(m.WorkerLease, 1).generation = 99
     with factory() as db:
         assert all(db.scalar(select(func.count()).select_from(table)) > 0 for table in m.Base.metadata.tables.values())

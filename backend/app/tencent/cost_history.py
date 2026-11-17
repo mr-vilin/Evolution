@@ -65,6 +65,18 @@ def scope(key):
     return {'period_key':key,'granularity':'month' if len(key)==7 else 'day','month':key[:7]}
 
 
+def automatic_reference(db,config,now):
+    """发现目标沿用实际受理的计划点；poll及普通时刻编辑不产生新周期。"""
+    if config.frequency not in {'daily','weekly','monthly'}:return now
+    scheduled=db.scalar(select(TencentSyncJob).where(TencentSyncJob.config_id==config.id,
+        TencentSyncJob.kind=='batch',TencentSyncJob.idempotency_key.like('schedule:'+config.frequency+':%'))
+        .order_by(TencentSyncJob.id.desc()).limit(1))
+    if scheduled and scheduled.snapshot.get('scheduled_at'):
+        return datetime.fromisoformat(scheduled.snapshot['scheduled_at'].replace('Z','+00:00'))
+    from .cost_scheduler import scheduled_point
+    return scheduled_point(now,config.execution_time,config.frequency)
+
+
 def targets(config,now):
     from .cost_scheduler import shifted
     w=window(now);keys=[]
@@ -114,7 +126,8 @@ def category(code):
 
 
 def history_data(db,config,account,now):
-    w=window(now)
+    reference=automatic_reference(db,config,now) if config else now
+    w=window(reference)
     if config is None:
         return {'origin_status':'unknown','first_bill_period':None,'earlier_history_unknown':True,'source_window':w,
             'target_period_count':0,'covered_period_count':0,'earliest_success_period':None,'last_success_at':None,
@@ -123,7 +136,7 @@ def history_data(db,config,account,now):
     HistoryProgress.model_validate(config.history_progress or {})
     periods,jobs,covered,latest,counts,_=facts(db,config,account,now)
     full_months={p.month for p in periods if p.granularity=='month'}
-    wanted=sorted({k[:7] if k[:7] in full_months else k for k in targets(config,now)},reverse=True);gaps=[];unexplored=[]
+    wanted=sorted({k[:7] if k[:7] in full_months else k for k in targets(config,reference)},reverse=True);gaps=[];unexplored=[]
     # 也展示人工探测过的窗口外失败；不冒充已确认不可查询。
     for k in sorted(set(wanted)|set(latest),reverse=True):
         if covered(k):continue
@@ -150,7 +163,7 @@ def history_data(db,config,account,now):
     cutoff=(shifted(w['latest_month'],1)+'-01') if config.frequency not in {'daily','weekly'} else w['end_exclusive']
     continuous=next(({'begin':b,'end_exclusive':cutoff} for b,e in reversed(merged) if b<cutoff<=e),None)
     if config.frequency in {'daily','weekly'}:
-        recent_begin=shifted(shanghai(now).strftime('%Y-%m'),-1)+'-01';recent=[k for k in wanted if k[:7]>=recent_begin[:7]]
+        recent_begin=shifted(shanghai(reference).strftime('%Y-%m'),-1)+'-01';recent=[k for k in wanted if k[:7]>=recent_begin[:7]]
     else:recent=wanted[:2]
     last=max((j.finished_at for j in jobs if j.status=='succeeded' and j.finished_at),default=None)
     return {'origin_status':'unknown','first_bill_period':None,'earlier_history_unknown':True,'source_window':w,
@@ -208,21 +221,25 @@ def continue_history(db,account,config,epoch,now,request_id,*,allow_discovery=Tr
     if active is not None:return False
     # 人工全范围的延期片是原父事件，范围和授权身份均不改变。
     manual=db.scalar(select(TencentSyncJob).where(TencentSyncJob.config_id==config.id,TencentSyncJob.dataset_epoch==epoch,
-        TencentSyncJob.kind=='batch',TencentSyncJob.snapshot['request_namespace'].as_string()=='manual-range-v1',
+        TencentSyncJob.kind=='batch',TencentSyncJob.snapshot['request_namespace'].as_string().in_(['manual-range-v1','recent-review-v1']),
         TencentSyncJob.finished_at.is_(None)).order_by(TencentSyncJob.id).with_for_update())
     if manual and manual.snapshot.get('deferred_periods'):
         remaining=manual.snapshot['deferred_periods'];template=manual.snapshot['execution_template']
         budget=history_capacity(config,policy=template['policy'],frequency=template['frequency'])
         if not budget:return False
         keys=remaining[:min(31,budget)]
-        append_children(db,manual,account,config,epoch,keys,now,purpose='manual-range')
-        manual.snapshot={**manual.snapshot,'periods':manual.snapshot['periods']+[scope(k) for k in keys],
-            'deferred_periods':remaining[len(keys):]}
+        append_children(db,manual,account,config,epoch,keys,now,purpose='manual-range' if manual.snapshot['request_namespace']=='manual-range-v1' else 'recent-review')
+        admitted=manual.snapshot['periods']+[scope(k) for k in keys]
+        manual.snapshot={**manual.snapshot,'periods':admitted,
+            'months':sorted({p['month'] for p in admitted}),'deferred_periods':remaining[len(keys):]}
+        if 'deferred_months' in manual.snapshot:
+            manual.snapshot={**manual.snapshot,'deferred_months':remaining[len(keys):]}
         refresh_batch(db,manual.id,now)
         return True
     if not allow_discovery:return False
     periods,jobs,covered,latest,counts,_=facts(db,config,account,now,lock=True)
-    wanted=targets(config,now)
+    reference=automatic_reference(db,config,now)
+    wanted=targets(config,reference)
     missing=[k for k in wanted if not covered(k)]
     # 首次探测优先于重试旧洞。自动总预算跨epoch/重启保留，手动可明确重探。
     fresh=[k for k in missing if k not in latest or latest[k].dataset_epoch!=epoch and latest[k].status in ACTIVE]
@@ -238,10 +255,10 @@ def continue_history(db,account,config,epoch,now,request_id,*,allow_discovery=Tr
         snapshot={'business':'cost','currency':config.currency,'execution_identity':identity,'actor_id':'system:tencent-'+identity.removeprefix('system-'),
             'request_namespace':'history-discovery-v1','purpose':'history-discovery','periods':[scope(k) for k in keys],
             'months':sorted({k[:7] for k in keys}),'deferred_periods':[k for k in missing if k not in keys],
-            'source_window':window(now)})
+            'source_window':window(reference)})
     db.add(parent);db.flush()
     append_children(db,parent,account,config,epoch,keys,now,purpose='history-discovery')
-    checkpoint(config,sequence=sequence,last_batch_id=str(parent.id),target_begin=window(now)['month_start']+'-01',target_end_exclusive=window(now)['end_exclusive'])
+    checkpoint(config,sequence=sequence,last_batch_id=str(parent.id),target_begin=window(reference)['month_start']+'-01',target_end_exclusive=window(reference)['end_exclusive'])
     db.add(ChangeLog(object_type='tencent_batch',object_id=str(parent.id),source='tencent_scheduler',actor=parent.snapshot['actor_id'],
         after_data={'status':'pending','purpose':'history-discovery','period_count':len(keys)},committed_at=now))
     return True

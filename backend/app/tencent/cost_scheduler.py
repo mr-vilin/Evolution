@@ -80,13 +80,13 @@ def refresh_batch(db,parent_id,now):
     elif all(s=='succeeded' for s in states):status='succeeded'
     elif any(s in {'pending','running','retry_wait'} for s in states):status='partial_failed' if any(s=='failed' for s in states) else 'pending'
     else:status='partial_failed' if any(s=='succeeded' for s in states) else 'failed'
-    if parent.snapshot.get('request_namespace')=='manual-range-v1' and parent.snapshot.get('deferred_periods'):
+    if parent.snapshot.get('request_namespace') in {'manual-range-v1','recent-review-v1'} and parent.snapshot.get('deferred_periods'):
         status='partial_failed' if any(s=='failed' for s in states) else 'pending'
     if parent.status!=status:
         db.add(ChangeLog(object_type='tencent_batch',object_id=str(parent.id),source='tencent_worker',actor=parent.snapshot.get('actor_id','system:tencent-monthly'),
             before_data={'status':parent.status},after_data={'status':status},committed_at=now))
     parent.status=status
-    parent.finished_at=now if not any(s in {'pending','running','retry_wait'} for s in states) and not (parent.snapshot.get('request_namespace')=='manual-range-v1' and parent.snapshot.get('deferred_periods')) else None
+    parent.finished_at=now if not any(s in {'pending','running','retry_wait'} for s in states) and not (parent.snapshot.get('request_namespace') in {'manual-range-v1','recent-review-v1'} and parent.snapshot.get('deferred_periods')) else None
 
 
 def accept_batch(db,account,config,epoch,key,now,*,actor_id,execution_identity,request_id,point=None):
@@ -132,12 +132,16 @@ def accept_batch(db,account,config,epoch,key,now,*,actor_id,execution_identity,r
     available=policy['queue_limit']-queued
     if available<1:raise TencentError('TENCENT_COST_QUEUE_FULL','队列空间不足以受理近期复核，请等待已有任务完成',429)
     selected=recent[:available]+available_gaps[:min(12,max(0,available-len(recent)))]
-    deferred=[m for m in recent+gaps if m not in selected and m>=window(now)['month_start']]
+    deferred=[m for m in recent+available_gaps if m not in selected]
+    template=period_snapshot(account,config,epoch,selected[0],actor_id=actor_id,execution_identity=execution_identity,accepted_at=now)
+    template['source_window']=window(now)
     parent=TencentSyncJob(kind='batch',config_id=config.id,account_id=account.id,dataset_epoch=epoch,
         idempotency_key=key,month=None,status='pending',request_id=request_id,
         snapshot={'business':'cost','currency':config.currency,'dataset_epoch':epoch,'config_revision':config.revision,
             'execution_identity':execution_identity,'actor_id':actor_id,'scheduled_at':point.isoformat()+'Z' if point else None,
-            'months':selected,'outside_known_source_window':[m for m in gaps if m<window(now)['month_start']],'deferred_months':deferred,'blocked_months':blocked,'latest_eligible_month':latest})
+            'request_namespace':'recent-review-v1','execution_template':template,
+            'periods':[{'granularity':'month','period_key':m,'month':m} for m in selected],
+            'deferred_periods':deferred,'months':selected,'outside_known_source_window':[m for m in gaps if m<window(now)['month_start']],'deferred_months':deferred,'blocked_months':blocked,'latest_eligible_month':latest})
     db.add(parent);db.flush()
     for month in selected:
         snapshot=period_snapshot(account,config,epoch,month,actor_id=actor_id,execution_identity=execution_identity,accepted_at=now)
@@ -148,7 +152,7 @@ def accept_batch(db,account,config,epoch,key,now,*,actor_id,execution_identity,r
             priority=0 if month in recent else 20,snapshot=snapshot,request_id=request_id,queue_deadline_at=now+timedelta(seconds=policy['queue_deadline_seconds'])))
     db.add(ChangeLog(object_type='tencent_batch',object_id=str(parent.id),source='tencent_scheduler' if point else 'admin',
         actor=actor_id if execution_identity=='system-monthly' else 'admin:'+actor_id,before_data=None,
-        after_data={'status':'pending','months':selected,'deferred_count':len(gaps)-(len(selected)-2)},committed_at=now))
+        after_data={'status':'pending','months':selected,'deferred_count':len(deferred)},committed_at=now))
     return parent,True
 
 
@@ -251,13 +255,17 @@ def accept_daily_batch(db,account,config,epoch,key,now,*,actor_id,execution_iden
     selected=recent[:available]+available_gaps[:min(31,max(0,available-len(recent)))]
     def scope(k):return {'granularity':'month' if len(k)==7 else 'day','period_key':k,'month':k[:7]}
     scopes=[scope(k) for k in selected]
+    template=period_snapshot(account,config,epoch,selected[0][:7],actor_id=actor_id,execution_identity=execution_identity,accepted_at=now)
+    template['source_window']=window(now)
+    deferred=[k for k in recent+available_gaps if k not in selected]
     parent=TencentSyncJob(kind='batch',config_id=config.id,account_id=account.id,dataset_epoch=epoch,
         idempotency_key=key,month=None,status='pending' if selected else 'no_work',request_id=request_id,
         finished_at=None if selected else now,
         snapshot={'business':'cost','currency':config.currency,'dataset_epoch':epoch,'config_revision':config.revision,
             'frequency':config.frequency,'execution_identity':execution_identity,'actor_id':actor_id,
             'scheduled_at':point.isoformat()+'Z' if point else None,'periods':scopes,
-            'months':sorted({k[:7] for k in selected}), 'deferred_periods':[k for k in sorted(gaps) if k not in selected and k[:7]>=window(now)['month_start']],
+            'request_namespace':'recent-review-v1','execution_template':template,
+            'months':sorted({k[:7] for k in selected}), 'deferred_periods':deferred,
             'outside_known_source_window':[k for k in sorted(gaps) if k[:7]<window(now)['month_start']],
             'blocked_periods':blocked,'cutoff_date':cutoff.isoformat()})
     db.add(parent);db.flush()
@@ -271,5 +279,5 @@ def accept_daily_batch(db,account,config,epoch,key,now,*,actor_id,execution_iden
             priority=0 if target['period_key'] in recent else 20,snapshot=snapshot,request_id=request_id,queue_deadline_at=now+timedelta(seconds=policy['queue_deadline_seconds'])))
     db.add(ChangeLog(object_type='tencent_batch',object_id=str(parent.id),source='tencent_scheduler' if point else 'admin',
         actor=actor_id if execution_identity.startswith('system-') else 'admin:'+actor_id,before_data=None,
-        after_data={'status':parent.status,'period_count':len(scopes),'deferred_count':len(gaps)-(len(selected)-len(recent))},committed_at=now))
+        after_data={'status':parent.status,'period_count':len(scopes),'deferred_count':len(deferred)},committed_at=now))
     return parent,True

@@ -80,7 +80,7 @@ def test_mysql_offline_new_database_matches_online_target(migration_database):
     with engine.begin() as connection:
         for statement in output.getvalue().split(';'):
             if statement.strip():
-                connection.exec_driver_sql(statement)
+                connection.exec_driver_sql(statement, execution_options={"no_parameters": True})
     assert check_schema(engine)['errors'] == []
 
 

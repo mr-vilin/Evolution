@@ -5,7 +5,8 @@ import dayjs from 'dayjs';
 import { ReloadOutlined } from '@ant-design/icons';
 import { PageHeader } from '../components/PageHeader';
 import { ResourceState } from '../components/ResourceState';
-import { ResourceTable } from '../components/ResourceTable';
+import { TencentCostTableCard } from '../components/TencentCostTableCard';
+import { useTencentSort, decimalValue, formatTencentTime } from '../components/tencentPresentation';
 import { request } from '../services/http';
 import { useResource } from '../services/useResource';
 import type { TencentAccount } from './TencentAccountsPage';
@@ -79,12 +80,13 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
     finally {setBusy(false);}
   }
   const active = detail.data?.month === month && ['pending','running','retry_wait'].includes(detail.data.status);
-  const rows = (period.data?.items ?? []).filter(row => !search || `${row.source_name} ${row.business_code ?? ''}`.includes(search));
+  const sorting=useTencentSort<CostItem>({amount:row=>decimalValue(row.amount)},()=>setPage(1));
+  const rows = sorting.rows((period.data?.items ?? []).filter(row => !search || `${row.source_name} ${row.business_code ?? ''}`.includes(search)));
   const columns: TableColumnsType<CostItem> = [
     {key:'name',title:'产品名称',dataIndex:'source_name',fixed:'left',width:220,ellipsis:true},
     {key:'code',title:'产品编码（BusinessCode）',dataIndex:'business_code',width:220,render:value => value || '-'},
     {key:'mapping',title:'产品映射',dataIndex:'mapping_status',width:140,render:value => <Tag color={value==='mapped' ? 'success' : 'warning'}>{value==='mapped' ? '已映射' : value==='ambiguous' ? '同名歧义' : '未映射'}</Tag>},
-    {key:'amount',title:'总费用（元）',dataIndex:'amount',align:'right',width:180},
+    {key:'amount',...sorting.column('amount'),title:'总费用（元）',dataIndex:'amount',align:'right',width:180},
   ];
   return <Space orientation="vertical" size={24} style={{width:'100%'}}>
     <Card title="成本配置">
@@ -94,10 +96,10 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
           <Form.Item label="采集方式"><Select aria-label="采集方式" value={frequency} onChange={setFrequency} options={[{value:'manual',label:'手动采集完整月'},{value:'monthly',label:'每月 3 日自动采集并复核近期两月'},{value:'daily',label:'每日自动采集，截至昨日'},{value:'weekly',label:'每周日自动采集，截至昨日'}]} disabled={busy || !config.data} style={{maxWidth:320}} /></Form.Item>
           {frequency !== 'manual' && <Form.Item label="北京时间执行时刻" help={`${frequency === 'monthly' ? '每月 3 日' : frequency === 'weekly' ? '固定每周日' : '每天'}，Asia/Shanghai；13:30 为可修改建议，按保存时刻执行。`}><Input aria-label="北京时间执行时刻" type="time" value={executionTime} onChange={event => setExecutionTime(event.target.value)} disabled={busy} style={{maxWidth:200}} /></Form.Item>}
           <Descriptions column={{xs:1,md:2}} items={[
-            {key:'next',label:'下次计划执行（北京时间）',children:config.data?.next_execution_at ? new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',dateStyle:'medium',timeStyle:'short'}).format(new Date(config.data.next_execution_at)) : '未启用自动计划'},
+            {key:'next',label:'下次计划执行（北京时间）',children:config.data?.next_execution_at ? formatTencentTime(config.data.next_execution_at) : '未启用自动计划'},
             {key:'cutoff',label:frequency==='daily' || frequency==='weekly' ? '费用截止日期' : '费用截止账月',children:(frequency==='daily' || frequency==='weekly' ? config.data?.latest_eligible_date : config.data?.latest_eligible_month) ?? '-'},
             {key:'success',label:frequency==='daily' || frequency==='weekly' ? '最近成功期间' : '最近成功账月',children:(frequency==='daily' || frequency==='weekly' ? config.data?.last_success_period : config.data?.last_success_month) ?? '尚无成功结果'},
-            {key:'successTime',label:'最近成功时间（北京时间）',children:config.data?.last_success_at ? new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',dateStyle:'medium',timeStyle:'short'}).format(new Date(config.data.last_success_at)) : '-'},
+            {key:'successTime',label:'最近成功时间（北京时间）',children:config.data?.last_success_at ? formatTencentTime(config.data.last_success_at) : '-'},
           ]} />
           {(frequency==='daily' || frequency==='weekly') && <Alert type="info" showIcon title="按日补缺并复核当月截至昨日及上月；已有完整月按整月复核。" description="空日与全零日尚缺独立就绪证据，保留原费用并显示未确认缺口。" />}
           <p style={{color:'var(--app-muted)'}}>费用账单 · 总费用 · 产品维度 · 人民币（CNY）</p>
@@ -123,7 +125,7 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
         canRerun={!!config.data?.is_enabled && account.is_enabled && !busy}
         onRerun={id => { setJobId(id); jobs.reload(); }} />}</ResourceState>}
     </Card>
-    <Card title="所选账月费用">
+    <TencentCostTableCard<CostItem> title="所选账月费用" showTable={!period.loading && !period.error && !!period.data} rowKey="id" columns={columns} dataSource={rows} onChange={sorting.onChange} scroll={{x:760}} pagination={{current:Math.min(page,Math.max(1,Math.ceil(rows.length/20))),pageSize:20,showSizeChanger:false,onChange:setPage}}>
       {period.error?.code === 'TENCENT_PERIOD_NOT_FOUND' ? <Alert type="info" showIcon title="该账月尚无完整费用结果" /> : <ResourceState {...period}>
         {period.data && <>
           {period.data.granularity==='day' && <Alert type="info" showIcon title={`原始日费用累计；累计至 ${period.data.covered_through ?? '-'}，缺 ${period.data.missing_dates?.length ?? 0} 日`} style={{marginBottom:16}} />}
@@ -133,10 +135,10 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
             {key:'basis',label:'费用口径',children:'费用账单 / 总费用 / 产品'},
           ]} />
           <Space style={{display:'flex',justifyContent:'flex-end',marginBottom:16}}><Input.Search aria-label="搜索费用产品" placeholder="搜索产品名称或编码" value={search} allowClear onChange={event => {setSearch(event.target.value);setPage(1);}} style={{width:260}} /></Space>
-          <ResourceTable<CostItem> rowKey="id" columns={columns} dataSource={rows} scroll={{x:760}} pagination={{current:Math.min(page,Math.max(1,Math.ceil(rows.length/20))),pageSize:20,showSizeChanger:false,onChange:setPage}} />
+
         </>}
       </ResourceState>}
-    </Card>
+    </TencentCostTableCard>
   </Space>;
 }
 

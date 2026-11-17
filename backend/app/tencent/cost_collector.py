@@ -1,6 +1,7 @@
 """费用账单/总费用/产品维度的日/月完整期间采集；完整性不能降级为空零。"""
 from collections import Counter, defaultdict
 from decimal import Decimal, InvalidOperation, localcontext
+from datetime import datetime, timezone
 import hashlib
 import json
 import time
@@ -34,8 +35,16 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False, default=str, separators=(',', ':')).encode()).hexdigest()
 
 
-def collect_period(gateway, credential, snapshot, *, clock=time.monotonic, check=None):
+def require_month_zero_window(snapshot, now):
+    """零值证据依赖实际查询时仍可取的窗口；冻结快照不能延长源能力。"""
+    from .cost_history import window
+    if snapshot.get('month_zero_eligible') is False or snapshot['month'] < window(now)['month_start']:
+        invalid('TENCENT_COST_ZERO_UNCONFIRMED')
+
+
+def collect_period(gateway, credential, snapshot, *, clock=time.monotonic, check=None, now=None):
     """有界单次完整采集。成功只返回内存候选，发布另有当前资格事务。"""
+    current = now or (lambda: datetime.now(timezone.utc))
     started = clock()
     policy=snapshot.get('policy') or {}
     deadline=policy.get('deadline_seconds',90)
@@ -129,8 +138,7 @@ def collect_period(gateway, credential, snapshot, *, clock=time.monotonic, check
     if daily and (not rows or all(row['amount']==0 for row in rows)):
         invalid('TENCENT_COST_ZERO_UNCONFIRMED')
     if count == 0:
-        if snapshot.get('month_zero_eligible') is False:
-            invalid('TENCENT_COST_ZERO_UNCONFIRMED')
+        require_month_zero_window(snapshot,current())
         auxiliary = call('DescribeBillSummaryByProduct', {'BeginTime': month, 'EndTime': month})
         values, summary = auxiliary.get('SummaryOverview'), auxiliary.get('SummaryTotal')
         if type(auxiliary.get('Ready')) is not int or auxiliary['Ready'] != 1 or not isinstance(values, list) or not isinstance(summary, dict):
@@ -140,6 +148,7 @@ def collect_period(gateway, credential, snapshot, *, clock=time.monotonic, check
         for value in values:
             if not isinstance(value, dict) or value.get('BillMonth') != month or money(value.get('RealTotalCost')) != 0:
                 invalid('TENCENT_COST_ZERO_UNCONFIRMED')
+        require_month_zero_window(snapshot,current())
         zero_evidence = 'same-month-ready-product-summary-zero'
     candidates = (first.get('ConditionValue') or {}).get('Business', [])
     by_name, by_code = defaultdict(set), defaultdict(set)

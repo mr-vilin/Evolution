@@ -87,8 +87,12 @@ def read_dashboard(db, account_id, params, *, now=None):
         TencentSyncJob.kind=='period', TencentSyncJob.month >= shifted_month(params.start_month,-12),
         TencentSyncJob.month <= params.end_month,TencentSyncJob.snapshot['currency'].as_string()==params.currency)
         .order_by(TencentSyncJob.id)).all()
-    latest_by_key={row.snapshot.get('period_key',row.month):row for row in jobs}
     latest_display={row.month:row for row in jobs}
+    # 尚未实际采集的资格拒绝仍在任务历史显示，不降级成功费用事实。
+    gate_codes={'DATASET_CHANGED','INITIALIZATION_INCOMPLETE','TENCENT_CREDENTIAL_CHANGED',
+        'TENCENT_ACCOUNT_UNAVAILABLE','TENCENT_ACTOR_REVOKED','TENCENT_COST_CONFIG_CHANGED','TENCENT_COST_CONTRACT_CHANGED'}
+    collection_jobs=[row for row in jobs if not (row.started_at is None and row.error_code in gate_codes)]
+    latest_by_key={row.snapshot.get('period_key',row.month):row for row in collection_jobs}
     last_job={}
     for month,group in by_month.items():
         monthly=[p for p in group if p.granularity=='month']
@@ -168,7 +172,7 @@ def read_dashboard(db, account_id, params, *, now=None):
                 'missing_dates':getattr(period,'missing_dates',[]) if period else [],
                 'due_date': due, 'latest_success_at': utc_datetime(period.update_time) if period else None,
                 'latest_job_id': str(period.latest_job_id) if period else None,
-                'latest_task_status': (job or latest_display.get(month)).status if job or month in latest_display else None, 'error_code': job.error_code if job else None,
+                'latest_task_status': (job or latest_display.get(month)).status if job or month in latest_display else None, 'error_code': (job or latest_display.get(month)).error_code if job or month in latest_display else None,
                 'mom': comparison(period, shifted_month(month, -1)), 'yoy': comparison(period, shifted_month(month, -12))})
         for item in items:
             period = selected_periods[item.period_id]

@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Alert, App, Button, Card, Form, Input, Modal, Select, Space, Tag, Tooltip } from 'antd';
+import { Alert, App, Button, Form, Input, Modal, Select, Space, Tag, Tooltip } from 'antd';
 import type { TableColumnsType } from 'antd';
 import { EditOutlined, PlusOutlined, ReloadOutlined, WalletOutlined } from '@ant-design/icons';
 import { PageHeader } from '../components/PageHeader';
 import { ResourceState } from '../components/ResourceState';
-import { ResourceTable } from '../components/ResourceTable';
+import { TencentCostTableCard } from '../components/TencentCostTableCard';
+import { useTencentSort, timeValue, TencentTime } from '../components/tencentPresentation';
 import { ApiError, request } from '../services/http';
 import { useResource } from '../services/useResource';
-import { formatTime } from '../domain';
 import { TencentAccountMaintenance } from './TencentAccountMaintenance';
 
 export interface TencentAccount {
@@ -30,7 +30,9 @@ export function TencentAccountsPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const labels = useMemo(() => new Map(credentials.data?.map(item => [item.value,item.label])), [credentials.data]);
-  const rows = useMemo(() => (accounts.data ?? []).filter(row => !search || `${row.alias} ${row.uin}`.includes(search)), [accounts.data,search]);
+  const sorting=useTencentSort<TencentAccount>({verified:row=>timeValue(row.verified_at),created:row=>timeValue(row.create_time)},()=>setPage(1));
+  const filtered = useMemo(() => (accounts.data ?? []).filter(row => !search || `${row.alias} ${row.uin}`.includes(search)), [accounts.data,search]);
+  const rows=sorting.rows(filtered);
   async function submit(register: boolean) {
     let values: AccountForm;
     try { values = await form.validateFields(register ? undefined : ['uin', 'credential_ref']); } catch { return; }
@@ -53,21 +55,21 @@ export function TencentAccountsPage() {
     { key:'uin',title:'账号 UIN',dataIndex:'uin',width:160 },
     { key:'credential',title:'只读凭据',render:(_,row) => labels.get(row.credential_ref) ?? '凭据待维护',width:200,ellipsis:true },
     { key:'status',title:'状态',render:(_,row) => <Tag color={row.is_enabled && row.verification_status === 'verified' ? 'success' : 'default'}>{row.is_enabled ? row.verification_status === 'verified' ? '已验证 / 启用' : '待验证' : '已停用'}</Tag>,width:150 },
-    { key:'verified',title:'验证时间（北京时间）',dataIndex:'verified_at',render:value => <span style={{fontSize:12,lineHeight:'20px',fontWeight:400,color:'var(--app-muted)'}}>{formatTime(value)}</span>,width:190 },
-    { key:'created',title:'登记时间（北京时间）',dataIndex:'create_time',render:value => <span style={{fontSize:12,lineHeight:'20px',fontWeight:400,color:'var(--app-muted)'}}>{formatTime(value)}</span>,width:190 },
+    { key:'verified',...sorting.column('verified'),title:'验证时间（北京时间）',dataIndex:'verified_at',render:value => <TencentTime value={value} />,width:190 },
+    { key:'created',...sorting.column('created'),title:'登记时间（北京时间）',dataIndex:'create_time',render:value => <TencentTime value={value} />,width:190 },
     { key:'actions',title:'操作',fixed:'right',width:96,render:(_,row) => <Space size={8}><Tooltip title="实时余额"><Button type="text" aria-label="实时余额" icon={<WalletOutlined />} href={`/tencent/accounts/${encodeURIComponent(row.id)}/balance`} disabled={!row.is_enabled || row.verification_status !== 'verified'} /></Tooltip><Tooltip title="维护账号"><Button type="text" aria-label="维护账号" icon={<EditOutlined />} onClick={() => setEditing(row)} /></Tooltip></Space> },
   ];
   return <PageHeader area="业务管理" title="腾讯云账号" description="登记各自独立的腾讯云账号，分别查看费用和实时余额。">
     {maintenanceNotice && <Alert type="warning" showIcon title={maintenanceNotice} style={{marginBottom:16}} />}
-    <Card>
+    <TencentCostTableCard<TencentAccount> title="腾讯云账号列表" showTable={!accounts.loading && !accounts.error && !!accounts.data?.length} rowKey="id" columns={columns} dataSource={rows} onChange={sorting.onChange} scroll={{x:1186}} pagination={{current:Math.min(page,Math.max(1,Math.ceil(rows.length/20))),pageSize:20,onChange:setPage,showSizeChanger:false}}>
       <Space wrap style={{display:'flex',justifyContent:'space-between',marginBottom:16}}>
         <Space><Button type="primary" aria-label="登记账号" icon={<PlusOutlined />} onClick={() => {setFeedback(null);setOpen(true);}}>登记账号</Button><Button aria-label="刷新" icon={<ReloadOutlined />} onClick={() => {accounts.reload();credentials.reload();}}>刷新</Button></Space>
         <Input.Search aria-label="搜索账号" placeholder="搜索账号名称或 UIN" allowClear value={search} onChange={event => {setSearch(event.target.value);setPage(1);}} style={{width:260}} />
       </Space>
       <ResourceState {...accounts} empty={!accounts.data?.length}>
-        <ResourceTable<TencentAccount> rowKey="id" columns={columns} dataSource={rows} scroll={{x:1186}} pagination={{current:Math.min(page,Math.max(1,Math.ceil(rows.length/20))),pageSize:20,onChange:setPage,showSizeChanger:false}} />
+        <span />
       </ResourceState>
-    </Card>
+    </TencentCostTableCard>
     <Modal title="登记腾讯云账号" centered open={open} onCancel={() => {if(!busy) setOpen(false);}} mask={{closable:!busy}} closable={!busy} footer={<Space><Button disabled={busy} onClick={() => setOpen(false)}>取消</Button><Button loading={busy} disabled={!credentials.data?.length} onClick={() => void submit(false)}>验证归属</Button><Button type="primary" loading={busy} disabled={!credentials.data?.length} onClick={() => void submit(true)}>验证并登记</Button></Space>}>
       <Alert type="info" showIcon title="每个独立账号使用自身只读凭据" description="请从已登记的凭据中选择。登记时将核验实际账号归属。" style={{marginBottom:16}} />
       <ResourceState {...credentials}>

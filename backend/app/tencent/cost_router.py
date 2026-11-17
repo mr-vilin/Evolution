@@ -219,6 +219,8 @@ def accept_job(account_id,body,request,response,identity,runtime,*,source_job_id
                 raise TencentError('TENCENT_IDEMPOTENCY_CONFLICT', '该请求标识已用于不同账月', 409)
             result = job_data(existing)
         else:
+            if body.day and config.frequency not in {'daily','weekly'}:
+                raise TencentError('TENCENT_DAY_MODE_INVALID','单日采集仅适用于每日或每周模式；当前模式请采集完整到期月',422)
             policy=effective_policy(config.run_policy)
             queued=db.scalar(select(func.count()).select_from(TencentSyncJob).where(
                 TencentSyncJob.config_id==config.id,TencentSyncJob.dataset_epoch==epoch,

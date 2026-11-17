@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { App } from 'antd';
 import { afterEach, expect, it, vi } from 'vitest';
 import { TencentCostDashboardPage } from './TencentCostDashboardPage';
@@ -43,4 +43,27 @@ it('查询失败显示重试并隐藏旧结果，导出不可用', async () => {
   expect(await screen.findByText('费用读取失败')).toBeVisible();
   expect(screen.queryByText('12.34567890 CNY')).toBeNull();
   expect(screen.getByRole('button',{name:'导出全部产品'})).toBeDisabled();
+});
+
+it('金额按完整十进制精确三态排序，空值始终置底并切换单列', async () => {
+  const sortedData={...data,products:[
+    {key:'a',source_name:'高额甲',business_code:'a',mapping_status:'mapped',total:'9007199254740992.00000002',amounts:{'2026-08':null}},
+    {key:'b',source_name:'高额乙',business_code:'b',mapping_status:'mapped',total:'9007199254740992.00000001',amounts:{'2026-08':'0.00000000'}},
+    {key:'c',source_name:'负费用',business_code:'c',mapping_status:'mapped',total:'-0.00000001',amounts:{'2026-08':'-0.00000001'}},
+  ]};
+  vi.stubGlobal('fetch',vi.fn(async (path:string)=>new Response(JSON.stringify({data:path.endsWith('/accounts')?[{id:'1',alias:'主账号',uin:'10001',is_enabled:true}]:sortedData,meta:{}}))));
+  render(<App><TencentCostDashboardPage /></App>);
+  const title=await screen.findByText('全部产品月度费用');
+  const card=title.closest('.ant-card')!;
+  const names=()=>Array.from(card.querySelectorAll('.ant-table-tbody tr[data-row-key]')).map(row=>row.textContent!.match(/高额甲|高额乙|负费用/)?.[0]);
+  const total=within(card as HTMLElement).getByRole('columnheader',{name:/已采集小计/});
+  fireEvent.click(total);
+  expect(names()).toEqual(['负费用','高额乙','高额甲']);
+  fireEvent.click(total);
+  expect(names()).toEqual(['高额甲','高额乙','负费用']);
+  fireEvent.click(total);
+  expect(names()).toEqual(['高额甲','高额乙','负费用']);
+  const month=within(card as HTMLElement).getByRole('columnheader',{name:'2026-08'});
+  fireEvent.click(month);expect(names()).toEqual(['负费用','高额乙','高额甲']);
+  fireEvent.click(month);expect(names()).toEqual(['高额乙','负费用','高额甲']);
 });
