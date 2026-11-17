@@ -10,8 +10,10 @@ export interface CostAttempt {
   started_at?: string | null; finished_at?: string | null;
   execution_input: Record<string, unknown>; execution_output: Record<string, unknown> | null;
 }
+export interface CostScopePeriod {granularity:string;period_key:string;month?:string;begin?:string;end_exclusive?:string;expansion_reason?:string|null}
 export interface CostJob {
-  id: string; month: string | null; granularity?: 'day' | 'month'; period_key?: string; periods?: Array<{granularity:string;period_key:string;month:string}>; deferred_periods?: string[]; blocked_periods?: Array<{period_key:string;reason_code:string}>; kind?: 'batch' | 'period'; parent_job_id?: string | null; children?: CostJob[]; deferred_months?: string[]; blocked_months?: Array<{month:string;reason_code:string}>; months?: string[]; scheduled_at?: string | null; status: string; error_code?: string | null; source_job_id?: string | null;
+  requested_scope?: {scope:string;start_date?:string;end_date?:string}; requested_periods?: CostScopePeriod[]; scope_status?:string; earlier_history_unknown?:boolean; expanded?:boolean; expansion_reasons?:string[]; not_due?:Array<string|CostScopePeriod>; outside_known_source_window?:Array<string|CostScopePeriod>;
+  id: string; month: string | null; granularity?: 'day' | 'month'; period_key?: string; periods?: CostScopePeriod[]; deferred_periods?: Array<string|CostScopePeriod>; blocked_periods?: Array<{period_key:string;reason_code:string}>; kind?: 'batch' | 'period'; parent_job_id?: string | null; children?: CostJob[]; deferred_months?: string[]; blocked_months?: Array<{month:string;reason_code:string}>; months?: string[]; scheduled_at?: string | null; status: string; error_code?: string | null; source_job_id?: string | null;
   next_attempt_at?: string | null; deadline_at?: string | null; queue_deadline_at?: string | null; attempts?: CostAttempt[];
 }
 export const costStatuses: Record<string, string> = { pending:'等待执行',running:'正在采集',retry_wait:'等待自动重试',succeeded:'已成功提交',failed:'执行失败',unknown:'结果未知',partial_failed:'部分失败，仍有缺口',no_work:'无待同步期间' };
@@ -31,6 +33,8 @@ const labels: Record<string, string> = {
   archive_repaired:'归档已修复',archive_repaired_at:'归档修复时间',source:'恢复依据',source_job_id:'原任务标识',rerun_reason:'重跑原因',
   request_namespace:'受理命名空间',timezone:'业务时区',bill_type:'账单类型',fee_type:'费用口径',dimensions:'聚合维度',currency_source:'币种声明依据',zero_evidence:'零费用证据',
 };
+const scopePeriodName=(period:CostScopePeriod)=>period.period_key+'（'+(period.granularity==='month'?'完整月':'单日')+'）';
+const scopeList=(periods:Array<string|CostScopePeriod>)=>periods.map(period=>typeof period==='string'?period:scopePeriodName(period)).join('、');
 function EvidenceValue({ value }: { value: unknown }) {
   if (value === null || value === undefined) return <span>-</span>;
   if (Array.isArray(value)) return value.length ? <ol style={{margin:0,paddingInlineStart:24}}>{value.map((item,index) => <li key={index}><EvidenceValue value={item} /></li>)}</ol> : <span>空列表</span>;
@@ -71,9 +75,17 @@ export function TencentCostJobDetail({ job, canRerun, onRerun }: { job: CostJob;
     {job.status === 'failed' && <Alert type="error" showIcon title="任务已结束，将不再自动重试" description="查看逐次原因，修复问题后可人工重跑；重跑会创建关联的新任务。" />}
     {job.granularity==='day' && job.error_code==='TENCENT_COST_ZERO_UNCONFIRMED' && <Alert type="warning" showIcon title="日零费用尚未确认，原费用已保留" description="腾讯云公开接口没有独立日级就绪证明；请核查后人工重跑，不以整月就绪证明单日为零。" />}
     {job.kind === 'batch' && <>
+      {(job.scope_status && job.scope_status!=='complete') && job.status==='succeeded' && <Alert type="warning" showIcon title="本片已完成，申请范围仍未全部覆盖" description="请继续查看延期、尚未到期和来源窗口外的期间；本片成功不代表全范围费用均已取得。" />}
+      {job.requested_scope && <Descriptions column={1} items={[
+        {key:'requested',label:'申请范围',children:job.requested_scope.scope==='all'?'全部实际可取历史（当前已知来源目标）':`${job.requested_scope.start_date} 至 ${job.requested_scope.end_date}（含结束日）`},
+        {key:'actual',label:'本片实际期间及粒度',children:(job.periods ?? []).map(scopePeriodName).join('、') || '本片无已受理期间'},
+      ]}/>}
+      {(job.requested_scope && job.earlier_history_unknown) && <Alert type="info" showIcon title="账号费用发生起点仍未知，更早历史待评估" />}
+      {!!job.not_due?.length && <Alert type="info" showIcon title="以下期间尚未到期" description={scopeList(job.not_due)} />}
+      {!!job.outside_known_source_window?.length && <Alert type="warning" showIcon title="以下期间位于已知来源窗口外，历史发生情况未知" description={scopeList(job.outside_known_source_window)} />}
       {job.blocked_periods?.map(item=><Alert key={item.period_key} type="warning" showIcon title={`${item.period_key}：已达到自动补漏上限，请核查后人工重跑。`} />)}
-      {!!job.deferred_periods?.length && <Alert type="warning" showIcon title="仍有旧期间缺口等待补漏" description={job.deferred_periods.join('、')} />}
-      <Alert type="info" showIcon title={job.periods ? "父批次仅汇总期间结果，不产生执行尝试" : "父批次仅汇总账月结果，不产生执行尝试"} description="各期间独立提交；仅所有子任务成功时批次才成功，失败期间可分别查看和重跑。" />
+      {!!job.deferred_periods?.length && <Alert type="warning" showIcon title="仍有旧期间缺口等待补漏" description={scopeList(job.deferred_periods)} />}
+      <Alert type="info" showIcon title={job.periods ? "父批次仅汇总期间结果，不产生执行尝试" : "父批次仅汇总账月结果，不产生执行尝试"} description="各期间独立提交；本片子任务成功不代表延期或未知范围已完成，失败期间可分别查看和重跑。" />
       {!!job.blocked_months?.length && <Alert type="warning" showIcon title="部分旧账月已达到自动补漏上限" description={`${job.blocked_months.map(item => item.month).join('、')}：请核查权限或历史可查范围，修复后手动重跑对应账月。`} />}
       {(job.deferred_months?.length ?? 0)>0 && <Alert type="warning" showIcon title={`仍有 ${job.deferred_months!.length} 个旧账月缺口等待后续补漏`} description={job.deferred_months!.join('、')} />}
       <Space orientation="vertical" size={8}>{job.children?.map(child => <Space key={child.id} wrap>

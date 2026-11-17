@@ -53,7 +53,7 @@ def next_point(now,execution_time,frequency="monthly"):
     return local.replace(year=int(month[:4]),month=int(month[5:])).astimezone(timezone.utc).replace(tzinfo=None)
 
 
-def period_snapshot(account, config, epoch, month, *, actor_id, execution_identity, reason=None, source_job_id=None, granularity="month", period_key=None):
+def period_snapshot(account, config, epoch, month, *, actor_id, execution_identity, reason=None, source_job_id=None, granularity="month", period_key=None, accepted_at=None):
     begin=datetime.strptime(month,'%Y-%m'); end=datetime.strptime(shifted(month,1),'%Y-%m')
     if granularity=='day':
         begin=datetime.strptime(period_key,'%Y-%m-%d');end=begin+timedelta(days=1)
@@ -63,6 +63,7 @@ def period_snapshot(account, config, epoch, month, *, actor_id, execution_identi
         'frequency':config.frequency,'currency':config.currency,'dataset_epoch':epoch,
         'actor_id':actor_id,'execution_identity':execution_identity,'month':month, 'granularity':granularity,'period_key':period_key or month,
         'begin':begin.isoformat()+'+08:00','end_exclusive':end.isoformat()+'+08:00',
+        'month_zero_eligible':month>=shifted(shanghai(accepted_at or datetime.now(timezone.utc)).strftime('%Y-%m'),-12),
         'policy':effective_policy(config.run_policy),'source_job_id':str(source_job_id) if source_job_id is not None else None,
         'rerun_reason':reason,'request_namespace':'manual-period-v1','upstream_params':{'BeginTime':begin.strftime('%Y-%m-%d %H:%M:%S'),
         'EndTime':(end-timedelta(seconds=1)).strftime('%Y-%m-%d %H:%M:%S'),'PeriodType':granularity,
@@ -79,11 +80,13 @@ def refresh_batch(db,parent_id,now):
     elif all(s=='succeeded' for s in states):status='succeeded'
     elif any(s in {'pending','running','retry_wait'} for s in states):status='partial_failed' if any(s=='failed' for s in states) else 'pending'
     else:status='partial_failed' if any(s=='succeeded' for s in states) else 'failed'
+    if parent.snapshot.get('request_namespace')=='manual-range-v1' and parent.snapshot.get('deferred_periods'):
+        status='partial_failed' if any(s=='failed' for s in states) else 'pending'
     if parent.status!=status:
         db.add(ChangeLog(object_type='tencent_batch',object_id=str(parent.id),source='tencent_worker',actor=parent.snapshot.get('actor_id','system:tencent-monthly'),
             before_data={'status':parent.status},after_data={'status':status},committed_at=now))
     parent.status=status
-    parent.finished_at=now if not any(s in {'pending','running','retry_wait'} for s in states) else None
+    parent.finished_at=now if not any(s in {'pending','running','retry_wait'} for s in states) and not (parent.snapshot.get('request_namespace')=='manual-range-v1' and parent.snapshot.get('deferred_periods')) else None
 
 
 def accept_batch(db,account,config,epoch,key,now,*,actor_id,execution_identity,request_id,point=None):
@@ -112,7 +115,8 @@ def accept_batch(db,account,config,epoch,key,now,*,actor_id,execution_identity,r
     failure_scopes=db.execute(select(TencentSyncJob.month,TencentSyncJob.parent_job_id).join(finished_parent,finished_parent.id==TencentSyncJob.parent_job_id).where(
         finished_parent.kind=='batch',finished_parent.finished_at.is_not(None),
         TencentSyncJob.config_id==config.id,TencentSyncJob.kind=='period',TencentSyncJob.parent_job_id.is_not(None),
-        TencentSyncJob.dataset_epoch==epoch,TencentSyncJob.status=='failed',
+        TencentSyncJob.status=='failed',
+        TencentSyncJob.error_code.not_in(['DATASET_CHANGED','INITIALIZATION_INCOMPLETE','TENCENT_COST_CONFIG_CHANGED','TENCENT_CREDENTIAL_CHANGED','TENCENT_ACCOUNT_UNAVAILABLE','TENCENT_ACTOR_REVOKED','TENCENT_COST_CONTRACT_CHANGED']),
         TencentSyncJob.snapshot['execution_identity'].as_string().in_(['system-monthly','system-daily','system-weekly']),
         or_(TencentSyncJob.snapshot['granularity'].as_string().is_(None),TencentSyncJob.snapshot['granularity'].as_string()=='month'),
         TencentSyncJob.snapshot['credential_revision'].as_integer()==account.credential_revision
@@ -120,26 +124,28 @@ def accept_batch(db,account,config,epoch,key,now,*,actor_id,execution_identity,r
     failures=Counter(month for month,_ in set(failure_scopes))
     blocked=[{'month':m,'reason_code':'TENCENT_MONTH_AUTO_BUDGET_EXHAUSTED'} for m in gaps if failures.get(m,0)>=3]
     blocked_set={item['month'] for item in blocked}
-    available_gaps=[m for m in gaps if m not in blocked_set]
+    from .cost_history import window
+    available_gaps=[m for m in gaps if m not in blocked_set and m>=window(now)['month_start']]
     policy=effective_policy(config.run_policy)
-    queued=db.scalar(select(func.count()).select_from(TencentSyncJob).where(TencentSyncJob.config_id==config.id,
-        TencentSyncJob.kind=='period',TencentSyncJob.dataset_epoch==epoch,TencentSyncJob.status.in_(['pending','running','retry_wait'])))
+    queued=len(list(db.scalars(select(TencentSyncJob.id).where(TencentSyncJob.config_id==config.id,
+        TencentSyncJob.kind=='period',TencentSyncJob.dataset_epoch==epoch,TencentSyncJob.status.in_(['pending','running','retry_wait'])).with_for_update(read=True))))
     available=policy['queue_limit']-queued
-    if available<len(recent):raise TencentError('TENCENT_COST_QUEUE_FULL','队列空间不足以受理近期复核，请等待已有任务完成',429)
-    selected=recent+available_gaps[:min(12,max(0,available-len(recent)))]
-    deferred=[m for m in gaps if m not in selected]
+    if available<1:raise TencentError('TENCENT_COST_QUEUE_FULL','队列空间不足以受理近期复核，请等待已有任务完成',429)
+    selected=recent[:available]+available_gaps[:min(12,max(0,available-len(recent)))]
+    deferred=[m for m in recent+gaps if m not in selected and m>=window(now)['month_start']]
     parent=TencentSyncJob(kind='batch',config_id=config.id,account_id=account.id,dataset_epoch=epoch,
         idempotency_key=key,month=None,status='pending',request_id=request_id,
         snapshot={'business':'cost','currency':config.currency,'dataset_epoch':epoch,'config_revision':config.revision,
             'execution_identity':execution_identity,'actor_id':actor_id,'scheduled_at':point.isoformat()+'Z' if point else None,
-            'months':selected,'deferred_months':deferred,'blocked_months':blocked,'latest_eligible_month':latest})
+            'months':selected,'outside_known_source_window':[m for m in gaps if m<window(now)['month_start']],'deferred_months':deferred,'blocked_months':blocked,'latest_eligible_month':latest})
     db.add(parent);db.flush()
     for month in selected:
-        snapshot=period_snapshot(account,config,epoch,month,actor_id=actor_id,execution_identity=execution_identity)
+        snapshot=period_snapshot(account,config,epoch,month,actor_id=actor_id,execution_identity=execution_identity,accepted_at=now)
         snapshot['request_namespace']='batch-child-v1'
+        snapshot['month_zero_eligible']=month>=shifted(shanghai(now).strftime('%Y-%m'),-12)
         db.add(TencentSyncJob(kind='period',parent_job_id=parent.id,config_id=config.id,account_id=account.id,
             dataset_epoch=epoch,idempotency_key=f'child:{parent.id}:month:{month}',month=month,status='pending',
-            snapshot=snapshot,request_id=request_id,queue_deadline_at=now+timedelta(seconds=policy['queue_deadline_seconds'])))
+            priority=0 if month in recent else 20,snapshot=snapshot,request_id=request_id,queue_deadline_at=now+timedelta(seconds=policy['queue_deadline_seconds'])))
     db.add(ChangeLog(object_type='tencent_batch',object_id=str(parent.id),source='tencent_scheduler' if point else 'admin',
         actor=actor_id if execution_identity=='system-monthly' else 'admin:'+actor_id,before_data=None,
         after_data={'status':'pending','months':selected,'deferred_count':len(gaps)-(len(selected)-2)},committed_at=now))
@@ -158,7 +164,7 @@ class TencentCostScheduler:
             state=db.get(DatasetState,1)
             if not state or state.initialization_status!='complete':return 0
             ids=list(db.scalars(select(TencentSyncConfig.id).where(TencentSyncConfig.is_enabled.is_(True),
-                TencentSyncConfig.business=='cost',TencentSyncConfig.frequency.in_(['monthly','daily','weekly']))))
+                TencentSyncConfig.business=='cost',TencentSyncConfig.frequency.in_(['manual','monthly','daily','weekly']))))
         for config_id in ids:
             try:
                 with self.sessions.begin() as db:
@@ -167,13 +173,22 @@ class TencentCostScheduler:
                     if hint is None:continue
                     account=require_account(db,hint.account_id,epoch=epoch,lock=True)
                     config=db.scalar(select(TencentSyncConfig).where(TencentSyncConfig.id==config_id).with_for_update().execution_options(populate_existing=True))
-                    if not config or not config.is_enabled or config.frequency not in {'monthly','daily','weekly'}:continue
+                    if not config or not config.is_enabled or config.frequency not in {'manual','monthly','daily','weekly'}:continue
+                    if config.frequency=='manual':
+                        from .cost_history import continue_history
+                        CredentialRegistry(self.settings).resolve(account.credential_ref)
+                        created+=continue_history(db,account,config,epoch,now,str(uuid.uuid4()),allow_discovery=False)
+                        continue
                     point=scheduled_point(now,config.execution_time,config.frequency)
                     # 执行时刻编辑不改同一日历事件身份，先定位已受理的原事件。
                     key='schedule:'+config.frequency+':'+shanghai(point).strftime('%Y-%m' if config.frequency=='monthly' else '%Y-%m-%d')
                     existing=db.scalar(select(TencentSyncJob.id).where(TencentSyncJob.config_id==config.id,
                         TencentSyncJob.dataset_epoch==epoch,TencentSyncJob.kind=='batch',TencentSyncJob.idempotency_key==key).with_for_update())
-                    if existing is not None:continue
+                    if existing is not None:
+                        from .cost_history import continue_history
+                        CredentialRegistry(self.settings).resolve(account.credential_ref)
+                        created+=continue_history(db,account,config,epoch,now,str(uuid.uuid4()))
+                        continue
                     CredentialRegistry(self.settings).resolve(account.credential_ref)
                     _,new=accept_batch(db,account,config,epoch,key,now,actor_id='system:tencent-'+config.frequency,
                         execution_identity='system-'+config.frequency,request_id=str(uuid.uuid4()),point=point)
@@ -194,7 +209,8 @@ def accept_daily_batch(db,account,config,epoch,key,now,*,actor_id,execution_iden
     complete={p.period_key for p in stored if p.coverage.get('status')=='complete'}
     def normalized(day):
         month=day[:7]
-        return month if month in full_months else day
+        from .cost_history import window
+        return month if month in full_months or len(day)>7 and day<window(now)['day_start'] else day
     recent=[]
     day=recent_start
     while day<=cutoff:
@@ -219,19 +235,20 @@ def accept_daily_batch(db,account,config,epoch,key,now,*,actor_id,execution_iden
     finished_parents=set(db.scalars(select(TencentSyncJob.id).where(TencentSyncJob.config_id==config.id,
         TencentSyncJob.kind=='batch',TencentSyncJob.finished_at.is_not(None)).with_for_update(read=True)))
     for job in failed:
-        if (job.dataset_epoch==epoch and job.parent_job_id in finished_parents and job.snapshot.get('execution_identity') in {'system-monthly','system-daily','system-weekly'}
+        if (job.error_code not in {'DATASET_CHANGED','INITIALIZATION_INCOMPLETE','TENCENT_COST_CONFIG_CHANGED','TENCENT_CREDENTIAL_CHANGED','TENCENT_ACCOUNT_UNAVAILABLE','TENCENT_ACTOR_REVOKED','TENCENT_COST_CONTRACT_CHANGED'} and job.parent_job_id in finished_parents and job.snapshot.get('execution_identity') in {'system-monthly','system-daily','system-weekly'}
             and job.snapshot.get('credential_revision')==account.credential_revision):
             failed_scopes.add((normalized(job.snapshot.get('period_key',job.month)),job.parent_job_id))
     counts=Counter(target for target,_ in failed_scopes)
     blocked=[{'period_key':k,'reason_code':'TENCENT_PERIOD_AUTO_BUDGET_EXHAUSTED'} for k in sorted(gaps) if counts[k]>=3]
     blocked_keys={v['period_key'] for v in blocked}
-    available_gaps=[k for k in sorted(gaps) if k not in blocked_keys]
+    from .cost_history import window
+    available_gaps=[k for k in sorted(gaps) if k not in blocked_keys and k[:7]>=window(now)['month_start']]
     policy=effective_policy(config.run_policy)
-    queued=db.scalar(select(func.count()).select_from(TencentSyncJob).where(TencentSyncJob.config_id==config.id,
-        TencentSyncJob.kind=='period',TencentSyncJob.dataset_epoch==epoch,TencentSyncJob.status.in_(['pending','running','retry_wait'])))
+    queued=len(list(db.scalars(select(TencentSyncJob.id).where(TencentSyncJob.config_id==config.id,
+        TencentSyncJob.kind=='period',TencentSyncJob.dataset_epoch==epoch,TencentSyncJob.status.in_(['pending','running','retry_wait'])).with_for_update(read=True))))
     available=policy['queue_limit']-queued
-    if available<len(recent):raise TencentError('TENCENT_COST_QUEUE_FULL','队列空间不足以受理当月与上月日费用复核，请等待已有任务完成',429)
-    selected=recent+available_gaps[:min(31,max(0,available-len(recent)))]
+    if available<1:raise TencentError('TENCENT_COST_QUEUE_FULL','队列空间不足以受理当月与上月日费用复核，请等待已有任务完成',429)
+    selected=recent[:available]+available_gaps[:min(31,max(0,available-len(recent)))]
     def scope(k):return {'granularity':'month' if len(k)==7 else 'day','period_key':k,'month':k[:7]}
     scopes=[scope(k) for k in selected]
     parent=TencentSyncJob(kind='batch',config_id=config.id,account_id=account.id,dataset_epoch=epoch,
@@ -240,16 +257,18 @@ def accept_daily_batch(db,account,config,epoch,key,now,*,actor_id,execution_iden
         snapshot={'business':'cost','currency':config.currency,'dataset_epoch':epoch,'config_revision':config.revision,
             'frequency':config.frequency,'execution_identity':execution_identity,'actor_id':actor_id,
             'scheduled_at':point.isoformat()+'Z' if point else None,'periods':scopes,
-            'months':sorted({k[:7] for k in selected}), 'deferred_periods':[k for k in sorted(gaps) if k not in selected],
+            'months':sorted({k[:7] for k in selected}), 'deferred_periods':[k for k in sorted(gaps) if k not in selected and k[:7]>=window(now)['month_start']],
+            'outside_known_source_window':[k for k in sorted(gaps) if k[:7]<window(now)['month_start']],
             'blocked_periods':blocked,'cutoff_date':cutoff.isoformat()})
     db.add(parent);db.flush()
     for target in scopes:
         snapshot=period_snapshot(account,config,epoch,target['month'],actor_id=actor_id,execution_identity=execution_identity,
-            granularity=target['granularity'],period_key=target['period_key'])
+            granularity=target['granularity'],period_key=target['period_key'],accepted_at=now)
         snapshot['request_namespace']='batch-child-v1'
+        snapshot['month_zero_eligible']=target['month']>=shifted(shanghai(now).strftime('%Y-%m'),-12)
         db.add(TencentSyncJob(kind='period',parent_job_id=parent.id,config_id=config.id,account_id=account.id,dataset_epoch=epoch,
             idempotency_key=f"child:{parent.id}:{target['granularity']}:{target['period_key']}",month=target['month'],status='pending',
-            snapshot=snapshot,request_id=request_id,queue_deadline_at=now+timedelta(seconds=policy['queue_deadline_seconds'])))
+            priority=0 if target['period_key'] in recent else 20,snapshot=snapshot,request_id=request_id,queue_deadline_at=now+timedelta(seconds=policy['queue_deadline_seconds'])))
     db.add(ChangeLog(object_type='tencent_batch',object_id=str(parent.id),source='tencent_scheduler' if point else 'admin',
         actor=actor_id if execution_identity.startswith('system-') else 'admin:'+actor_id,before_data=None,
         after_data={'status':parent.status,'period_count':len(scopes),'deferred_count':len(gaps)-(len(selected)-len(recent))},committed_at=now))

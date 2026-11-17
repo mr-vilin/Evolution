@@ -39,12 +39,12 @@ def test_monthly_migration_preserves_legacy_request_namespace_and_refuses_batch_
         with sessions() as db:
             before_ddl={name:db.execute(text('SHOW CREATE TABLE '+name)).one()[1]
                 for name in ('tencent_sync_config','tencent_sync_job','tencent_cost_period','tencent_cost_item')}
-        with pytest.raises(RuntimeError,match='TENCENT_MONTHLY_DOWNGRADE_EVIDENCE'):
+        with pytest.raises(RuntimeError,match='TENCENT_(MONTHLY|HISTORY)_DOWNGRADE_EVIDENCE'):
             command.downgrade(config,'0017_tencent_maintenance')
         assert client.get(f'/admin/api/tencent/cost-jobs/{legacy_id}').json()['data']==legacy
         assert client.get(f"/admin/api/tencent/accounts/{account['id']}/cost-jobs").json()['data']==before_jobs
         with sessions() as db:
-            assert db.execute(text('SELECT version_num FROM alembic_version')).scalars().all()==['0019_tencent_daily']
+            assert db.execute(text('SELECT version_num FROM alembic_version')).scalars().all()==['0020_tencent_history']
             assert {name:db.execute(text('SHOW CREATE TABLE '+name)).one()[1] for name in before_ddl}==before_ddl
         from app.persistence.schema_check import check_schema
         assert not check_schema(sessions.kw['bind'])['errors']

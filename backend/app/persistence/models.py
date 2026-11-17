@@ -412,6 +412,7 @@ class TencentSyncConfig(Base):
     run_policy: Mapped[dict | None] = mapped_column(JSON, comment='经过校验的重试预算、租约心跳及排队策略')
     frequency: Mapped[str] = mapped_column(String(32), default='manual', comment='执行频率：manual手动、monthly每月三日、daily每日或weekly每周日')
     execution_time: Mapped[str] = mapped_column(String(5), default='13:30', server_default='13:30', comment='自动计划的北京时间时分，默认建议13:30可修改')
+    history_progress: Mapped[dict | None] = mapped_column(JSON, comment='经类型校验的历史发现检查点，来源窗口不代表账号历史起点')
     schedule_start_date: Mapped[str | None] = mapped_column(String(10), comment='首次日周计划的补漏日期锚点，不代表已核验历史起点')
     schedule_start_month: Mapped[str | None] = mapped_column(String(7), comment='首次启用月模式时的补漏起点，不代表已核验历史起点')
     currency: Mapped[str] = mapped_column(String(3), default='CNY', comment='境内账单声明币种，不由源接口返回')
@@ -432,6 +433,7 @@ class TencentSyncJob(Base):
     account_id: Mapped[int] = mapped_column(Integer, comment='所属腾讯云账号标识')
     dataset_epoch: Mapped[str] = mapped_column(SOURCE_ID, comment='受理时冻结的初始化世代，用于隔离幂等键')
     idempotency_key: Mapped[str] = mapped_column(String(128, collation='utf8mb4_bin'), comment='配置内可靠请求幂等键')
+    priority: Mapped[int] = mapped_column(Integer, default=0, server_default='0', comment='实际领取优先级：0近期或人工，20历史发现；活动重试保持资格')
     kind: Mapped[str] = mapped_column(String(16), default='period', server_default='period', comment='任务种类：batch纯汇总父批次或period实际期间')
     parent_job_id: Mapped[int | None] = mapped_column(Integer, index=True, comment='期间所属父批次标识，独立手动期间为空')
     month: Mapped[str | None] = mapped_column(String(7), comment='实际日月期间所属自然月YYYY-MM，纯汇总父批次为空')
@@ -448,7 +450,7 @@ class TencentSyncJob(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, comment='任务终结UTC时刻')
     create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text('CURRENT_TIMESTAMP'), comment='任务可靠受理UTC时间')
     update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='任务状态更新UTC时间')
-    __table_args__ = (UniqueConstraint('config_id','dataset_epoch','kind','idempotency_key',name='uk_tencent_job_request'), Index('idx_tencent_job_claim','status','config_id','id'), _table_args('腾讯云单月逻辑执行任务，不依赖浏览器会话存活'))
+    __table_args__ = (UniqueConstraint('config_id','dataset_epoch','kind','idempotency_key',name='uk_tencent_job_request'), Index('idx_tencent_job_claim','status','config_id','id'), Index('ix_tencent_job_priority','config_id','status','priority','id'), _table_args('腾讯云单月逻辑执行任务，不依赖浏览器会话存活'))
 
 
 class TencentSyncAttempt(Base):

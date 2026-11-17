@@ -141,7 +141,12 @@ def update_config(account_id: int, body: CostConfigBody, request: Request, ident
 
 
 def job_data(job):
-    return {'kind':job.kind,'parent_job_id':str(job.parent_job_id) if job.parent_job_id else None,
+    return {'requested_scope':job.snapshot.get('requested_scope'),'requested_periods':job.snapshot.get('requested_periods',[]),
+        'expanded':job.snapshot.get('expanded',False),'expansion_reasons':job.snapshot.get('expansion_reasons',[]),
+        'outside_known_source_window':job.snapshot.get('outside_known_source_window',[]),'not_due':job.snapshot.get('not_due',[]),
+        'origin_status':'unknown','earlier_history_unknown':True,
+        'scope_status':('complete' if job.status=='succeeded' and not job.snapshot.get('deferred_periods') and not job.snapshot.get('not_due') and not job.snapshot.get('deferred_months') and not job.snapshot.get('blocked_months') and not job.snapshot.get('blocked_periods') and (not job.snapshot.get('outside_known_source_window') or job.snapshot.get('request_namespace')=='manual-range-v1') else 'partial' if job.status in {'failed','partial_failed'} else 'pending'),
+        'kind':job.kind,'parent_job_id':str(job.parent_job_id) if job.parent_job_id else None,
         'periods':job.snapshot.get('periods'), 'period_key':job.snapshot.get('period_key',job.month), 'granularity':job.snapshot.get('granularity','month'),
         'deferred_periods':job.snapshot.get('deferred_periods',[]), 'blocked_periods':job.snapshot.get('blocked_periods',[]),
         'months':job.snapshot.get('months') if job.kind=='batch' else None,
@@ -225,7 +230,9 @@ def accept_job(account_id,body,request,response,identity,runtime,*,source_job_id
                 TencentCostPeriod.month==body.month,TencentCostPeriod.currency==config.currency,TencentCostPeriod.granularity=='month').with_for_update(read=True)) is not None:
                 granularity,target='month',body.month
             snapshot=period_snapshot(account,config,epoch,body.month,granularity=granularity,period_key=target,actor_id=identity.open_id,
-                execution_identity='current-admin-allowlist',source_job_id=source_job_id,reason=reason)
+                execution_identity='current-admin-allowlist',source_job_id=source_job_id,reason=reason,accepted_at=utcnow())
+            from .cost_history import window
+            snapshot['month_zero_eligible']=body.month>=window(utcnow())['month_start']
             snapshot['requested_period_key']=requested
             job = TencentSyncJob(config_id=config.id, account_id=account.id, dataset_epoch=epoch, idempotency_key='manual-period:'+hashlib.sha256(body.idempotency_key.encode()).hexdigest(),
                 month=body.month, source_job_id=source_job_id, status='pending', snapshot=snapshot, request_id=request.state.tencent_request_id,
@@ -322,4 +329,44 @@ def create_batch(account_id: int,body: CostBatchBody,request: Request,response: 
         result=job_data(job)
     location='/admin/api/tencent/cost-jobs/'+result['id']
     response.headers['Location']=location
+    return {'data':{**result,'status_url':location},'meta':{}}
+
+
+@router.get('/accounts/{account_id}/cost-history',operation_id='tencent_cost_history_get')
+def get_history(account_id:int,request:Request,identity=Depends(require_action('tencent.cost.read')),runtime=Depends(get_runtime)):
+    from .cost_history import history_data
+    with runtime.sessions() as db:
+        account=readable_account(db,account_id);request.state.tencent_target=account.uin
+        account._history_epoch=require_dataset(db)
+        config=db.scalar(select(TencentSyncConfig).where(TencentSyncConfig.account_id==account_id,TencentSyncConfig.business=='cost'))
+        return {'data':history_data(db,config,account,utcnow()),'meta':{}}
+
+
+from .cost_history import RangeBody
+
+
+@router.post('/accounts/{account_id}/cost-range-preview',operation_id='tencent_cost_range_preview')
+def preview_range(account_id:int,body:RangeBody,request:Request,
+    identity=Depends(require_action('tencent.cost.rerun',write=True)),runtime=Depends(get_runtime)):
+    from .cost_history import range_preview
+    with runtime.sessions() as db:
+        epoch=require_dataset(db);account=require_account(db,account_id,epoch=epoch);require_actor(db,identity)
+        request.state.tencent_target=account.uin
+        config=db.scalar(select(TencentSyncConfig).where(TencentSyncConfig.account_id==account_id,TencentSyncConfig.business=='cost'))
+        if not config or not config.is_enabled:raise TencentError('TENCENT_COST_DISABLED','请先启用有效成本配置')
+        return {'data':range_preview(db,account,config,epoch,body,utcnow()),'meta':{}}
+
+
+@router.post('/accounts/{account_id}/cost-range-batches',status_code=202,operation_id='tencent_cost_range_batch_create')
+def create_range_batch(account_id:int,body:RangeBody,request:Request,response:Response,
+    identity=Depends(require_action('tencent.cost.rerun',write=True)),runtime=Depends(get_runtime)):
+    from .cost_history import accept_range
+    with runtime.sessions.begin() as db:
+        epoch=require_dataset(db,lock=True);account=require_account(db,account_id,epoch=epoch,lock=True);require_actor(db,identity)
+        request.state.tencent_target=account.uin
+        config=db.scalar(select(TencentSyncConfig).where(TencentSyncConfig.account_id==account_id,TencentSyncConfig.business=='cost').with_for_update())
+        if not config or not config.is_enabled:raise TencentError('TENCENT_COST_DISABLED','请先启用有效成本配置')
+        job=accept_range(db,account,config,epoch,body,utcnow(),actor_id=identity.open_id,request_id=request.state.tencent_request_id)
+        result=job_data(job)
+    location='/admin/api/tencent/cost-jobs/'+result['id'];response.headers['Location']=location
     return {'data':{**result,'status_url':location},'meta':{}}

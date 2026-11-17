@@ -11,6 +11,7 @@ import { useResource } from '../services/useResource';
 import type { TencentAccount } from './TencentAccountsPage';
 import { TencentCostJobDetail, costStatusTag as statusTag, costStatuses as statuses, type CostJob } from '../components/TencentCostJobDetail';
 
+import { TencentCostHistoryPanel } from '../components/TencentCostHistoryPanel';
 import { TencentCostPolicyFields, defaultCostPolicy, costPolicyErrors, type CostPolicy } from '../components/TencentCostPolicyFields';
 
 interface CostConfig { run_policy?: CostPolicy; revision: number; is_enabled: boolean; frequency: 'manual' | 'monthly' | 'daily' | 'weekly'; execution_time?: string; next_execution_at?: string | null; last_success_period?: string | null; last_success_month?: string | null; last_success_at?: string | null; currency: 'CNY'; latest_eligible_month: string; latest_eligible_date?: string }
@@ -31,6 +32,7 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
   const [feedback, setFeedback] = useState<{ type: 'info' | 'error'; text: string } | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [historyRevision, setHistoryRevision] = useState(0);
   const keys = useRef(new Map<string,string>());
   const detail = useResource<CostJob>(jobId ? `/admin/api/tencent/cost-jobs/${jobId}` : null, true);
   const period = useResource<Period>(month ? `${base}/cost-periods/${month}` : null, true);
@@ -49,7 +51,7 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
     setBusy(true); setFeedback(null);
     try {
       await request(`${base}/cost-config`, { method:'PUT', body:{ revision:config.data.revision,is_enabled:enabled,frequency,execution_time:executionTime,currency:'CNY',run_policy:policy } });
-      message.success('成本配置已保存'); config.reload();
+      message.success('成本配置已保存'); config.reload(); setHistoryRevision(value=>value+1);
     } catch (error) { setFeedback({type:'error',text:error instanceof Error ? error.message : '保存失败，请重试'}); }
     finally { setBusy(false); }
   }
@@ -104,12 +106,13 @@ function CostAccountPanel({ account }: { account: TencentAccount }) {
         </Form>
       </ResourceState>
     </Card>
+    <TencentCostHistoryPanel accountId={account.id} enabled={!!config.data?.is_enabled && enabled === config.data.is_enabled} refreshRevision={historyRevision} onAccepted={id=>{setJobId(id);jobs.reload();detail.reload();}} />
     <Card title="完整账月采集">
       <Space wrap>
         <DatePicker aria-label="完整账月" picker="month" format="YYYY-MM" value={month ? dayjs(`${month}-01`) : null} maxDate={config.data ? dayjs(`${config.data.latest_eligible_month}-01`).endOf('month') : undefined} minDate={dayjs('1970-01-01')} allowClear={false} onChange={value => {setMonth(value?.format('YYYY-MM') ?? null);setSearch('');setPage(1);setFeedback(null);}} />
         <Button aria-label="采集所选账月" type="primary" loading={busy} disabled={busy || !config.data?.is_enabled || !month || Boolean(active) || enabled !== config.data.is_enabled} onClick={() => void submit()}>采集所选账月</Button>
         {config.data && ['monthly','daily','weekly'].includes(config.data.frequency) && <Button aria-label={config.data.frequency==='monthly' ? '立即执行月度复核' : '立即执行日周复核'} loading={busy} disabled={busy || config.loading || !config.data.is_enabled || enabled !== config.data.is_enabled} onClick={() => void submitBatch()}>{config.data.frequency==='monthly' ? '立即执行月度复核' : '立即执行日周复核'}</Button>}
-        <Button aria-label="刷新结果" icon={<ReloadOutlined />} onClick={() => {config.reload();jobs.reload();detail.reload();period.reload();}}>刷新结果</Button>
+        <Button aria-label="刷新结果" icon={<ReloadOutlined />} onClick={() => {config.reload();jobs.reload();detail.reload();period.reload();setHistoryRevision(value=>value+1);}}>刷新结果</Button>
       </Space>
       <p style={{color:'var(--app-muted)'}}>按北京时间每月 3 日开放上月。每月 1–2 日最多选择上上月；受理后由后台执行。</p>
       {feedback && <Alert type={feedback.type} showIcon title={feedback.text} style={{marginBottom:16}} />}

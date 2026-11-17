@@ -129,6 +129,8 @@ def collect_period(gateway, credential, snapshot, *, clock=time.monotonic, check
     if daily and (not rows or all(row['amount']==0 for row in rows)):
         invalid('TENCENT_COST_ZERO_UNCONFIRMED')
     if count == 0:
+        if snapshot.get('month_zero_eligible') is False:
+            invalid('TENCENT_COST_ZERO_UNCONFIRMED')
         auxiliary = call('DescribeBillSummaryByProduct', {'BeginTime': month, 'EndTime': month})
         values, summary = auxiliary.get('SummaryOverview'), auxiliary.get('SummaryTotal')
         if type(auxiliary.get('Ready')) is not int or auxiliary['Ready'] != 1 or not isinstance(values, list) or not isinstance(summary, dict):
