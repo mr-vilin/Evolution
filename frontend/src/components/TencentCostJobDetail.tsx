@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Alert, App, Button, Collapse, Descriptions, Form, Select, Space, Tag } from 'antd';
-import dayjs from 'dayjs';
+import { formatTencentTime } from './tencentPresentation';
 import { request } from '../services/http';
 
 export interface CostAttempt {
@@ -42,7 +42,7 @@ function EvidenceValue({ value }: { value: unknown }) {
   if (typeof value === 'boolean') return <span>{value ? '是' : '否'}</span>;
   return <span style={{overflowWrap:'anywhere'}}>{String(value) || '-'}</span>;
 }
-const time = (value?: string | null) => value ? dayjs(value).format('YYYY-MM-DD HH:mm:ss') : '-';
+const time = formatTencentTime;
 const returns: Record<string,string> = { VALUE:'已捕获真实返回',NOT_RETURNED:'因异常未正常返回',UNKNOWN:'返回结果未知，尚无可核实返回',NULL:'明确返回空值',VOID:'按契约无返回值' };
 
 export function TencentCostJobDetail({ job, canRerun, onRerun }: { job: CostJob; canRerun: boolean; onRerun: (jobId: string) => void }) {
@@ -84,10 +84,10 @@ export function TencentCostJobDetail({ job, canRerun, onRerun }: { job: CostJob;
       {!!job.not_due?.length && <Alert type="info" showIcon title="以下期间尚未到期" description={scopeList(job.not_due)} />}
       {!!job.outside_known_source_window?.length && <Alert type="warning" showIcon title="以下期间位于已知来源窗口外，历史发生情况未知" description={scopeList(job.outside_known_source_window)} />}
       {job.blocked_periods?.map(item=><Alert key={item.period_key} type="warning" showIcon title={`${item.period_key}：已达到自动补漏上限，请核查后人工重跑。`} />)}
-      {!!job.deferred_periods?.length && <Alert type="warning" showIcon title="仍有旧期间缺口等待补漏" description={scopeList(job.deferred_periods)} />}
+      {!!job.deferred_periods?.length && <Alert type="warning" showIcon title="仍有期间等待本批次后续采集" description={scopeList(job.deferred_periods)} />}
       <Alert type="info" showIcon title={job.periods ? "父批次仅汇总期间结果，不产生执行尝试" : "父批次仅汇总账月结果，不产生执行尝试"} description="各期间独立提交；本片子任务成功不代表延期或未知范围已完成，失败期间可分别查看和重跑。" />
       {!!job.blocked_months?.length && <Alert type="warning" showIcon title="部分旧账月已达到自动补漏上限" description={`${job.blocked_months.map(item => item.month).join('、')}：请核查权限或历史可查范围，修复后手动重跑对应账月。`} />}
-      {(job.deferred_months?.length ?? 0)>0 && <Alert type="warning" showIcon title={`仍有 ${job.deferred_months!.length} 个旧账月缺口等待后续补漏`} description={job.deferred_months!.join('、')} />}
+      {(job.deferred_months?.length ?? 0)>0 && <Alert type="warning" showIcon title={`仍有 ${job.deferred_months!.length} 个账月等待本批次后续采集`} description={job.deferred_months!.join('、')} />}
       <Space orientation="vertical" size={8}>{job.children?.map(child => <Space key={child.id} wrap>
         <span>{child.period_key ?? child.month}{child.granularity==='day' ? '（单日）' : ''}</span>{costStatusTag(child.status)}<span>{child.error_code ?? ''}</span>
         <Button aria-label={child.period_key ? `查看期间 ${child.period_key}` : `查看账月 ${child.month}`}  onClick={() => onRerun(child.id)}>{child.granularity==='day' ? '查看期间':'查看账月'}</Button>

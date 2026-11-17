@@ -5,6 +5,7 @@ import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { PageHeader } from '../components/PageHeader';
 import { ResourceState } from '../components/ResourceState';
+import { useTencentSort, decimalValue, timeValue, TencentTime, tencentTimeStyle } from '../components/tencentPresentation';
 import { TencentCostTableCard } from '../components/TencentCostTableCard';
 import { query, requestFile } from '../services/http';
 import { useResource } from '../services/useResource';
@@ -66,22 +67,24 @@ function DashboardPanel({account}: {account:TencentAccount}) {
     finally { if (!controller.signal.aborted) setExporting(false); }
   }
   const data = result.data;
-  const rows = (data?.products ?? []).filter(row=>`${row.source_name} ${row.business_code ?? ''}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+  const productSort=useTencentSort<Product>({total:row=>decimalValue(row.total),...Object.fromEntries((data?.months ?? []).map(month=>[month.month,(row:Product)=>decimalValue(row.amounts[month.month])]))},()=>setPage(1));
+  const monthSort=useTencentSort<Month>({total:row=>decimalValue(row.total),mom:row=>decimalValue(row.mom.value),yoy:row=>decimalValue(row.yoy.value),due:row=>timeValue(row.due_date+'T00:00:00+08:00'),success:row=>timeValue(row.latest_success_at)});
+  const rows = productSort.rows((data?.products ?? []).filter(row=>`${row.source_name} ${row.business_code ?? ''}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())));
   const productColumns: TableColumnsType<Product> = [
     {key:'name',title:'产品名称',dataIndex:'source_name',fixed:'left',width:200,ellipsis:true},
     {key:'code',title:'产品编码（BusinessCode）',dataIndex:'business_code',width:200,render:value=>value || '-'},
     {key:'mapping',title:'产品映射',dataIndex:'mapping_status',width:120,render:value=><Tag color={value==='mapped' ? 'success':'warning'}>{value==='mapped' ? '已映射':value==='ambiguous' ? '同名歧义':'未映射'}</Tag>},
-    ...(data?.months ?? []).map(month=>({key:month.month,title:month.month,width:170,align:'right' as const,render:(_:unknown,row:Product)=>row.amounts[month.month] ?? '-'})),
-    {key:'total',title:'已采集小计（元）',dataIndex:'total',align:'right',width:180},
+    ...(data?.months ?? []).map(month=>({key:month.month,...productSort.column(month.month),title:month.month,width:170,align:'right' as const,render:(_:unknown,row:Product)=>row.amounts[month.month] ?? '-'})),
+    {key:'total',...productSort.column('total'),title:'已采集小计（元）',dataIndex:'total',align:'right',width:180},
   ];
   const monthColumns: TableColumnsType<Month> = [
     {key:'month',title:'账月',dataIndex:'month',fixed:'left',width:120},
-    {key:'total',title:'费用（元）',dataIndex:'total',width:180,align:'right',render:value=>value ?? '-'},
-    {key:'status',title:'覆盖状态',width:280,render:(_,row)=><Space orientation="vertical" size={4}>{status(row)}{row.source_granularity==='day' && <span style={{fontSize:12,color:'var(--app-muted)'}}>原始日费用，累计至 {row.covered_through ?? '-'}；缺 {row.missing_dates?.length ?? 0} 日</span>}</Space>},
-    {key:'mom',title:'环比',dataIndex:'mom',width:220,render:change},
-    {key:'yoy',title:'同比',dataIndex:'yoy',width:220,render:change},
-    {key:'due',title:'开放采集日（北京时间）',dataIndex:'due_date',width:210,render:value=><span style={{fontSize:12,color:'var(--app-muted)'}}>{value ?? '-'}</span>},
-    {key:'success',title:'最近成功（北京时间）',dataIndex:'latest_success_at',width:210,render:value=><span style={{fontSize:12,color:'var(--app-muted)'}}>{value ? new Date(value).toLocaleString('sv-SE',{timeZone:'Asia/Shanghai'}) : '-'}</span>},
+    {key:'total',...monthSort.column('total'),title:'费用（元）',dataIndex:'total',width:180,align:'right',render:value=>value ?? '-'},
+    {key:'status',title:'覆盖状态',width:280,render:(_,row)=><Space orientation="vertical" size={4}>{status(row)}{row.source_granularity==='day' && <span style={tencentTimeStyle}>原始日费用，累计至 {row.covered_through ?? '-'}；缺 {row.missing_dates?.length ?? 0} 日</span>}</Space>},
+    {key:'mom',...monthSort.column('mom'),title:'环比',dataIndex:'mom',width:220,render:change},
+    {key:'yoy',...monthSort.column('yoy'),title:'同比',dataIndex:'yoy',width:220,render:change},
+    {key:'due',...monthSort.column('due'),title:'开放采集日（北京时间）',dataIndex:'due_date',width:210,render:value=><span style={tencentTimeStyle}>{value ?? '-'}</span>},
+    {key:'success',...monthSort.column('success'),title:'最近成功（北京时间）',dataIndex:'latest_success_at',width:210,render:value=><TencentTime value={value} />},
   ];
   return <Space orientation="vertical" size={24} style={{width:'100%'}}>
     <Card><Space wrap align="end">
@@ -100,8 +103,8 @@ function DashboardPanel({account}: {account:TencentAccount}) {
         {key:'range',label:'账月范围',children:`${data.start_month} 至 ${data.end_month}`},
       ]} /></Card>
       <Card title="完整月费用趋势"><Trend months={data.months} currency={data.currency} /></Card>
-      <TencentCostTableCard<Month> title="账月覆盖与比较" rowKey="month" columns={monthColumns} dataSource={data.months} pagination={false} scroll={{x:1510}} />
-      <TencentCostTableCard<Product> title="全部产品月度费用" rowKey="key" columns={productColumns} dataSource={rows} scroll={{x:700+data.months.length*170}} pagination={{current:Math.min(page,Math.max(1,Math.ceil(rows.length/10))),pageSize:10,onChange:setPage,showSizeChanger:false}}><Space style={{display:'flex',justifyContent:'flex-end',marginBottom:16}}><Input.Search aria-label="搜索费用产品" placeholder="搜索产品名称或编码" value={search} allowClear onChange={event=>{setSearch(event.target.value);setPage(1);}} /></Space>
+      <TencentCostTableCard<Month> title="账月覆盖与比较" rowKey="month" columns={monthColumns} dataSource={monthSort.rows(data.months)} onChange={monthSort.onChange} pagination={false} scroll={{x:1510}} />
+      <TencentCostTableCard<Product> title="全部产品月度费用" rowKey="key" columns={productColumns} dataSource={rows} onChange={productSort.onChange} scroll={{x:700+data.months.length*170}} pagination={{current:Math.min(page,Math.max(1,Math.ceil(rows.length/10))),pageSize:10,onChange:setPage,showSizeChanger:false}}><Space style={{display:'flex',justifyContent:'flex-end',marginBottom:16}}><Input.Search aria-label="搜索费用产品" placeholder="搜索产品名称或编码" value={search} allowClear onChange={event=>{setSearch(event.target.value);setPage(1);}} /></Space>
         <p style={{color:'var(--app-muted)'}}>已映射产品在完整月缺行显示 0；未映射、同名歧义和未覆盖期间显示 -，不推定产品跨月身份。导出包含全部产品，不受当前搜索与分页限制。</p>
       </TencentCostTableCard>
     </>}</ResourceState>

@@ -243,7 +243,7 @@ def test_unavailable_old_gap_is_visible_but_not_reenqueued_without_bound(cost_ht
     newest=next(j for j in batches if j['kind']=='batch')
     data=client.get('/admin/api/tencent/cost-jobs/'+newest['id']).json()['data']
     assert '2026-09' not in [j['month'] for j in data['children']]
-    assert '2026-09' in data['deferred_months']
+    assert '2026-09' not in data['deferred_months']
     assert data['blocked_months']==[{'month':'2026-09','reason_code':'TENCENT_MONTH_AUTO_BUDGET_EXHAUSTED'}]
     drain(worker)
 

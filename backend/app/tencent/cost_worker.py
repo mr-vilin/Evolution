@@ -14,10 +14,11 @@ from .access import require_account
 from .credentials import CredentialRegistry
 from .errors import TencentError
 from .gateway import TencentGateway, sdk_transport
-from .cost_collector import collect_period, CONTRACT, PERIOD_CONTRACT
+from .cost_collector import collect_period, require_month_zero_window, CONTRACT, PERIOD_CONTRACT
 from .cost_router import utcnow
 from .cost_policy import effective_policy
 from .cost_scheduler import refresh_batch, TencentCostScheduler
+from .worker_logging import configure_logging, log_exception, safe_exception
 
 log = logging.getLogger('organization.tencent.cost_worker')
 
@@ -231,6 +232,8 @@ class TencentCostWorker:
             attempt = db.scalar(select(TencentSyncAttempt).where(TencentSyncAttempt.id==claim.attempt_id).with_for_update())
             now = self.now()
             self._owned(config, job, attempt, claim, now)
+            if candidate['coverage'].get('zero_evidence'):
+                require_month_zero_window(claim.snapshot,now)
             # 配置锁已由_config_gate持有；在其内统一校验整月范围，唯一键不足以防日/月重叠。
             key=claim.snapshot.get('period_key',job.month)
             granularity=claim.snapshot.get('granularity','month')
@@ -295,6 +298,7 @@ class TencentCostWorker:
                 before_data={'status':'running'}, after_data={'status':job.status,'error_code':code}, committed_at=now))
 
             refresh_batch(db,job.parent_job_id,now)
+            return job.status
 
     def committed_receipt(self, claim):
         """只核实原任务原尝试；原始回执同事务存档，缺口仅修归档。"""
@@ -329,6 +333,8 @@ class TencentCostWorker:
                 while not heartbeat_stop.wait(effective_policy(claim.snapshot['policy'])['heartbeat_seconds']):
                     try:self.heartbeat(claim)
                     except Exception as exc:
+                        if not isinstance(exc,TencentError):
+                            log_exception(log,'tencent.cost_heartbeat_failed',exc,job_id=claim.job_id,attempt_id=claim.attempt_id,request_id=claim.request_id)
                         heartbeat_error.append(exc.code if isinstance(exc,TencentError) else 'TENCENT_COST_HEARTBEAT_FAILED')
                         return
             def check():
@@ -337,7 +343,7 @@ class TencentCostWorker:
             gateway.check=check
             pulse=threading.Thread(target=keep_alive,name='tencent-cost-heartbeat',daemon=True)
             pulse.start()
-            try:candidate = collect_period(gateway, credential, claim.snapshot,check=check)
+            try:candidate = collect_period(gateway, credential, claim.snapshot,check=check,now=self.now)
             finally:
                 heartbeat_stop.set()
                 pulse.join()
@@ -351,9 +357,14 @@ class TencentCostWorker:
                 return receipt
             code = exc.code if isinstance(exc,TencentError) else 'TENCENT_COST_EXECUTION_FAILED'
             # 不记录SQL参数、任意上游异常原文或密钥；失败证据独立提交。
-            self._fail(claim, code, {'reason_code':code,'upstream_request_id':getattr(exc,'upstream_request_id',None),
-                'upstream_response_state':getattr(exc,'upstream_response_state','NOT_OBSERVED')})
-            log.warning('tencent.cost_failed job_id=%s attempt_id=%s reason_code=%s',claim.job_id,claim.attempt_id,code)
+            status=self._fail(claim, code, {'reason_code':code,'upstream_request_id':getattr(exc,'upstream_request_id',None),
+                'upstream_response_state':getattr(exc,'upstream_response_state','NOT_OBSERVED'),
+                **({'diagnostic':safe_exception(exc)} if not isinstance(exc,TencentError) else {})})
+            level=logging.WARNING if status=='retry_wait' else logging.ERROR
+            if isinstance(exc,TencentError):
+                log.log(level,'tencent.cost_failed job_id=%s attempt_id=%s request_id=%s reason_code=%s',claim.job_id,claim.attempt_id,claim.request_id,code)
+            else:
+                log_exception(log,'tencent.cost_failed',exc,level=level,job_id=claim.job_id,attempt_id=claim.attempt_id,request_id=claim.request_id,reason_code=code)
             return None
         log.info('tencent.cost_committed job_id=%s attempt_id=%s row_count=%s',claim.job_id,claim.attempt_id,result['row_count'])
         return result
@@ -367,25 +378,25 @@ class TencentCostWorker:
             scheduler=TencentCostScheduler(self.sessions,self.settings,now=self.now)
             while not stop.is_set():
                 try:scheduler.tick()
-                except Exception:log.error('tencent.monthly_schedule_unavailable')
+                except Exception as exc:log_exception(log,'tencent.monthly_schedule_unavailable',exc)
                 for future in list(active):
                     if future.done():
                         active.remove(future)
                         try:future.result()
-                        except Exception:
+                        except Exception as exc:
                             # 持久化故障留给租约恢复；不输出包含参数的异常原文。
-                            log.error('tencent.cost_executor_unavailable')
+                            log_exception(log,'tencent.cost_executor_unavailable',exc)
                 while len(active)<max_concurrency and not stop.is_set():
                     try:claim=self.claim()
-                    except Exception:
-                        log.error('tencent.cost_claim_unavailable')
+                    except Exception as exc:
+                        log_exception(log,'tencent.cost_claim_unavailable',exc)
                         break
                     if claim is None:break
                     active.add(pool.submit(self.execute,claim))
                 stop.wait(poll_seconds)
             for future in active:
                 try:future.result()
-                except Exception:log.error('tencent.cost_shutdown_pending_recovery')
+                except Exception as exc:log_exception(log,'tencent.cost_shutdown_pending_recovery',exc)
 
     def run_once(self, now=None):
         claim = self.claim(now)
@@ -395,6 +406,7 @@ class TencentCostWorker:
 
 
 def main():
+    configure_logging()
     from app.config import get_settings
     from app.dependencies import get_runtime
     runtime, settings = get_runtime(), get_settings()

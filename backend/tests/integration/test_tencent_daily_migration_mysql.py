@@ -59,9 +59,29 @@ def test_daily_downgrade_refuses_unexpressible_config_or_task_before_any_ddl(cos
     else:
         monthly(client,account,frequency='manual')
         body={'month':'2026-10','idempotency_key':'unsupported'}
-        if evidence!='pending_month':body['day']='2026-10-31'
         accepted=client.post(base+'/cost-jobs',json=body)
         assert accepted.status_code==202,accepted.text
+        if evidence!='pending_month':
+            # 构造修复前已受理的旧单日快照；现行 API 已禁止 manual 模式新建日任务。
+            from app.persistence.models import TencentSyncJob
+            with sessions.begin() as db:
+                job=db.get(TencentSyncJob,int(accepted.json()['data']['id']))
+                job.snapshot={**job.snapshot,'granularity':'day','period_key':'2026-10-31',
+                    'begin':'2026-10-31T00:00:00+08:00','end_exclusive':'2026-11-01T00:00:00+08:00',
+                    'upstream_params':{**job.snapshot['upstream_params'],'BeginTime':'2026-10-31 00:00:00',
+                        'EndTime':'2026-10-31 23:59:59','PeriodType':'day'}}
+        if evidence!='pending_month':
+            # 模拟修复前已经受理的 manual-day 旧任务，不能依赖现行 API 再次受理无效模式。
+            from app.persistence.models import TencentSyncJob
+            from app.tencent.cost_scheduler import period_snapshot
+            with sessions.begin() as db:
+                job=db.get(TencentSyncJob,int(accepted.json()['data']['id']))
+                snapshot=job.snapshot
+                from types import SimpleNamespace
+                account_row=SimpleNamespace(id=int(account['id']),uin=account['uin'],credential_ref=account['credential_ref'],credential_revision=account['credential_revision'])
+                from app.persistence.models import TencentSyncConfig
+                config_row=db.get(TencentSyncConfig,job.config_id)
+                job.snapshot={**snapshot,**period_snapshot(account_row,config_row,job.dataset_epoch,'2026-10',actor_id=snapshot['actor_id'],execution_identity=snapshot['execution_identity'],granularity='day',period_key='2026-10-31',accepted_at=now)}
         if evidence=='failed_day':
             def denied(c,a,p):
                 if a=='DescribeCostExplorerSummary':return b'{"Response":{"Error":{"Code":"UnauthorizedOperation"},"RequestId":"day-no-success"}}'

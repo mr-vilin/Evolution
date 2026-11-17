@@ -37,11 +37,21 @@ MCP 接入示例使用新目录；已有客户端需重新加载配置。本地 
 - [产品版本声明](./version.json)
 - [产品版本记录](./CHANGELOG.md)
 
-当前主分支包含 Agent 能力、独立 MCP 适配层与确定性 Evaluation；当前迁移为 `0009_operation_receipt`，数据库与会话采用 `general_ci`，稳定 ID 保留 `utf8mb4_bin`。开发前端不会自动登录或填充业务数据；未连接后端时显示明确的错误与重试入口。
+当前主分支包含 Agent 能力、独立 MCP 适配层与确定性 Evaluation；当前代码所需迁移以 `backend/app/persistence/database.py` 的 `CURRENT_SCHEMA_HEAD` 为准，数据库与会话采用 `general_ci`，稳定 ID 保留 `utf8mb4_bin`。开发前端不会自动登录或填充业务数据；未连接后端时显示明确的错误与重试入口。
 
 首版历史验证：后端 95 项、前端 25 项、部署侧 5 项通过；前端生产构建、Ant Design 检查与离线迁移 SQL 生成通过，当时 6 项 MySQL 测试跳过。[首版整体代码审查](./docs/superpowers/final-review.md)记录原基线。当前实际 MySQL、MCP 与六场景连续评测的结果见[最新运行台账](./docs/运行与验收.md)，不能与首版历史数字混作同一次验收。
 
 六场景使用 ScriptedWorker 与 Fake Feishu，经官方 MCP Client/Server、受保护内部 HTTP、生产同步 Worker 和真实 MySQL 运行；这验证协议、业务事实与 CI 隔离。ProviderWorker 提供显式模型注入协议，尚未用真实模型或企业飞书验收。规则软评分和默认关闭的可选 LLM Judge 只作诊断，确定性硬门槛决定通过与退出码。普通 CI 不调用真实飞书或生产模型。
+
+## 腾讯云财务模块
+
+已实现独立账号登记与维护、当次实时余额、完整月/日周成本任务、历史回溯与范围重拉，以及费用看板和 CSV。入口仅对完成组织初始化的现有管理员开放，账号使用各自受控只读凭据。
+
+- [账号、余额与凭据实现](docs/architecture/tencent-finance-implementation.md)
+- [成本与恢复](docs/architecture/tencent-cost-recovery-implementation-2026-11-17.md)、[日周计划](docs/architecture/tencent-cost-daily-implementation-2026-11-17.md)、[历史范围](docs/architecture/tencent-cost-history-implementation-2026-11-17.md)
+- [看板验收](docs/architecture/tencent-cost-dashboard-acceptance-2026-11-17.md)、[审查修复验证](docs/architecture/tencent-finance-review-fixes-2026-11-17.md)
+
+已做隔离 MySQL 与合成出站验证；真实腾讯云 CAM、来源边界及账单一致性待联调。本次未迁移业务数据库、未部署，代码所需 schema 不代表任何环境已执行迁移。
 
 ## 阅读顺序
 
