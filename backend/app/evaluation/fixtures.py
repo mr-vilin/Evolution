@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 import json
 
-from sqlalchemy import delete, func, insert, select, text, update
+from sqlalchemy import delete, func, insert, or_, select, text, update
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import sessionmaker
 
@@ -79,7 +79,11 @@ def _require_quiet(connection):
     lease = connection.execute(select(m.WorkerLease.__table__).where(m.WorkerLease.id == 1).with_for_update()).mappings().first()
     # 即使租约已过期也要求执行方显式释放 owner；不能把线程超时当作取消。
     running = connection.scalar(select(m.SyncJob.id).where(m.SyncJob.status == 'running').limit(1))
-    if (lease and lease['owner']) or running:
+    cloud_owner = connection.scalar(select(m.TencentSyncConfig.id).where(or_(
+        m.TencentSyncConfig.owner.is_not(None), m.TencentSyncConfig.active_job_id.is_not(None)
+    )).with_for_update().limit(1))
+    cloud_running = connection.scalar(select(m.TencentSyncJob.id).where(m.TencentSyncJob.status == 'running').with_for_update().limit(1))
+    if (lease and lease['owner']) or running or cloud_owner or cloud_running:
         raise RuntimeError('EVALUATION_WORKER_NOT_QUIET')
 
 
