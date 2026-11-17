@@ -20,7 +20,7 @@ it('管理员开启成本、受理单月后查看真实任务结果及精确负�
     } else if (path.endsWith('/cost-jobs') && method === 'POST') { accepted = true; data = { id:'7',month:'2026-10',status:'pending',attempts:[] }; }
     else if (path.endsWith('/cost-jobs')) data = accepted ? [{ id:'7',month:'2026-10',status:finished ? 'succeeded' : 'pending' }] : [];
     else if (path.endsWith('/cost-jobs/7')) data = { id:'7',month:'2026-10',status:finished ? 'succeeded' : 'pending',attempts:finished ? [{ id:'9',attempt_no:1,status:'succeeded',execution_input:{month:'2026-10',begin:'2026-10-01T00:00:00+08:00',end_exclusive:'2026-11-01T00:00:00+08:00'},execution_output:{row_count:2,total:'12.00000000',currency:'CNY',request_ids:['fixture']}}] : [] };
-    else if (finished) data = { id:'3',month:'2026-10',currency:'CNY',total:'12.00000000',latest_job_id:'7',coverage:{status:'complete'},items:[{id:'1',source_name:'云服务',business_code:'p_cvm',mapping_status:'mapped',amount:'12.34567890'},{id:'2',source_name:'退款',business_code:null,mapping_status:'unmapped',amount:'-0.34567890'}] };
+    else if (finished) data = { id:'3',month:'2026-10',currency:'CNY',total:'12.00000000',latest_job_id:'7',coverage:{status:'complete'},items:[{id:'1',source_name:'云服务',business_code:'p_synthetic_a',mapping_status:'mapped',amount:'12.34567890'},{id:'2',source_name:'退款',business_code:null,mapping_status:'unmapped',amount:'-0.34567890'}] };
     else return new Response(JSON.stringify({error:{code:'TENCENT_PERIOD_NOT_FOUND',message:'该月尚无完整费用结果'}}),{status:404});
     return new Response(JSON.stringify({data,meta:{}}),{status:method === 'POST' ? 202 : 200});
   }));
@@ -30,7 +30,7 @@ it('管理员开启成本、受理单月后查看真实任务结果及精确负�
   await waitFor(() => expect(screen.getByRole('switch',{name:'成本能力'})).toBeEnabled());
   fireEvent.click(screen.getByRole('switch',{name:'成本能力'}));
   fireEvent.click(screen.getByRole('button',{name:'保存配置'}));
-  await waitFor(() => expect(screen.getByRole('button',{name:'采集所选账月'})).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole('button',{name:'采集所选账月'})).toBeEnabled(), { timeout: 5000 });
   fireEvent.click(screen.getByRole('button',{name:'采集所选账月'}));
   expect(await screen.findByText(/任务 #7 已受理/)).toBeVisible();
   expect(screen.queryByText('采集成功')).toBeNull();

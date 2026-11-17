@@ -482,4 +482,3 @@ class TencentCostItem(Base):
     create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text('CURRENT_TIMESTAMP'), comment='当前产品行创建UTC时间')
     update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='当前产品行最后更新UTC时间')
     __table_args__ = (UniqueConstraint('period_id','row_no',name='uk_tencent_item_row'), _table_args('完整月全量产品行，未映射和同名行保持独立'))
-

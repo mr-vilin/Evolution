@@ -59,6 +59,6 @@ Total=0/空Detail本身不能清空旧费用。只有辅助 DescribeBillSummaryB
 
 真实管理HTTP→实际独立worker→真实MySQL，只模拟腾讯云原始出站传输。已验证完整月受理/发布、消失产品/其他月保留/历史提交回执、可靠幂等、分页超过一页、重复/早空/变计数/尾页多余、负数退款/金额溢出/总计不符、空零未就绪/已确认零、归属错配、在途撤权/停用/改凭据/epoch/初始化、普通data_version不干扰、同配置互斥/到期拒绝、不同配置独立执行及数据库故障回滚。实际结构核验中文注释、引擎/排序、无外键及金额精度。
 
-前端Vitest覆盖中文开启配置→202等待执行→刷新成功状态与精确负退款；TypeScript、antd6.6.4离线元数据/lint及生产构建通过。jsdom的CSS解析和伪元素getComputedStyle提示是测试环境能力限制，不代表真实浏览器视觉验收。Windows依赖由集成分支固定 [tzdata2026.6](https://pypi.org/project/tzdata/2026.6/)，共享Python已验证Asia/Shanghai可用。
+合入T01/T02后的最终新库 `tencent_t03_final_test` 回归：账号、余额及成本三个真实MySQL集成测试文件共81项通过；后端离线回归1400项通过、16项跳过。前端账号/余额/成本页面及HTTP/useResource五文件17项通过，覆盖中文开启配置→202等待执行→刷新成功状态与精确负退款。复杂表单保存按真实完成状态等待，预算5秒，避免并行回归中默认1秒等待导致假阴性；未模拟业务模块或跳过断言。合并后TypeScript通过；antd6.6.4离线元数据/lint及生产构建在本票核心实现上通过（111个构建资源）。jsdom的CSS解析和伪元素getComputedStyle提示是测试环境能力限制，不代表真实浏览器视觉验收。Windows依赖由集成分支固定 [tzdata2026.6](https://pypi.org/project/tzdata/2026.6/)，共享Python已验证Asia/Shanghai可用。
 
 合成wire fixture只证明官方协议形态与故障处理，不证明真实账号CAM、历史可查范围、费用口径和月时间列格式。真实腾讯云费用查询、真实企业登录、容器运行及业务环境验收仍未执行。
