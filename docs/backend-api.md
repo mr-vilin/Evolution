@@ -187,4 +187,4 @@ worker 通过 `SqlSyncJobRepository.claim_next()` 认领任务；全局租约、
 | 已提交费用、看板与导出 | `GET /accounts/{id}/cost-periods/{period}`；`GET /accounts/{id}/cost-dashboard`；`GET /accounts/{id}/cost-export` | [看板验收与契约](architecture/tencent-cost-dashboard-acceptance-2026-11-17.md) |
 | 历史范围 | `GET /accounts/{id}/cost-history`；`POST /accounts/{id}/cost-range-preview`；`POST /accounts/{id}/cost-range-batches` | [历史回溯与范围重拉](architecture/tencent-cost-history-implementation-2026-11-17.md) |
 
-日参数仅用于 daily/weekly 模式；manual/monthly 采集完整到期月。小队列延期沿原父批次和冻结输入推进，延期、阻止和窗口外分别展示；周中发现不扩大上个周日的自动目标，人工范围仍按本次受理时刻。未采集的资格拒绝保留任务失败事实，但不使已提交完整费用失去可比性。空月零值证明还须在采集和发布时处于实际来源窗口内。修复证据见[本轮审查验证](architecture/tencent-finance-review-fixes-2026-11-17.md)。
+日参数仅用于 daily/weekly 模式；manual/monthly 采集完整到期月。小队列延期沿原父批次和冻结输入推进，延期、阻止和窗口外分别展示；周中发现不扩大上个周日的自动目标，人工范围仍按本次受理时刻。所有既有资格门槛拒绝均保留任务及尝试失败事实，不论尝试是否开始，均不使已提交完整费用失去可比性；真实来源采集失败仍按失败保留旧值并取消完整总额与比较资格。空月零值证明还须在采集和发布时处于实际来源窗口内。修复证据见[本轮审查验证](architecture/tencent-finance-review-fixes-2026-11-17.md)。

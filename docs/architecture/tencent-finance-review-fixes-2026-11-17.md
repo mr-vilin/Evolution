@@ -9,7 +9,7 @@
 | 月模式可提交 day 绕过月三日到期 | 新请求仅 daily/weekly 可带 day；原幂等任务先按原身份重放，不改原冻结范围 |
 | 合法小队列只受理部分近期期间，父批次提前完整 | recent＋可处理旧缺口统一计算 selected/deferred，阻止和窗口外独立披露，audit 使用真实延期长度；延期保留原父批次、执行策略、频率及身份，已覆盖近期仍按原意图复核 |
 | 周中持续发现扩大周日目标 | 自动发现和历史页面沿最后实际受理的计划点；继续推进旧范围，下一计划点才扩展新日期；人工 range/all 按本次受理时刻 |
-| 旧 epoch 刷新在采集前被拒绝却降级费用 | 任务拒绝事实保留；未开始的资格门槛拒绝不改变已提交完整费用的总额和比较资格，真实采集失败仍显示保留旧值 |
+| 旧 epoch 刷新被资格门槛拒绝却降级费用 | 任务及尝试失败事实保留；既有资格拒绝码均不改变已提交完整费用的总额和比较资格，不以尝试是否开始判断；真实采集失败仍显示保留旧值 |
 | 最老来源月排队跨月后，冻结零值资格过期 | 空月证明前后及发布事务内同时核对冻结资格和当前真实来源窗口；移出窗口则 ZERO_UNCONFIRMED，保留旧产品及非零总额 |
 | 金额/比例/时间缺少排序 | 每表受控单列三态，筛选后全量稳定排序再分页；空值升降均置底，刷新保留；金额用八位固定单位 BigInt 比较，不经 Number |
 | 账号及账月费用卡高度和窄屏未适配 | 共用实际顶栏、工具栏、摘要、分页、行高测量，60%/三行预算分支、低位整卡吸顶、极矮自然滚动；窄表体优先保留名称，右固定按中间96px预算退让。ProTable固定布局变化时重建内部列状态，外部排序/分页保留 |
@@ -37,3 +37,15 @@
 共享证据位于本任务visualizations目录：`tencent-review-fixes-mysql-complete.log`、`tencent-review-fixes-rollover.log`、`tencent-review-fixes-mysql-postroll.log`、`tencent-review-fixes-frontend.log`、`tencent-review-browser-results.json`、`tencent-browser-check.cjs`及`tencent-review-*.png`。全量非集成后端、前端、类型、构建和antd日志分别为`tencent-review-fixes-backend.log`、`tencent-review-fixes-frontend-all.log`、`tencent-review-fixes-typecheck.log`、`tencent-review-fixes-build.log`、`tencent-review-fixes-antd.json`。
 
 真实CAM权限、真实账单来源窗口和有效零值仍待同账号同口径联调；模拟源通过不证明腾讯实际可取范围。未启动业务同步，未部署或发布版本。
+
+## 第二批定向残留修复（2026-11-18）
+
+复查补充两个边界：任务已开始，仅身份查询后发生 epoch 变化时，费用仍被错误降级；账号及产品费用搜索框固定 260px，窄容器下超出卡片内容区。本批费用汇总排除所有既有资格门槛拒绝码，覆盖身份查询后和成本响应后的失效，不依赖 started_at；任务/尝试失败仍可追踪。腾讯超时等真实来源采集失败继续保留旧值并取消完整总额与环比资格。两页搜索工具栏改用可收缩 flex 容器，搜索框以 260px 为首选宽度并限制在可用宽度内。
+
+本批验证与前述全量证据独立：
+
+- 定向 MySQL 三边界（身份后失效、成本响应后失效、真实成本超时）先观察 2 失败/1 通过，修复后 3 通过；随后 dashboard、daily、cost 及相关审查回归共 64 项通过，161.66秒。目标仍为独立临时 MySQL 8.4.11 的 tencent_review_residual_regression_test，无业务数据库写入。
+- 受影响三页前端 3 文件12项通过，50.21秒；typecheck 通过；Ant Design 相对 4292658 的差异检查为0问题、0跳过、非partial；git diff --check通过。未重跑前述全量测试和生产构建。
+- 真实 Edge 146.0.3856.109、UTC、合成API共10场景通过，保留第一批9场景原证据。本批账号与费用卡各在260px容器、210px表体中检查搜索框右边界；两者实际搜索宽度均210px，保留左固定列、解除右固定列。费用窄容器保留三行141px预算并自然滚动；其他低位吸顶、极矮、单行和空表场景继续通过。1152×720仅为125%等效可用视口，未操作真实浏览器或系统缩放。
+
+证据位于共享验证目录：tencent-review-residual-red.log、tencent-review-residual-green.log、tencent-review-residual-mysql.log、tencent-review-residual-frontend.log、tencent-review-residual-typecheck.log、tencent-review-residual-antd.json；浏览器脚本 tencent-residual-browser-check.cjs、结果 tencent-review-residual-browser-results.json、过程 tencent-review-residual-browser-green.log，以及 tencent-review-residual-*.png。本批未调用真实腾讯、未执行迁移、未部署。

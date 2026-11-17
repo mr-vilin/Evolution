@@ -62,10 +62,10 @@ export function TencentAccountsPage() {
   return <PageHeader area="业务管理" title="腾讯云账号" description="登记各自独立的腾讯云账号，分别查看费用和实时余额。">
     {maintenanceNotice && <Alert type="warning" showIcon title={maintenanceNotice} style={{marginBottom:16}} />}
     <TencentCostTableCard<TencentAccount> title="腾讯云账号列表" showTable={!accounts.loading && !accounts.error && !!accounts.data?.length} rowKey="id" columns={columns} dataSource={rows} onChange={sorting.onChange} scroll={{x:1186}} pagination={{current:Math.min(page,Math.max(1,Math.ceil(rows.length/20))),pageSize:20,onChange:setPage,showSizeChanger:false}}>
-      <Space wrap style={{display:'flex',justifyContent:'space-between',marginBottom:16}}>
+      <div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap',marginBottom:16,minWidth:0}}>
         <Space><Button type="primary" aria-label="登记账号" icon={<PlusOutlined />} onClick={() => {setFeedback(null);setOpen(true);}}>登记账号</Button><Button aria-label="刷新" icon={<ReloadOutlined />} onClick={() => {accounts.reload();credentials.reload();}}>刷新</Button></Space>
-        <Input.Search aria-label="搜索账号" placeholder="搜索账号名称或 UIN" allowClear value={search} onChange={event => {setSearch(event.target.value);setPage(1);}} style={{width:260}} />
-      </Space>
+        <Input.Search aria-label="搜索账号" placeholder="搜索账号名称或 UIN" allowClear value={search} onChange={event => {setSearch(event.target.value);setPage(1);}} style={{width:260,maxWidth:'100%',minWidth:0,flex:'0 1 260px'}} />
+      </div>
       <ResourceState {...accounts} empty={!accounts.data?.length}>
         <span />
       </ResourceState>
