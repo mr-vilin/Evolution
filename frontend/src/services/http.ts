@@ -39,7 +39,7 @@ export async function request<T>(path: string, options: { method?: string; body?
   }
   if (!response.ok) {
     const detail = (payload as { error?: { code?: string; message?: string; fields?: FieldError[] } } | null)?.error;
-    if ((response.status === 401 || response.status === 403) && path !== '/admin/auth/session') {
+    if ((response.status === 401 || response.status === 403 || detail?.code === 'INITIALIZATION_INCOMPLETE') && path !== '/admin/auth/session') {
       csrfToken = null;
       window.dispatchEvent(new CustomEvent(AUTH_FAILURE_EVENT, { detail: { status: response.status } }));
     }

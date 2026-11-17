@@ -8,6 +8,8 @@ version = "0.1.0"
 requires-python = ">=3.11,<3.14"
 dependencies = [
   "mcp==2.2.0",
+  "tencentcloud-sdk-python-billing==3.1.177",
+  "tencentcloud-sdk-python-common==3.1.177",
   "PyYAML==6.0.3",
   "httpx==0.28.1",
   "lark-oapi==1.7.3",
