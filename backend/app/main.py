@@ -20,10 +20,12 @@ from .initialization.router import router as initialization_router
 from .initialization.validation import InitializationFailure
 from .tencent.router import router as tencent_router
 from .tencent.audit import TencentAuditMiddleware
+from .tencent.balance import router as tencent_balance_router
 
 
 app = FastAPI(title="组织架构维护系统", version="1.0.0")
 app.include_router(tencent_router)
+app.include_router(tencent_balance_router)
 app.add_middleware(TencentAuditMiddleware)
 app.include_router(admin_router)
 app.include_router(capability_router)

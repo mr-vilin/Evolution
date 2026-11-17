@@ -43,6 +43,8 @@ def upgrade():
         sa.Column('duration_ms', sa.Integer(), nullable=True, comment='单调时钟测量的实际耗时毫秒数'),
         mysql_engine='InnoDB', mysql_charset='utf8mb4', mysql_collate='utf8mb4_general_ci', comment='腾讯云模块实际请求事实，元信息白名单且不保存财务正文')
     op.create_index('ix_tencent_api_call_request_id','tencent_api_call',['request_id'])
+    # 余额限流按账号读取最近调用窗口，避免审计历史增长后全表扫描。
+    op.create_index('ix_tencent_api_call_rate_window','tencent_api_call',['direction','action','target_id','started_at'])
 
 
 def downgrade():
