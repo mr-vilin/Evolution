@@ -1,7 +1,8 @@
 import { theme, type ThemeConfig } from 'antd';
 
+// 项目默认八色与 .codex/frontend-style.md 中已保存的配置保持一致。
 export const defaultColors = {
-  primary: '#1677FF', auxiliary: '#13C2C2', accent: '#FA8C16', canvas: '#F5F5F5',
+  primary: '#38B8D2', auxiliary: '#6FA9F1', accent: '#FA8C16', canvas: '#F5F5F5',
   surface: '#FFFFFF', text: '#1F1F1F', muted: '#595959', line: '#F0F0F0',
 };
 export type ColorRole = keyof typeof defaultColors;
