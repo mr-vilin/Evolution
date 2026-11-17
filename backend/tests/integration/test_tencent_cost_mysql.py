@@ -80,6 +80,13 @@ def wire(month='2026-10', *, single=False, mode=None):
 def run_job(client, sessions, account, key, *, month='2026-10', transport=None):
     from app.tencent.cost_worker import TencentCostWorker
     from app.config import get_settings
+    # 本文件验证单次完整采集契约；自动重试在 recovery HTTP/worker 测试中单独验收。
+    config_path=f"/admin/api/tencent/accounts/{account['id']}/cost-config"
+    config=client.get(config_path).json()['data']
+    if config['run_policy']['max_attempts']!=1:
+        saved=client.put(config_path,json={'revision':config['revision'],'is_enabled':True,'frequency':'manual','currency':'CNY',
+            'run_policy':{**config['run_policy'],'max_attempts':1}})
+        assert saved.status_code==200,saved.text
     accepted = client.post(f"/admin/api/tencent/accounts/{account['id']}/cost-jobs",json={'month':month,'idempotency_key':key})
     assert accepted.status_code==202, accepted.text
     def default_transport(credential,action,params):

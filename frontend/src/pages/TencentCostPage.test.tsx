@@ -44,3 +44,32 @@ it('管理员开启成本、受理单月后查看真实任务结果及精确负�
   expect(post?.body).not.toHaveProperty('actor_id');
   expect(screen.queryByRole('textbox',{name:/JSON|密钥/})).toBeNull();
 });
+
+
+it('管理员用结构化数值设置执行预算并在保存前看到心跳字段校验', async () => {
+  const puts: unknown[]=[];
+  vi.stubGlobal('fetch',vi.fn(async (path: string,options: RequestInit) => {
+    let data: unknown;
+    if (path==='/admin/api/tencent/accounts') data=[{id:'1',alias:'主账号',uin:'10001',is_enabled:true}];
+    else if (path.endsWith('/cost-config')) {
+      if (options?.method==='PUT') puts.push(JSON.parse(String(options.body)));
+      data={revision:1,is_enabled:true,frequency:'manual',currency:'CNY',latest_eligible_month:'2026-10'};
+    } else if (path.endsWith('/cost-jobs')) data=[];
+    else return new Response(JSON.stringify({error:{code:'TENCENT_PERIOD_NOT_FOUND',message:'尚无完整费用'}}),{status:404});
+    return new Response(JSON.stringify({data,meta:{}}));
+  }));
+  render(<App><TencentCostPage /></App>);
+  fireEvent.click(await screen.findByText('重试与执行限制'));
+  const heartbeat=await screen.findByRole('spinbutton',{name:'心跳间隔（秒）'});
+  fireEvent.change(heartbeat,{target:{value:'60'}});
+  fireEvent.blur(heartbeat);
+  await waitFor(() => expect(screen.getByText('心跳间隔不能超过租约的三分之一')).toBeVisible());
+  fireEvent.click(screen.getByRole('button',{name:'保存配置'}));
+  await waitFor(() => expect(puts).toHaveLength(0));
+  fireEvent.change(heartbeat,{target:{value:'20'}});
+  fireEvent.blur(heartbeat);
+  fireEvent.click(screen.getByRole('button',{name:'保存配置'}));
+  await waitFor(() => expect(puts).toHaveLength(1));
+  expect(puts[0]).toMatchObject({run_policy:{heartbeat_seconds:20,max_attempts:3,queue_deadline_seconds:86400}});
+  expect(screen.queryByRole('textbox',{name:/JSON/})).toBeNull();
+});

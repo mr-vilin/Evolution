@@ -4,7 +4,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from app.config import get_settings
 from app.dependencies import get_runtime
@@ -15,6 +15,7 @@ from .access import require_action, require_dataset, require_account, require_ac
 from .errors import TencentError
 from .cost_collector import CONTRACT
 from .credentials import CredentialRegistry
+from .cost_policy import CostRunPolicy, effective_policy
 
 router = APIRouter(prefix='/admin/api/tencent', tags=['腾讯云成本'])
 
@@ -49,6 +50,7 @@ class CostConfigBody(BaseModel):
     is_enabled: bool = Field(strict=True)
     frequency: Literal['manual']
     currency: Literal['CNY']
+    run_policy: CostRunPolicy | None = None
 
 
 class CostJobBody(BaseModel):
@@ -61,30 +63,34 @@ def config_data(row):
     return {'id': str(row.id) if row else None, 'revision': row.revision if row else 0,
         'is_enabled': bool(row.is_enabled) if row else False, 'frequency': row.frequency if row else 'manual',
         'currency': row.currency if row else 'CNY', 'latest_eligible_month': latest_month(),
+        'run_policy': effective_policy(row.run_policy if row else None),
         'last_success_month': row.last_success_month if row else None}
 
 
 def readable_account(db, account_id):
     require_dataset(db)
-    if db.get(TencentAccount, account_id) is None:
+    account=db.get(TencentAccount, account_id)
+    if account is None:
         raise TencentError('TENCENT_ACCOUNT_NOT_FOUND', '腾讯云账号不存在', 404)
+    return account
 
 
 @router.get('/accounts/{account_id}/cost-config', operation_id='tencent_cost_config_get')
-def get_config(account_id: int, identity=Depends(require_action('tencent.cost.read')), runtime=Depends(get_runtime)):
+def get_config(account_id: int, request: Request, identity=Depends(require_action('tencent.cost.read')), runtime=Depends(get_runtime)):
     with runtime.sessions() as db:
-        readable_account(db, account_id)
+        request.state.tencent_target=readable_account(db, account_id).uin
         row = db.scalar(select(TencentSyncConfig).where(TencentSyncConfig.account_id==account_id, TencentSyncConfig.business=='cost'))
         return {'data': config_data(row), 'meta': {}}
 
 
 @router.put('/accounts/{account_id}/cost-config', operation_id='tencent_cost_config_update')
-def update_config(account_id: int, body: CostConfigBody, identity=Depends(require_action('tencent.config.update', write=True)), runtime=Depends(get_runtime), settings=Depends(get_settings)):
+def update_config(account_id: int, body: CostConfigBody, request: Request, identity=Depends(require_action('tencent.config.update', write=True)), runtime=Depends(get_runtime), settings=Depends(get_settings)):
     try:
         with runtime.sessions.begin() as db:
             require_dataset(db, lock=True)
             account = db.scalar(select(TencentAccount).where(TencentAccount.id==account_id).with_for_update())
             if account is None: raise TencentError('TENCENT_ACCOUNT_NOT_FOUND', '腾讯云账号不存在', 404)
+            request.state.tencent_target=account.uin
             require_actor(db, identity)
             if body.is_enabled and (not account.is_enabled or account.verification_status!='verified'):
                 raise TencentError('TENCENT_ACCOUNT_UNAVAILABLE', '请先启用账号并验证归属')
@@ -94,12 +100,17 @@ def update_config(account_id: int, body: CostConfigBody, identity=Depends(requir
             if body.is_enabled:
                 CredentialRegistry(settings).resolve(account.credential_ref)
             before = config_data(row)
+            policy = body.run_policy.model_dump() if body.run_policy else effective_policy(row.run_policy if row else None)
             if row is None:
-                row = TencentSyncConfig(account_id=account_id, business='cost', revision=1, generation=0)
+                row = TencentSyncConfig(account_id=account_id, business='cost', revision=1, control_revision=1, generation=0)
                 db.add(row)
-            elif row.is_enabled != body.is_enabled:
-                row.revision += 1
+            else:
+                if row.is_enabled != body.is_enabled:
+                    row.control_revision += 1
+                if row.is_enabled != body.is_enabled or effective_policy(row.run_policy)!=policy:
+                    row.revision += 1
             row.is_enabled, row.frequency, row.currency = body.is_enabled, body.frequency, body.currency
+            row.run_policy=policy
             db.flush()
             result = config_data(row)
             db.add(ChangeLog(object_type='tencent_config', object_id=str(row.id), source='admin', actor='admin:'+identity.open_id,
@@ -112,38 +123,78 @@ def update_config(account_id: int, body: CostConfigBody, identity=Depends(requir
 def job_data(job):
     return {'id': str(job.id), 'account_id': str(job.account_id), 'config_id': str(job.config_id), 'month': job.month,
         'status': job.status, 'error_code': job.error_code, 'create_time': utc_datetime(job.create_time),
-        'started_at': utc_datetime(job.started_at), 'finished_at': utc_datetime(job.finished_at)}
+        'started_at': utc_datetime(job.started_at), 'finished_at': utc_datetime(job.finished_at),
+        'next_attempt_at':utc_datetime(job.next_attempt_at),'deadline_at':utc_datetime(job.deadline_at),
+        'queue_deadline_at':utc_datetime(job.queue_deadline_at),
+        'source_job_id':str(job.source_job_id) if job.source_job_id is not None else None}
 
 
 @router.post('/accounts/{account_id}/cost-jobs', status_code=202, operation_id='tencent_cost_job_create')
 def create_job(account_id: int, body: CostJobBody, request: Request, response: Response,
     identity=Depends(require_action('tencent.cost.rerun', write=True)), runtime=Depends(get_runtime)):
+    return accept_job(account_id,body,request,response,identity,runtime)
+
+
+class CostRerunBody(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    idempotency_key: str = Field(min_length=1,max_length=128,pattern=r'^[A-Za-z0-9][A-Za-z0-9_.:-]*$',strict=True)
+    reason: Literal['after_fix','refresh_result']
+
+
+@router.post('/cost-jobs/{job_id}/rerun',status_code=202,operation_id='tencent_cost_job_rerun')
+def rerun_job(job_id: int,body: CostRerunBody,request: Request,response: Response,
+    identity=Depends(require_action('tencent.cost.rerun',write=True)),runtime=Depends(get_runtime)):
+    with runtime.sessions() as db:
+        require_dataset(db)
+        source=db.get(TencentSyncJob,job_id)
+        if source is None:raise TencentError('TENCENT_JOB_NOT_FOUND','费用任务不存在',404)
+        account_id,month=source.account_id,source.month
+    return accept_job(account_id,CostJobBody(month=month,idempotency_key=body.idempotency_key),request,response,identity,runtime,
+        source_job_id=job_id,reason=body.reason)
+
+
+def accept_job(account_id,body,request,response,identity,runtime,*,source_job_id=None,reason=None):
     begin, end = month_scope(body.month)
     with runtime.sessions.begin() as db:
         epoch = require_dataset(db, lock=True)
         account = require_account(db, account_id, epoch=epoch, lock=True)
         require_actor(db, identity)
+        request.state.tencent_target=account.uin
+        if source_job_id is not None:
+            source=db.get(TencentSyncJob,source_job_id)
+            if source is None or source.account_id!=account_id or source.month!=body.month:
+                raise TencentError('TENCENT_JOB_NOT_FOUND','原费用任务不存在',404)
+            if source.status not in {'succeeded','failed'}:
+                raise TencentError('TENCENT_JOB_NOT_TERMINAL','请等待原任务结束后重跑',409)
         config = db.scalar(select(TencentSyncConfig).where(TencentSyncConfig.account_id==account_id, TencentSyncConfig.business=='cost').with_for_update())
         if config is None or not config.is_enabled or config.frequency!='manual' or config.currency!='CNY':
             raise TencentError('TENCENT_COST_DISABLED', '请先启用有效的手动月成本配置')
-        existing = db.scalar(select(TencentSyncJob).where(TencentSyncJob.config_id==config.id, TencentSyncJob.idempotency_key==body.idempotency_key))
+        existing = db.scalar(select(TencentSyncJob).where(TencentSyncJob.config_id==config.id, TencentSyncJob.dataset_epoch==epoch, TencentSyncJob.idempotency_key==body.idempotency_key))
         if existing:
-            if existing.month != body.month:
+            if existing.month != body.month or existing.source_job_id!=source_job_id:
                 raise TencentError('TENCENT_IDEMPOTENCY_CONFLICT', '该请求标识已用于不同账月', 409)
             result = job_data(existing)
         else:
+            policy=effective_policy(config.run_policy)
+            queued=db.scalar(select(func.count()).select_from(TencentSyncJob).where(
+                TencentSyncJob.config_id==config.id,TencentSyncJob.dataset_epoch==epoch,
+                TencentSyncJob.status.in_(['pending','running','retry_wait'])))
+            if queued>=policy['queue_limit']:
+                raise TencentError('TENCENT_COST_QUEUE_FULL','本配置待处理任务已达上限，请等待任务完成',429)
             snapshot = {'handler': CONTRACT, 'business': 'cost', 'account_id': account.id, 'uin': account.uin,
                 'credential_ref': account.credential_ref, 'credential_revision': account.credential_revision,
-                'config_id': config.id, 'config_revision': config.revision, 'frequency': config.frequency,
+                'config_id': config.id, 'config_revision': config.revision, 'control_revision':config.control_revision, 'frequency': config.frequency,
                 'currency': config.currency, 'dataset_epoch': epoch,
                 'actor_id': identity.open_id, 'execution_identity': 'current-admin-allowlist',
                 'month': body.month, 'begin': begin.isoformat()+'+08:00', 'end_exclusive': end.isoformat()+'+08:00',
-                'policy': {'max_attempts': 1, 'deadline_seconds': 90, 'max_rows': 10000},
+                'policy': effective_policy(config.run_policy),
+                'source_job_id':str(source_job_id) if source_job_id is not None else None,'rerun_reason':reason,
                 'upstream_params': {'BeginTime': begin.strftime('%Y-%m-%d %H:%M:%S'),
                     'EndTime': (end-timedelta(seconds=1)).strftime('%Y-%m-%d %H:%M:%S'),
                     'PeriodType': 'month', 'BillType': '1', 'FeeType': 'cost', 'Dimensions': 'business', 'NeedConditionValue': '1'}}
-            job = TencentSyncJob(config_id=config.id, account_id=account.id, idempotency_key=body.idempotency_key,
-                month=body.month, status='pending', snapshot=snapshot, request_id=request.state.tencent_request_id)
+            job = TencentSyncJob(config_id=config.id, account_id=account.id, dataset_epoch=epoch, idempotency_key=body.idempotency_key,
+                month=body.month, source_job_id=source_job_id, status='pending', snapshot=snapshot, request_id=request.state.tencent_request_id,
+                queue_deadline_at=utcnow()+timedelta(seconds=snapshot['policy']['queue_deadline_seconds']))
             db.add(job)
             db.flush()
             db.refresh(job)
@@ -156,30 +207,35 @@ def create_job(account_id: int, body: CostJobBody, request: Request, response: R
 
 
 @router.get('/cost-jobs/{job_id}', operation_id='tencent_cost_job_get')
-def get_job(job_id: int, identity=Depends(require_action('tencent.job.read')), runtime=Depends(get_runtime)):
+def get_job(job_id: int, request: Request, identity=Depends(require_action('tencent.job.read')), runtime=Depends(get_runtime)):
     with runtime.sessions() as db:
         require_dataset(db)
         job = db.get(TencentSyncJob, job_id)
         if job is None: raise TencentError('TENCENT_JOB_NOT_FOUND', '费用任务不存在', 404)
+        request.state.tencent_target=readable_account(db,job.account_id).uin
         attempts = db.scalars(select(TencentSyncAttempt).where(TencentSyncAttempt.job_id==job.id).order_by(TencentSyncAttempt.attempt_no)).all()
         return {'data': {**job_data(job), 'attempts': [{'id':str(row.id), 'attempt_no':row.attempt_no,
             'status':row.status, 'execution_input':row.execution_input, 'execution_output':row.execution_output,
+            'return_state':row.return_state,
+            'input_capture_status':'CAPTURED',
+            'output_capture_status':('CAPTURED' if row.execution_output is not None else 'FAILED') if row.return_state=='VALUE' else 'NO_CONTENT' if row.return_state=='NOT_RETURNED' else 'UNAVAILABLE',
+            'request_id':row.request_id, 'failure_evidence':row.failure_evidence,
             'error_code':row.error_code, 'started_at':utc_datetime(row.started_at), 'finished_at':utc_datetime(row.finished_at)} for row in attempts]}, 'meta': {}}
 
 
 @router.get('/accounts/{account_id}/cost-jobs', operation_id='tencent_cost_job_list')
-def list_jobs(account_id: int, identity=Depends(require_action('tencent.job.read')), runtime=Depends(get_runtime)):
+def list_jobs(account_id: int, request: Request, identity=Depends(require_action('tencent.job.read')), runtime=Depends(get_runtime)):
     with runtime.sessions() as db:
-        readable_account(db, account_id)
+        request.state.tencent_target=readable_account(db, account_id).uin
         rows = db.scalars(select(TencentSyncJob).where(TencentSyncJob.account_id==account_id).order_by(TencentSyncJob.id.desc()).limit(100)).all()
         return {'data':[job_data(row) for row in rows], 'meta':{'limit':100}}
 
 
 @router.get('/accounts/{account_id}/cost-periods/{month}', operation_id='tencent_cost_period_get')
-def get_period(account_id: int, month: str, identity=Depends(require_action('tencent.cost.read')), runtime=Depends(get_runtime)):
+def get_period(account_id: int, month: str, request: Request, identity=Depends(require_action('tencent.cost.read')), runtime=Depends(get_runtime)):
     # 同一REPEATABLE READ事务读取期间、完整产品和覆盖，禁止拆到独立连接。
     with runtime.sessions() as db:
-        readable_account(db, account_id)
+        request.state.tencent_target=readable_account(db, account_id).uin
         row = db.scalar(select(TencentCostPeriod).where(TencentCostPeriod.account_id==account_id, TencentCostPeriod.month==month, TencentCostPeriod.currency=='CNY'))
         if row is None: raise TencentError('TENCENT_PERIOD_NOT_FOUND', '该月尚无完整费用结果', 404)
         items = db.scalars(select(TencentCostItem).where(TencentCostItem.period_id==row.id).order_by(TencentCostItem.row_no)).all()
