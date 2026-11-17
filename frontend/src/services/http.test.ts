@@ -46,3 +46,11 @@ describe('后端请求契约', () => {
     expect(listener).toHaveBeenCalledOnce(); window.removeEventListener('org-admin-auth-failure', listener);
   });
 });
+
+
+it('初始化资格失效时通知门禁重取会话并清理业务展示', async () => {
+  const listener = vi.fn(); window.addEventListener('org-admin-auth-failure', listener);
+  vi.stubGlobal('fetch', async () => Response.json({ error: { code: 'INITIALIZATION_INCOMPLETE', message: '请完成初始化' } }, { status: 409 }));
+  await expect(request('/admin/api/tencent/accounts')).rejects.toMatchObject({ code: 'INITIALIZATION_INCOMPLETE' });
+  expect(listener).toHaveBeenCalledOnce(); window.removeEventListener('org-admin-auth-failure', listener);
+});

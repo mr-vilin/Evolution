@@ -2,7 +2,9 @@ from datetime import datetime
 
 from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text as sql_text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.dialects.mysql import INTEGER
+from sqlalchemy.sql.elements import TextClause
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.dialects.mysql import INTEGER, TINYINT
 
 
 TABLE_ARGS = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_general_ci"}
@@ -10,6 +12,16 @@ TABLE_ARGS = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4", "mysql_colla
 def _table_args(comment: str) -> dict:
     return {**TABLE_ARGS, "comment": comment}
 SOURCE_ID = String(191, collation="utf8mb4_bin")
+
+
+class _UpdateTimestamp(TextClause):
+    """MySQL 服务端更新时间语义；SQLite 仅用于既有离线单测建表。"""
+    inherit_cache = True
+
+
+@compiles(_UpdateTimestamp, 'sqlite')
+def _sqlite_update_timestamp(element, compiler, **kwargs):
+    return 'CURRENT_TIMESTAMP'
 
 
 class Base(DeclarativeBase):
@@ -346,3 +358,40 @@ class OperationReceipt(Base):
         Index("ix_operation_receipt_created_at", "created_at"),
         _table_args("Agent 操作回执记录"),
     )
+
+
+class TencentAccount(Base):
+    __tablename__ = 'tencent_account'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment='腾讯云账号内部标识')
+    uin: Mapped[str] = mapped_column(SOURCE_ID, nullable=False, comment='不可重新绑定的腾讯云主账号 UIN 字符串')
+    alias: Mapped[str] = mapped_column(String(128), nullable=False, comment='管理员维护的中文账号别名')
+    credential_ref: Mapped[str] = mapped_column(String(64, collation='utf8mb4_bin'), nullable=False, comment='后端受控凭据注册表引用，不保存可用密钥')
+    credential_revision: Mapped[int] = mapped_column(Integer, default=1, server_default='1', comment='账号凭据绑定修订号，用于隔离在途旧结果')
+    is_enabled: Mapped[bool] = mapped_column(Boolean().with_variant(TINYINT(unsigned=True), 'mysql'), default=True, server_default='1', comment='账号总开关：1启用，0停用并禁止新结果')
+    verification_status: Mapped[str] = mapped_column(String(32), nullable=False, comment='归属验证状态，仅 verified 可执行查询')
+    verified_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, comment='最近一次实际归属验证成功的 UTC 时间')
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text('CURRENT_TIMESTAMP'), comment='账号登记 UTC 时间')
+    update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='账号最后修改 UTC 时间')
+    __table_args__ = (UniqueConstraint('uin', name='uk_tencent_account_uin'), _table_args('独立腾讯云账号及受控凭据绑定'))
+
+
+class TencentApiCall(Base):
+    __tablename__ = 'tencent_api_call'
+    id: Mapped[str] = mapped_column(String(36, collation='utf8mb4_bin'), primary_key=True, comment='每次实际调用的唯一审计事件标识')
+    request_id: Mapped[str] = mapped_column(String(36, collation='utf8mb4_bin'), index=True, comment='服务端生成的本次入站请求关联标识')
+    direction: Mapped[str] = mapped_column(String(16), comment='调用方向：inbound入站，outbound腾讯云出站')
+    action: Mapped[str] = mapped_column(String(64), comment='服务端登记的业务动作，未知为 unknown')
+    permission_code: Mapped[str | None] = mapped_column(String(64), comment='本次服务端实际执行的独立权限动作')
+    actor_id: Mapped[str | None] = mapped_column(SOURCE_ID, comment='已认证管理员开放标识，匿名拒绝为空')
+    target_id: Mapped[str | None] = mapped_column(SOURCE_ID, comment='必要的账号 UIN 或外部操作目标，不保存财务正文')
+    method: Mapped[str] = mapped_column(String(16), comment='实际 HTTP 方法或 SDK 调用方式')
+    route: Mapped[str] = mapped_column(String(255), comment='规范接口模板或腾讯云官方动作名称')
+    status_code: Mapped[int | None] = mapped_column(Integer, comment='已观察到的 HTTP 状态码，未返回时为空')
+    outcome: Mapped[str] = mapped_column(String(32), comment='调用结果：running、succeeded、failed、unknown')
+    reason_code: Mapped[str | None] = mapped_column(String(64), comment='稳定错误码，不保存外部异常原文')
+    upstream_request_id: Mapped[str | None] = mapped_column(String(128), comment='腾讯云返回的请求标识，不保存余额或账单')
+    started_at: Mapped[datetime] = mapped_column(DateTime, comment='实际调用开始 UTC 时间')
+    returned_at: Mapped[datetime | None] = mapped_column(DateTime, comment='观察到实际响应返回的 UTC 时间，未观测为空')
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, comment='调用结束 UTC 时间，未结束为空')
+    duration_ms: Mapped[int | None] = mapped_column(Integer, comment='单调时钟测量的实际耗时毫秒数')
+    __table_args__ = _table_args('腾讯云模块实际请求事实，元信息白名单且不保存财务正文')

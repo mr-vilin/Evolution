@@ -18,9 +18,13 @@ from .capabilities.errors import CapabilityError
 from .version import product_build_info
 from .initialization.router import router as initialization_router
 from .initialization.validation import InitializationFailure
+from .tencent.router import router as tencent_router
+from .tencent.audit import TencentAuditMiddleware
 
 
 app = FastAPI(title="组织架构维护系统", version="1.0.0")
+app.include_router(tencent_router)
+app.add_middleware(TencentAuditMiddleware)
 app.include_router(admin_router)
 app.include_router(capability_router)
 app.include_router(initialization_router)
@@ -47,6 +51,8 @@ async def capability_error_handler(request: Request, exc: CapabilityError):
 @app.exception_handler(StarletteHTTPException)
 async def http_error_handler(request: Request, exc: HTTPException):
     detail = exc.detail if isinstance(exc.detail, dict) else {"code": "HTTP_ERROR", "message": str(exc.detail)}
+    if request.url.path.startswith('/admin/api/tencent/'):
+        request.state.tencent_reason = detail.get("code", "HTTP_ERROR")
     return error(detail.get("code", "HTTP_ERROR"), detail.get("message", "请求失败"), exc.status_code, fields=detail.get("fields"))
 
 
