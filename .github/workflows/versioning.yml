@@ -9,9 +9,55 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  backend:
+    name: 后端非集成回归
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: 安装后端锁定依赖
+        run: |
+          python -m pip install -r backend/requirements.lock
+          python -m pip install --no-deps -e backend
+      - name: 运行后端与部署工具非集成测试
+        working-directory: backend
+        run: python -m pytest tests ../deploy/tests --ignore=tests/integration -q -rs
+
+  mysql:
+    name: MySQL 8.4 集成回归
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: 安装后端锁定依赖
+        run: |
+          python -m pip install -r backend/requirements.lock
+          python -m pip install --no-deps -e backend
+      - name: 启动独立的临时 MySQL
+        run: docker compose -p evolution-backend-ci -f deploy/compose.mysql-test.yaml up -d --wait --wait-timeout 180
+      - name: 建库、核验会话、迁移并运行全部集成测试
+        run: python backend/scripts/run_ci_mysql.py
+      - name: 输出失败时的 MySQL 日志
+        if: failure()
+        run: docker compose -p evolution-backend-ci -f deploy/compose.mysql-test.yaml logs --no-color --tail=100 mysql
+      - name: 清理临时 MySQL
+        if: always()
+        run: docker compose -p evolution-backend-ci -f deploy/compose.mysql-test.yaml down --volumes
+
   version:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -21,9 +67,6 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
       - name: 校验版本文件与构建一致性
         env:
           BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -38,12 +81,6 @@ jobs:
             node scripts/versioning.mjs check
           fi
       - run: node --test scripts/versioning.test.mjs
-      - name: 安装后端锁定依赖
-        run: |
-          python -m pip install -r backend/requirements.lock
-          python -m pip install --no-deps -e backend
-      - name: 验证元信息与认证边界
-        run: python -m pytest backend/tests/test_product_version.py deploy/tests/test_web.py -q
       - run: npm ci --strict-peer-deps
         working-directory: frontend
       - run: npm test -- --maxWorkers=1

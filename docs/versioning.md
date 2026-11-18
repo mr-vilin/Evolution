@@ -15,6 +15,7 @@
 - `scripts/versioning.mjs`：版本格式、记录顺序、基准历史保留与 tag 一致性校验，以及构建元信息生成。
 - `scripts/versioning.test.mjs`：版本工具回归测试。
 - `.github/workflows/versioning.yml`：CI 校验、相关测试及构建入口。
+- [自动测试与费用说明](ci.md)：完整后端回归、隔离 MySQL、本地复用命令及 GitHub Actions 费用边界。
 - `build-info.json`：构建生成的版本、提交、工作区状态、构建时间和发行元信息，不手工编辑或提交。前后端使用同一份元信息，系统信息页核对运行版本。
 - `frontend/package.json`、`backend/pyproject.toml`：技术包版本；API 契约和 Alembic revision 分别管理，不作为产品版本来源。
 
