@@ -2,11 +2,49 @@
 import json
 import csv
 import io
+from decimal import Decimal
 
 from app.main import app
 from app.tencent.gateway import get_tencent_transport
 from test_tencent_accounts_mysql import tencent_http
 from test_tencent_cost_mysql import cost_http, enable_cost, run_job, wire
+
+
+def test_single_month_with_varying_filter_options_reconciles_dashboard_and_csv(cost_http):
+    client, sessions, account = cost_http
+    enable_cost(client, account)
+    page_calls = []
+
+    def transport(credential, action, params):
+        if action == 'DescribeAccountBalance':
+            return b'{"Response":{"Uin":10001,"RequestId":"identity"}}'
+        assert action == 'DescribeCostExplorerSummary'
+        result = wire()['Response']
+        page_calls.append(params['PageNo'])
+        if len(page_calls) > 1:
+            result['ConditionValue'] = {'Business': []}
+        if params['PageNo'] > 1:
+            result['Detail'] = []
+        return json.dumps({'Response': result}).encode()
+
+    assert run_job(client, sessions, account, 'condition-value-drift', transport=transport)['status'] == 'succeeded'
+    assert page_calls == [1, 2, 1]
+    base = f"/admin/api/tencent/accounts/{account['id']}"
+    period_response = client.get(f'{base}/cost-periods/2026-10')
+    assert period_response.status_code == 200
+    period = period_response.json()['data']
+    query = 'start_month=2026-10&end_month=2026-10'
+    dashboard_response = client.get(f'{base}/cost-dashboard?{query}')
+    assert dashboard_response.status_code == 200
+    dashboard = dashboard_response.json()['data']
+    export_response = client.get(f'{base}/cost-export?{query}')
+    assert export_response.status_code == 200
+    exported = list(csv.DictReader(io.StringIO(export_response.content.decode('utf-8-sig'))))
+    amounts = ['-0.34567890', '12.34567890']
+    assert sorted(row['amount'] for row in period['items']) == amounts
+    assert sorted(row['total'] for row in dashboard['products']) == amounts
+    assert sorted(row['费用（元）'] for row in exported) == amounts
+    assert Decimal(period['total']) == Decimal(dashboard['complete_total']) == sum(map(Decimal, amounts))
 
 
 def test_dashboard_sums_local_current_months_without_cloud_requests_and_keeps_missing_null(cost_http):

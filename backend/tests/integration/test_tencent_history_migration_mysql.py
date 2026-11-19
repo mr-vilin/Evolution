@@ -7,6 +7,7 @@ from sqlalchemy import text
 import pytest
 from app.config import get_settings
 from app.main import app
+from app.persistence.database import CURRENT_SCHEMA_HEAD
 from test_tencent_accounts_mysql import tencent_http
 from test_tencent_cost_mysql import cost_http
 from test_tencent_monthly_mysql import monthly,drain
@@ -36,7 +37,7 @@ def test_history_migration_roundtrip_retains_existing_month_and_validates_orm_co
     assert client.get(base+'/cost-periods/2026-10').json()['data']==before
     assert not check_schema(sessions.kw['bind'])['errors']
     with sessions() as db:
-        assert db.execute(text('SELECT version_num FROM alembic_version')).scalar_one()=='0020_tencent_history'
+        assert db.execute(text('SELECT version_num FROM alembic_version')).scalar_one()==CURRENT_SCHEMA_HEAD
         rows=db.execute(text("SELECT TABLE_NAME,COLUMN_NAME,COLUMN_COMMENT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND ((TABLE_NAME='tencent_sync_config' AND COLUMN_NAME='history_progress') OR (TABLE_NAME='tencent_sync_job' AND COLUMN_NAME='priority'))")).all()
         assert len(rows)==2 and all(any('\u4e00'<=c<='\u9fff' for c in row[2]) for row in rows)
 
@@ -54,7 +55,7 @@ def test_history_progress_or_range_jobs_block_downgrade_before_any_ddl(cost_http
     before=structure(sessions)
     with pytest.raises(RuntimeError,match='TENCENT_HISTORY_DOWNGRADE_EVIDENCE'):command.downgrade(alembic(),target)
     assert structure(sessions)==before
-    with sessions() as db:assert db.execute(text('SELECT version_num FROM alembic_version')).scalar_one()=='0020_tencent_history'
+    with sessions() as db:assert db.execute(text('SELECT version_num FROM alembic_version')).scalar_one()==CURRENT_SCHEMA_HEAD
 
 
 @pytest.mark.parametrize('target',['0018_tencent_monthly','0017_tencent_maintenance'])

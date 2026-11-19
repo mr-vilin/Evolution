@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text as sql_text
+from sqlalchemy import JSON, BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text as sql_text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql.elements import TextClause
 from sqlalchemy.ext.compiler import compiles
@@ -379,7 +379,7 @@ class TencentAccount(Base):
 class TencentApiCall(Base):
     __tablename__ = 'tencent_api_call'
     id: Mapped[str] = mapped_column(String(36, collation='utf8mb4_bin'), primary_key=True, comment='每次实际调用的唯一审计事件标识')
-    request_id: Mapped[str] = mapped_column(String(36, collation='utf8mb4_bin'), index=True, comment='服务端生成的本次入站请求关联标识')
+    request_id: Mapped[str] = mapped_column(String(36, collation='utf8mb4_bin'), comment='服务端生成的本次入站请求关联标识')
     direction: Mapped[str] = mapped_column(String(16), comment='调用方向：inbound入站，outbound腾讯云出站')
     action: Mapped[str] = mapped_column(String(64), comment='服务端登记的业务动作，未知为 unknown')
     permission_code: Mapped[str | None] = mapped_column(String(64), comment='本次服务端实际执行的独立权限动作')
@@ -396,7 +396,8 @@ class TencentApiCall(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, comment='调用结束 UTC 时间，未结束为空')
     duration_ms: Mapped[int | None] = mapped_column(Integer, comment='单调时钟测量的实际耗时毫秒数')
     __table_args__ = (
-        Index('ix_tencent_api_call_rate_window', 'direction', 'action', 'target_id', 'started_at'),
+        Index('idx_tencent_api_call_request_id', 'request_id'),
+        Index('idx_tencent_api_call_rate_window', 'direction', 'action', 'target_id', 'started_at'),
         _table_args('腾讯云模块实际请求事实，元信息白名单且不保存财务正文'),
     )
 
@@ -413,7 +414,7 @@ class TencentSyncConfig(Base):
     frequency: Mapped[str] = mapped_column(String(32), default='manual', comment='执行频率：manual手动、monthly每月三日、daily每日或weekly每周日')
     execution_time: Mapped[str] = mapped_column(String(5), default='13:30', server_default='13:30', comment='自动计划的北京时间时分，默认建议13:30可修改')
     history_progress: Mapped[dict | None] = mapped_column(JSON, comment='经类型校验的历史发现检查点，来源窗口不代表账号历史起点')
-    schedule_start_date: Mapped[str | None] = mapped_column(String(10), comment='首次日周计划的补漏日期锚点，不代表已核验历史起点')
+    schedule_start_date: Mapped[date | None] = mapped_column(Date, comment='首次日周计划的补漏日期锚点，不代表已核验历史起点')
     schedule_start_month: Mapped[str | None] = mapped_column(String(7), comment='首次启用月模式时的补漏起点，不代表已核验历史起点')
     currency: Mapped[str] = mapped_column(String(3), default='CNY', comment='境内账单声明币种，不由源接口返回')
     owner: Mapped[str | None] = mapped_column(String(36, collation='utf8mb4_bin'), comment='本配置当前执行者标识')
@@ -435,7 +436,7 @@ class TencentSyncJob(Base):
     idempotency_key: Mapped[str] = mapped_column(String(128, collation='utf8mb4_bin'), comment='配置内可靠请求幂等键')
     priority: Mapped[int] = mapped_column(Integer, default=0, server_default='0', comment='实际领取优先级：0近期或人工，20历史发现；活动重试保持资格')
     kind: Mapped[str] = mapped_column(String(16), default='period', server_default='period', comment='任务种类：batch纯汇总父批次或period实际期间')
-    parent_job_id: Mapped[int | None] = mapped_column(Integer, index=True, comment='期间所属父批次标识，独立手动期间为空')
+    parent_job_id: Mapped[int | None] = mapped_column(Integer, comment='期间所属父批次标识，独立手动期间为空')
     month: Mapped[str | None] = mapped_column(String(7), comment='实际日月期间所属自然月YYYY-MM，纯汇总父批次为空')
     status: Mapped[str] = mapped_column(String(32), comment='任务状态pending、running、retry_wait、succeeded或failed')
     snapshot: Mapped[dict] = mapped_column(JSON, comment='冻结配置、口径、范围、可信发起身份及初始化世代，不含秘密')
@@ -450,7 +451,13 @@ class TencentSyncJob(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, comment='任务终结UTC时刻')
     create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text('CURRENT_TIMESTAMP'), comment='任务可靠受理UTC时间')
     update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='任务状态更新UTC时间')
-    __table_args__ = (UniqueConstraint('config_id','dataset_epoch','kind','idempotency_key',name='uk_tencent_job_request'), Index('idx_tencent_job_claim','status','config_id','id'), Index('ix_tencent_job_priority','config_id','status','priority','id'), _table_args('腾讯云单月逻辑执行任务，不依赖浏览器会话存活'))
+    __table_args__ = (
+        UniqueConstraint('config_id','dataset_epoch','kind','idempotency_key',name='uk_tencent_job_request'),
+        Index('idx_tencent_job_claim','status','config_id','id'),
+        Index('idx_tencent_job_priority','config_id','status','priority','id'),
+        Index('idx_tencent_sync_job_parent_job_id','parent_job_id'),
+        _table_args('腾讯云单月逻辑执行任务，不依赖浏览器会话存活'),
+    )
 
 
 class TencentSyncAttempt(Base):
@@ -488,7 +495,7 @@ class TencentCostPeriod(Base):
     latest_attempt_id: Mapped[int] = mapped_column(Integer, comment='最近成功提交本期间的尝试标识')
     create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text('CURRENT_TIMESTAMP'), comment='期间首次创建UTC时间')
     update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='完整期间最后替换UTC时间')
-    __table_args__ = (UniqueConstraint('account_id','period_key','currency',name='uk_tencent_period_scope'), Index('ix_tencent_period_month','account_id','currency','month'), _table_args('腾讯云原始日月费用及一致覆盖回执'))
+    __table_args__ = (UniqueConstraint('account_id','period_key','currency',name='uk_tencent_period_scope'), Index('idx_tencent_period_month','account_id','currency','month'), _table_args('腾讯云原始日月费用及一致覆盖回执'))
 
 
 class TencentCostItem(Base):

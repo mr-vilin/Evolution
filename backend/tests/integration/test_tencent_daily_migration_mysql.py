@@ -7,6 +7,7 @@ from sqlalchemy import text
 import pytest
 from app.main import app
 from app.config import get_settings
+from app.persistence.database import CURRENT_SCHEMA_HEAD
 from test_tencent_accounts_mysql import tencent_http
 from test_tencent_cost_mysql import cost_http
 from test_tencent_monthly_mysql import monthly
@@ -100,6 +101,6 @@ def test_daily_downgrade_refuses_unexpressible_config_or_task_before_any_ddl(cos
     assert client.get(base+'/cost-config').json()['data']==before_config
     assert client.get(base+'/cost-jobs').json()['data']==before_jobs
     with sessions() as db:
-        assert db.execute(text('SELECT version_num FROM alembic_version')).scalars().all()==['0020_tencent_history']
+        assert db.execute(text('SELECT version_num FROM alembic_version')).scalars().all()==[CURRENT_SCHEMA_HEAD]
         assert {name:db.execute(text('SHOW CREATE TABLE '+name)).one()[1] for name in before_ddl}==before_ddl
     assert not check_schema(sessions.kw['bind'])['errors']

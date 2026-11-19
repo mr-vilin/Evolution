@@ -8,6 +8,7 @@ from alembic.config import Config
 from sqlalchemy import text
 from app.main import app
 from app.config import get_settings
+from app.persistence.database import CURRENT_SCHEMA_HEAD
 from test_tencent_accounts_mysql import tencent_http
 
 
@@ -44,7 +45,7 @@ def test_monthly_migration_preserves_legacy_request_namespace_and_refuses_batch_
         assert client.get(f'/admin/api/tencent/cost-jobs/{legacy_id}').json()['data']==legacy
         assert client.get(f"/admin/api/tencent/accounts/{account['id']}/cost-jobs").json()['data']==before_jobs
         with sessions() as db:
-            assert db.execute(text('SELECT version_num FROM alembic_version')).scalars().all()==['0020_tencent_history']
+            assert db.execute(text('SELECT version_num FROM alembic_version')).scalars().all()==[CURRENT_SCHEMA_HEAD]
             assert {name:db.execute(text('SHOW CREATE TABLE '+name)).one()[1] for name in before_ddl}==before_ddl
         from app.persistence.schema_check import check_schema
         assert not check_schema(sessions.kw['bind'])['errors']
