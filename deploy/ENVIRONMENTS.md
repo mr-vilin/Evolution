@@ -8,7 +8,7 @@
 
 ## 环境台账
 
-本地核实日期：2026-11-16；远端列保留 2026-10-26 的历史快照，本次未连接或发布远端。日期均为北京时间。
+本地核实日期：2026-11-18；远端列保留 2026-10-26 的历史快照，本次未连接或发布远端。日期均为北京时间。
 
 | 项目 | 本地 Docker | 线上测试 | 正式 |
 | --- | --- | --- | --- |
@@ -19,11 +19,13 @@
 | Compose 项目 | `evolution` | `organization-directory` | 待确认；不得与测试数据卷混用 |
 | 应用入口 | `http://127.0.0.1:8000`；仅用于本机检查，正式登录 HTTPS 入口待登记 | `https://test-organization.bzg.company` | 待确认独立 HTTPS 域名与回调 |
 | 容器 | app、mcp、mysql；migrate 为一次性服务 | 同左 | 沿用既定拓扑，实例与凭据独立 |
-| 数据库 | 实测 `0013_employee_profile`；MySQL 8.4.11 | 实测 `0010_initialization_wizard`；MySQL 8.4.11 | 待创建及实测，不能假定同测试 |
-| 最近镜像 | `evolution-runtime:release-20261116-034142-fadb8915`（原镜像新增别名） | `organization-directory-runtime:coverage-20261026-01` | 无 |
+| 数据库 | 实测 `0020_tencent_history`；MySQL 8.4.11 | 实测 `0010_initialization_wizard`；MySQL 8.4.11 | 待创建及实测，不能假定同测试 |
+| 最近镜像 | `evolution-runtime:release-20261118-022303-3b683f62`（0.3.0 开发构建） | `organization-directory-runtime:coverage-20261026-01` | 无 |
 | 凭据来源 | 仓库 `.env` 和 Docker Desktop 当前身份 | 远端原 Compose／受限配置、SSH 当前身份、`sudo -n docker` | 独立配置，禁止复制测试凭据 |
 
 这里的版本和镜像是核实快照；每次运行 `inspect` 获取当前状态。`ORG_AGENT_ENVIRONMENT` 是能力安全策略字段，不能据它的值认定部署主机是测试或正式环境。
+
+2026-11-18 已按当次授权完成本地 0013→0020 的加密备份、隔离恢复及迁移演练、业务库迁移与同制品发布；原有 22 张业务表结构及全部列的数据摘要保持一致。迁移入口见 [0020 手册](migrations/0020-tencent-finance.md)，最终验证、证据与跨迁移回退边界见[本地发布记录](../docs/architecture/local-tencent-finance-deployment-2026-11-18.md)。本记录不授权后续环境迁移或发布。
 
 ## 固定工具与制品
 
