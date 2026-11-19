@@ -197,6 +197,6 @@ def test_actual_mysql_balance_rate_limit_has_matching_range_index(tencent_http):
     with sessions() as db:
         actual = {item['name']:item['column_names'] for item in inspect(db.get_bind()).get_indexes('tencent_api_call')}
     expected = ['direction','action','target_id','started_at']
-    assert actual.get('ix_tencent_api_call_rate_window') == expected
-    declared = next(index for index in TencentApiCall.__table__.indexes if index.name=='ix_tencent_api_call_rate_window')
+    assert actual.get('idx_tencent_api_call_rate_window') == expected
+    declared = next(index for index in TencentApiCall.__table__.indexes if index.name=='idx_tencent_api_call_rate_window')
     assert [column.name for column in declared.columns] == expected

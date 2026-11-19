@@ -100,12 +100,17 @@ def collect_period(gateway, credential, snapshot, *, clock=time.monotonic, check
 
     count = first['Total']
     total = amount(first['TotalDetail'])
-    metadata = digest({key: first.get(key) for key in ('Total', 'Header', 'TotalDetail', 'ConditionValue')})
+
+    def bill_metadata(response):
+        # ConditionValue 只用于产品编码映射，不是账单一致性的证据。
+        return digest((response['Total'], response['Header'], response['TotalDetail']))
+
+    metadata = bill_metadata(first)
     rows, fingerprints = [], set()
     pages = max(1, (count + PAGE_SIZE - 1) // PAGE_SIZE)
     for number in range(1, pages + 1):
         response = first if number == 1 else page(number)
-        if digest({key: response.get(key) for key in ('Total', 'Header', 'TotalDetail', 'ConditionValue')}) != metadata:
+        if bill_metadata(response) != metadata:
             invalid('TENCENT_COST_SOURCE_CHANGED')
         values = response['Detail']
         expected = min(PAGE_SIZE, max(0, count - (number-1)*PAGE_SIZE))
@@ -124,11 +129,11 @@ def collect_period(gateway, credential, snapshot, *, clock=time.monotonic, check
         tail = page(pages+1)
         if tail['Detail']:
             invalid('TENCENT_COST_EXCESS_ROWS')
-        if digest({key: tail.get(key) for key in ('Total','Header','TotalDetail','ConditionValue')}) != metadata:
+        if bill_metadata(tail) != metadata:
             invalid('TENCENT_COST_SOURCE_CHANGED')
     # 源接口无快照token；重读完整首证据只能降低变化风险，不能声称上游事务快照。
     again = page(1)
-    if digest({k:v for k,v in first.items() if k!='RequestId'}) != digest({k:v for k,v in again.items() if k!='RequestId'}):
+    if bill_metadata(again) != metadata or digest(again['Detail']) != digest(first['Detail']):
         invalid('TENCENT_COST_SOURCE_CHANGED')
     with localcontext() as ctx:
         ctx.prec = 64

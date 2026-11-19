@@ -35,13 +35,13 @@ T03的唯一可变配置是开关，revision在本阶段同时充当启停栅栏
 
 主接口 DescribeCostExplorerSummary 固定 BillType=1、FeeType=cost、Dimensions=business、PeriodType=month、NeedConditionValue=1；BeginTime/EndTime为北京时间月首至月末最后一秒。主响应不含UIN、币种、Ready或快照token，因此一次尝试先解析一次不可变受控凭据，用同一凭据 DescribeAccountBalance 核验实际UIN后再请求全部费用分页，不创建余额历史。
 
-校验总条数、每页应有行数、重复页指纹（不含RequestId）、提前空/null页、声明总行数之后仍有产品、页间总计/列/字典变化，以及每行时间金额、所有产品和总计一致。最后重读首证据降低变化风险；**不宣称腾讯云提供事务快照**。当前明确支持单一月时间列的YYYY-MM、YYYY-MM-01、YYYY-MM-01 00:00:00三种标签，其他形态拒绝发布，待真实账号核验后再扩展。
+校验总条数、每页应有行数、重复页指纹（不含RequestId）、提前空/null页、声明总行数之后仍有产品、页间总条数/表头/总计变化，以及每行时间金额、所有产品和总计一致。最后重读首页，比较总条数、表头、总计及全部首页明细；筛选选项`ConditionValue`不参与一致性校验。**不宣称腾讯云提供事务快照**。当前明确支持单一月时间列的YYYY-MM、YYYY-MM-01、YYYY-MM-01 00:00:00三种标签，其他形态拒绝发布，待真实账号核验后再扩展。
 
 金额从源十进制字符串直接Decimal处理，64位上下文求和，DECIMAL(24,8)无损落库。负数退款保持原值，超范围、非有限或超过八位有效小数拒绝，不舍入配平。CNY是境内账号配置声明，不冒充上游响应币种，不跨币种合计。
 
 Total=0/空Detail本身不能清空旧费用。只有辅助 DescribeBillSummaryByProduct（BeginTime/EndTime均同一YYYY-MM、无PayerUin/PayType限制）Ready=1、折后总费用RealTotalCost=0、全产品零且BillMonth匹配，才形成同月就绪零证据。需额外只读CAM动作 `finance:DescribeBillSummaryByProduct`；无权限、未就绪、空/缺失正文或非零差异均保留旧值。非空正负相抵的零净额仍保留全部产品。
 
-产品只用主响应ConditionValue.Business精确双向唯一字典映射BusinessCode；不把子产品ProductCode混作BusinessCode，不按名字推码或合并。没有可靠映射、重复同名或双向歧义时，保留原始产品名、独立期间内行标识及unmapped/ambiguous。重新采集整月原子删除旧产品并插入完整新集合，消失产品自然移除，其他月份不受影响。T05应从期间覆盖计算范围，不将last_success_month（最近成功执行的月）误作连续历史高水位。
+产品只用首次首页的`ConditionValue.Business`精确双向唯一字典映射BusinessCode，后续页及重读首页的筛选选项不会覆盖首次映射；不把子产品ProductCode混作BusinessCode，不按名字推码或合并。没有可靠映射、重复同名或双向歧义时，保留原始产品名、独立期间内行标识及unmapped/ambiguous。重新采集整月原子删除旧产品并插入完整新集合，消失产品自然移除，其他月份不受影响。T05应从期间覆盖计算范围，不将last_success_month（最近成功执行的月）误作连续历史高水位。
 
 ## 数据库迁移与回退
 

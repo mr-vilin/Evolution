@@ -24,13 +24,12 @@ def upgrade():
 
 
 
-def downgrade():
+def check_downgrade(target):
     if not context.is_offline_mode():
         bind=op.get_bind()
         if (bind.execute(text("SELECT id FROM tencent_sync_config WHERE history_progress IS NOT NULL AND JSON_TYPE(history_progress)!='NULL' LIMIT 1")).first()
             or bind.execute(text("SELECT id FROM tencent_sync_job WHERE priority<>0 OR JSON_UNQUOTE(JSON_EXTRACT(snapshot,'$.request_namespace')) IN ('manual-range-v1','history-discovery-v1') LIMIT 1")).first()):
             raise RuntimeError('TENCENT_HISTORY_DOWNGRADE_EVIDENCE: preserve history config and jobs; use application rollback')
-        target=context.get_revision_argument()
         if target not in {down_revision,'-1'}:
             if (bind.execute(text("SELECT id FROM tencent_cost_period WHERE granularity='day' LIMIT 1")).first()
                 or bind.execute(text("SELECT id FROM tencent_sync_config WHERE frequency IN ('daily','weekly') OR schedule_start_date IS NOT NULL LIMIT 1")).first()
@@ -38,6 +37,10 @@ def downgrade():
                 raise RuntimeError('TENCENT_DAILY_DOWNGRADE_EVIDENCE: preserve daily evidence before any DDL')
             if target not in {'0018_tencent_monthly'} and bind.execute(text("SELECT id FROM tencent_sync_job WHERE kind='batch' LIMIT 1")).first():
                 raise RuntimeError('TENCENT_MONTHLY_DOWNGRADE_EVIDENCE: preserve batch history before any DDL')
+
+
+def downgrade():
+    check_downgrade(context.get_revision_argument())
     op.drop_index('ix_tencent_job_priority',table_name='tencent_sync_job')
     op.drop_column('tencent_sync_job','priority')
     op.drop_column('tencent_sync_config','history_progress')

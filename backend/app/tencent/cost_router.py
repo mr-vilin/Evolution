@@ -1,5 +1,5 @@
 """腾讯云日/月期间的可靠受理和一致查询接口。"""
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import hashlib
 from typing import Literal
 from zoneinfo import ZoneInfo
@@ -127,9 +127,9 @@ def update_config(account_id: int, body: CostConfigBody, request: Request, ident
             row.execution_time=body.execution_time
             if body.is_enabled and body.frequency=='monthly' and not row.schedule_start_month:
                 row.schedule_start_month=shifted(latest_month(),-1)
-            if body.is_enabled and body.frequency in {'daily','weekly'} and not row.schedule_start_date:
+            if body.is_enabled and body.frequency in {'daily','weekly'} and row.schedule_start_date is None:
                 local=utcnow().replace(tzinfo=timezone.utc).astimezone(ZoneInfo('Asia/Shanghai'))
-                row.schedule_start_date=shifted(local.strftime('%Y-%m'),-1)+'-01'
+                row.schedule_start_date=date.fromisoformat(shifted(local.strftime('%Y-%m'),-1)+'-01')
             row.run_policy=policy
             db.flush()
             result = config_data(row)

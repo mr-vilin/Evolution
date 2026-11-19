@@ -223,7 +223,7 @@ def accept_daily_batch(db,account,config,epoch,key,now,*,actor_id,execution_iden
         day+=timedelta(days=1)
     # 当月截至昨日优先，其次上月；集合身份先规范化再冻结，执行不得自行扩范围。
     recent.sort(key=lambda k:(k[:7]!=local.strftime('%Y-%m'),k))
-    start=datetime.strptime(config.schedule_start_date or recent_start.isoformat(),'%Y-%m-%d').date()
+    start=config.schedule_start_date or recent_start
     gaps=set(); day=start
     while day<recent_start:
         target=normalized(day.isoformat())
