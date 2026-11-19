@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     agent_service_token: SecretStr | None = None
     agent_environment: Literal["production", "test"] = "production"
+    tencent_credentials: SecretStr | None = None
     database_url: str | None = None
     session_secret: SecretStr | None = None
     feishu_app_id: str | None = None

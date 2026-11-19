@@ -1,0 +1,49 @@
+{
+  "Response": {
+    "Total": 2,
+    "Header": {
+      "Name": "产品",
+      "Total": "总计",
+      "HeadDetail": [
+        {
+          "Name": "2026-10-01 00:00:00"
+        }
+      ]
+    },
+    "Detail": [
+      {
+        "Name": "样例产品甲",
+        "Total": "12.34567890",
+        "TimeDetail": [
+          {
+            "Time": "2026-10-01 00:00:00",
+            "Money": "12.34567890"
+          }
+        ]
+      }
+    ],
+    "TotalDetail": {
+      "Name": "总计",
+      "Total": "12.00000000",
+      "TimeDetail": [
+        {
+          "Time": "2026-10-01 00:00:00",
+          "Money": "12.00000000"
+        }
+      ]
+    },
+    "ConditionValue": {
+      "Business": [
+        {
+          "BusinessCode": "p_synthetic_a",
+          "BusinessCodeName": "样例产品甲"
+        },
+        {
+          "BusinessCode": "p_synthetic_b",
+          "BusinessCodeName": "样例产品乙"
+        }
+      ]
+    },
+    "RequestId": "synthetic-month-page-1"
+  }
+}

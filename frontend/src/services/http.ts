@@ -39,7 +39,7 @@ export async function request<T>(path: string, options: { method?: string; body?
   }
   if (!response.ok) {
     const detail = (payload as { error?: { code?: string; message?: string; fields?: FieldError[] } } | null)?.error;
-    if ((response.status === 401 || response.status === 403) && path !== '/admin/auth/session') {
+    if ((response.status === 401 || response.status === 403 || detail?.code === 'INITIALIZATION_INCOMPLETE') && path !== '/admin/auth/session') {
       csrfToken = null;
       window.dispatchEvent(new CustomEvent(AUTH_FAILURE_EVENT, { detail: { status: response.status } }));
     }
@@ -58,4 +58,25 @@ export function query(values: Record<string, string | number | boolean | null | 
   }
   const encoded = params.toString();
   return encoded ? `?${encoded}` : '';
+}
+
+/** 受保护的文件读取沿用会话失效通知；失败正文不能作为下载文件。 */
+export async function requestFile(path: string, signal?: AbortSignal): Promise<Blob> {
+  let response: Response;
+  try { response = await fetch(path, {credentials:'include',signal,headers:{Accept:'text/csv'}}); }
+  catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
+    throw new ApiError(0,'NETWORK_ERROR','无法连接服务，请稍后重试');
+  }
+  if (!response.ok) {
+    let detail: {code?: string;message?: string} | undefined;
+    try { detail = (await response.json()).error; } catch { /* 保留HTTP失败状态。 */ }
+    if (response.status === 401 || response.status === 403 || detail?.code === 'INITIALIZATION_INCOMPLETE') {
+      csrfToken = null;
+      window.dispatchEvent(new CustomEvent(AUTH_FAILURE_EVENT,{detail:{status:response.status}}));
+    }
+    throw new ApiError(response.status,detail?.code ?? 'REQUEST_FAILED',detail?.message ?? '导出失败，请稍后重试');
+  }
+  if (!response.headers.get('content-type')?.startsWith('text/csv')) throw new ApiError(response.status,'INVALID_RESPONSE','服务未返回费用文件，请重试');
+  return response.blob();
 }

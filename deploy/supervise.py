@@ -49,6 +49,7 @@ def main() -> int:
     return supervise([
         [sys.executable, '-m', 'uvicorn', 'deploy.asgi:app', '--host', '0.0.0.0', '--port', '8000', '--no-access-log'],
         [sys.executable, '-m', 'app.sync.worker'],
+        [sys.executable, '-m', 'app.tencent.cost_worker'],
         [sys.executable, '-m', 'app.feishu.listener'],
     ])
 

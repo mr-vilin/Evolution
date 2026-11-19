@@ -38,7 +38,7 @@ export const layout: RunTimeLayoutConfig = () => {
     actionsRender: () => [<ConfigProvider key="admin" theme={{ components: { Button: { textTextColor: token.colorTextLightSolid, textTextHoverColor: token.colorTextLightSolid, textTextActiveColor: token.colorTextLightSolid, textHoverBg: token.colorPrimaryHover, colorBgTextActive: token.colorPrimaryActive } } }}><Space className="workspace-actions" size={0}><Button type="text" aria-label="布局设置" title="布局设置" icon={<SettingOutlined />} onClick={preferences.open} /><Link aria-label="系统信息" title="系统信息" to="/system-info"><Button type="text" aria-label="系统信息" icon={<InfoCircleOutlined />} /></Link><Button type="text" aria-label="官方参考帮助" title="官方参考帮助" icon={<QuestionCircleOutlined />} href="https://pro.ant.design/zh-CN/" target="_blank" rel="noopener noreferrer" /><AdminActions /></Space></ConfigProvider>],
     rightContentRender: false,
     menuDataRender: (items) => {
-      const business = items.filter(item => ['/organization', '/stores'].includes(item.path ?? '') || item.path?.startsWith('/employees/'));
+      const business = items.filter(item => ['/organization', '/stores', '/tencent/accounts', '/tencent/costs', '/tencent/cost-dashboard'].includes(item.path ?? '') || item.path?.startsWith('/employees/'));
       const system = items.filter(item => ['/sync', '/logs', '/settings', '/system-info'].includes(item.path ?? ''));
       const examples = items.filter(item => item.path?.startsWith('/examples/'));
       const standards = items.filter(item => item.path?.startsWith('/ui-standards/'));

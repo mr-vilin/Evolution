@@ -47,3 +47,10 @@ truststore==0.10.5
 typing-inspection==0.4.4
 typing_extensions==4.16.0
 uvicorn==0.35.0
+
+charset-normalizer==3.5.2
+requests==2.34.2
+tencentcloud-sdk-python-billing==3.1.177
+tencentcloud-sdk-python-common==3.1.177
+urllib3==2.8.0
+tzdata==2026.6
