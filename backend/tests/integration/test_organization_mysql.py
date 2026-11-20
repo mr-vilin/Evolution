@@ -85,7 +85,7 @@ def test_0011_preserves_existing_schema_data_and_initializes_stable_sibling_orde
     with engine.begin() as db:
         db.execute(text("INSERT INTO department (id,feishu_department_id,name,status,sync_quality,is_virtual_root) VALUES ('z','z','后','active','complete',0),('a','a','前','active','complete',0)"))
     before = schema_snapshot(engine)
-    command.upgrade(config, 'head')
+    command.upgrade(config, '0011_organization_browser')
     after = schema_snapshot(engine)
     assert after['session']['version'].startswith('8.4.')
     assert after['session']['collation_connection'] == 'utf8mb4_general_ci'

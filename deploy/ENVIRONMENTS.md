@@ -19,8 +19,8 @@
 | Compose 项目 | `evolution` | `organization-directory` | 待确认；不得与测试数据卷混用 |
 | 应用入口 | `http://127.0.0.1:8000`；仅用于本机检查，正式登录 HTTPS 入口待登记 | `https://test-organization.bzg.company` | 待确认独立 HTTPS 域名与回调 |
 | 容器 | app、mcp、mysql；migrate 为一次性服务 | 同左 | 沿用既定拓扑，实例与凭据独立 |
-| 数据库 | `evolution`，应用账号 `evolution`。实测 `0021_tencent_db_conventions`（MySQL 8.4.11） | 实测 `0010_initialization_wizard`；MySQL 8.4.11 | 待创建及实测，不能假定同测试 |
-| 最近镜像 | `evolution-runtime:release-20261120-024142-99f78cf8`（0.3.0 开发构建） | `organization-directory-runtime:coverage-20261026-01` | 无 |
+| 数据库 | `evolution`，应用账号 `evolution`。实测 `0022_mysql_general_ci`（MySQL 8.4.11） | 实测 `0010_initialization_wizard`；MySQL 8.4.11 | 待创建及实测，不能假定同测试 |
+| 最近镜像 | `evolution-runtime:release-20261120-093830-b44b7fe9`（0.4.0 开发构建） | `organization-directory-runtime:coverage-20261026-01` | 无 |
 | 凭据来源 | 仓库 `.env` 和 Docker Desktop 当前身份 | 远端原 Compose／受限配置、SSH 当前身份、`sudo -n docker` | 独立配置，禁止复制测试凭据 |
 
 这里的版本和镜像是核实快照；每次运行 `inspect` 获取当前状态。`AGENT_ENVIRONMENT` 是能力安全策略字段，不能据它的值认定部署主机是测试或正式环境。
@@ -30,6 +30,8 @@
 2026-11-20 本地 app/MCP 发布 0.3.0 配置键过渡镜像，源码基于 `ab34919` 的工作区快照，构建时间为 `2026-11-20T10:43:46.974+08:00`。发布与独立复核通过健康、未登录访问控制、100 个静态资源和数据库状态检查。该镜像已验证仅用新键加载应用和 MCP 配置。当次发布使用的 Compose 含旧键映射，供依赖 `ORG_` 键的回退镜像使用。制品与源码清单位于 `.cache/artifacts/release-20261120-024142-99f78cf8/`，前后状态、校验结果与回退镜像位于 `.cache/releases/release-20261120-024142-99f78cf8/`。
 
 2026-11-20 本地数据库与应用账号切换为 `evolution`。沿用当前 app/MCP 镜像、MySQL 容器与数据卷。隔离演练和真实导入均核对了数据、DDL 与逐列元数据，应用健康检查通过。加密备份、切换记录和验证证据位于 `.cache/migrations/db-evolution-20261120-081224-65eea342/`。原库保留，原应用账号锁定。
+
+2026-11-20 本地 MySQL 使用新卷 `evolution_mysql-general-ci_20261120` 完成空库初始化，表和字符串列实测均为 `utf8mb4_general_ci`，应用处于待初始化状态。旧卷 `organization-directory_mysql-data` 保留作回退。app、MCP、MySQL 健康检查和 100 个静态资源核验通过。切换与回退证据位于 `.cache/migrations/local-0022-20261120-093830-b44b7fe9/`，流程见 [0022 迁移手册](migrations/0022-mysql-general-ci.md)。
 
 ## 固定工具与制品
 

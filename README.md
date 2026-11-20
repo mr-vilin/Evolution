@@ -37,7 +37,7 @@ MCP 接入示例使用新目录；已有客户端需重新加载配置。本地 
 - [产品版本声明](./version.json)
 - [产品版本记录](./CHANGELOG.md)
 
-当前主分支包含 Agent 能力、独立 MCP 适配层与确定性 Evaluation；当前代码所需迁移以 `backend/app/persistence/database.py` 的 `CURRENT_SCHEMA_HEAD` 为准，数据库与会话采用 `general_ci`，稳定 ID 保留 `utf8mb4_bin`。开发前端不会自动登录或填充业务数据；未连接后端时显示明确的错误与重试入口。
+当前主分支包含 Agent 能力、独立 MCP 适配层与确定性 Evaluation；当前代码所需迁移以 `backend/app/persistence/database.py` 的 `CURRENT_SCHEMA_HEAD` 为准，数据库、业务表、字符串列和应用会话统一采用 `utf8mb4_general_ci`（自迁移 0022 起）。开发前端不会自动登录或填充业务数据；未连接后端时显示明确的错误与重试入口。
 
 首版历史验证：后端 95 项、前端 25 项、部署侧 5 项通过；前端生产构建、Ant Design 检查与离线迁移 SQL 生成通过，当时 6 项 MySQL 测试跳过。[首版整体代码审查](./docs/superpowers/final-review.md)记录原基线。当前实际 MySQL、MCP 与六场景连续评测的结果见[最新运行台账](./docs/运行与验收.md)，不能与首版历史数字混作同一次验收。
 

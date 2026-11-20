@@ -82,7 +82,9 @@ def test_all_detail_fields_survive_initialization_scheduled_sync_and_event(setup
             assert db.get(Employee, 'u').open_id == 'ou_u'
 
     assert_fields()
-    assert ScheduleService(sessions).due(datetime(2030, 1, 1, 19))
+    schedule = ScheduleService(sessions)
+    schedule.put({'enabled': True, 'local_time': '03:00', 'timezone': 'Asia/Shanghai'}, 'test')
+    assert schedule.due(datetime(2030, 1, 1, 19))
     assert worker.step()
     with sessions() as db:
         scheduled = list(db.scalars(select(SyncJob).where(SyncJob.trigger_source == 'schedule')))
