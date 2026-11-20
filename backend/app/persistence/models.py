@@ -11,7 +11,7 @@ TABLE_ARGS = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4", "mysql_colla
 
 def _table_args(comment: str) -> dict:
     return {**TABLE_ARGS, "comment": comment}
-SOURCE_ID = String(191, collation="utf8mb4_bin")
+SOURCE_ID = String(191)
 
 
 class _UpdateTimestamp(TextClause):
@@ -75,7 +75,7 @@ class DatasetState(Base):
 
 class SystemSetting(Base):
     __tablename__ = "system_setting"
-    key: Mapped[str] = mapped_column(String(128, collation="utf8mb4_bin"), primary_key=True, comment="系统设置键名")
+    key: Mapped[str] = mapped_column(String(128), primary_key=True, comment="系统设置键名")
     value: Mapped[str] = mapped_column(Text, comment="系统设置值")
     __table_args__ = _table_args("系统设置")
 
@@ -102,9 +102,9 @@ class Employee(Base):
     open_id: Mapped[str | None] = mapped_column(SOURCE_ID, unique=True, comment="飞书用户开放标识")
     name: Mapped[str] = mapped_column(String(255), comment="员工姓名")
     employee_no: Mapped[str | None] = mapped_column(String(128), comment="员工工号")
-    mobile: Mapped[str | None] = mapped_column(String(128, collation="utf8mb4_bin"), comment="飞书完整手机号，空值含义由字段可读性说明")
-    email: Mapped[str | None] = mapped_column(String(254, collation="utf8mb4_bin"), comment="飞书人员邮箱，缺省或不可读时为空，可读性记录于 field_readability")
-    avatar_url: Mapped[str | None] = mapped_column(String(2048, collation="utf8mb4_bin"), comment="飞书人员头像 HTTPS 地址，缺省或不可读时为空")
+    mobile: Mapped[str | None] = mapped_column(String(128), comment="飞书完整手机号，空值含义由字段可读性说明")
+    email: Mapped[str | None] = mapped_column(String(254), comment="飞书人员邮箱，缺省或不可读时为空，可读性记录于 field_readability")
+    avatar_url: Mapped[str | None] = mapped_column(String(2048), comment="飞书人员头像 HTTPS 地址，缺省或不可读时为空")
     join_time: Mapped[int | None] = mapped_column(BigInteger, comment="飞书入职时间 Unix 秒时间戳，按北京时间展示日期，未填写或不可读时为空")
     is_frozen: Mapped[bool | None] = mapped_column(Boolean, comment="飞书账号是否暂停，NULL 表示未知")
     is_resigned: Mapped[bool | None] = mapped_column(Boolean, comment="飞书账号是否离职，NULL 表示未知")
@@ -141,14 +141,14 @@ class StoreProfile(Base):
     __tablename__ = "store_profile"
     department_id: Mapped[str] = mapped_column(SOURCE_ID, ForeignKey("department.id"), primary_key=True, comment="门店对应部门标识")
     is_store: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否标记为门店")
-    store_code: Mapped[str | None] = mapped_column(String(128, collation="utf8mb4_bin"), unique=True, comment="门店编码")
+    store_code: Mapped[str | None] = mapped_column(String(128), unique=True, comment="门店编码")
     notes: Mapped[str | None] = mapped_column(Text, comment="门店备注")
     __table_args__ = _table_args("门店资料")
 
 
 class StoreCodeReservation(Base):
     __tablename__ = "store_code_reservation"
-    store_code: Mapped[str] = mapped_column(String(128, collation="utf8mb4_bin"), primary_key=True, comment="预留门店编码")
+    store_code: Mapped[str] = mapped_column(String(128), primary_key=True, comment="预留门店编码")
     department_id: Mapped[str] = mapped_column(SOURCE_ID, ForeignKey("department.id"), comment="占用该编码的部门标识")
     reserved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), comment="编码预留时间")
     __table_args__ = _table_args("门店编码预留")
@@ -184,7 +184,7 @@ class AdminAllowlist(Base):
 class AdminSession(Base):
     __tablename__ = "admin_session"
     id: Mapped[str] = mapped_column(SOURCE_ID, primary_key=True, comment="管理员会话内部标识")
-    token_digest: Mapped[str] = mapped_column(String(64, collation="utf8mb4_bin"), comment="管理员会话令牌 SHA-256 摘要")
+    token_digest: Mapped[str] = mapped_column(String(64), comment="管理员会话令牌 SHA-256 摘要")
     open_id: Mapped[str] = mapped_column(SOURCE_ID, index=True, comment="管理员飞书开放标识")
     csrf_hash: Mapped[str] = mapped_column(String(64), comment="CSRF 令牌摘要")
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), comment="会话过期时间")
@@ -365,7 +365,7 @@ class TencentAccount(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment='腾讯云账号内部标识')
     uin: Mapped[str] = mapped_column(SOURCE_ID, nullable=False, comment='不可重新绑定的腾讯云主账号 UIN 字符串')
     alias: Mapped[str] = mapped_column(String(128), nullable=False, comment='管理员维护的中文账号别名')
-    credential_ref: Mapped[str] = mapped_column(String(64, collation='utf8mb4_bin'), nullable=False, comment='后端受控凭据注册表引用，不保存可用密钥')
+    credential_ref: Mapped[str] = mapped_column(String(64), nullable=False, comment='后端受控凭据注册表引用，不保存可用密钥')
     revision: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), 'mysql'), default=1, server_default='1', comment='账号维护并发修订号，每次有效维护递增')
     credential_revision: Mapped[int] = mapped_column(Integer, default=1, server_default='1', comment='账号安全修订号，凭据轮换或启停后隔离旧在途结果')
     is_enabled: Mapped[bool] = mapped_column(Boolean().with_variant(TINYINT(unsigned=True), 'mysql'), default=True, server_default='1', comment='账号总开关：1启用，0停用并禁止新结果')
@@ -378,8 +378,8 @@ class TencentAccount(Base):
 
 class TencentApiCall(Base):
     __tablename__ = 'tencent_api_call'
-    id: Mapped[str] = mapped_column(String(36, collation='utf8mb4_bin'), primary_key=True, comment='每次实际调用的唯一审计事件标识')
-    request_id: Mapped[str] = mapped_column(String(36, collation='utf8mb4_bin'), comment='服务端生成的本次入站请求关联标识')
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, comment='每次实际调用的唯一审计事件标识')
+    request_id: Mapped[str] = mapped_column(String(36), comment='服务端生成的本次入站请求关联标识')
     direction: Mapped[str] = mapped_column(String(16), comment='调用方向：inbound入站，outbound腾讯云出站')
     action: Mapped[str] = mapped_column(String(64), comment='服务端登记的业务动作，未知为 unknown')
     permission_code: Mapped[str | None] = mapped_column(String(64), comment='本次服务端实际执行的独立权限动作')
@@ -417,7 +417,7 @@ class TencentSyncConfig(Base):
     schedule_start_date: Mapped[date | None] = mapped_column(Date, comment='首次日周计划的补漏日期锚点，不代表已核验历史起点')
     schedule_start_month: Mapped[str | None] = mapped_column(String(7), comment='首次启用月模式时的补漏起点，不代表已核验历史起点')
     currency: Mapped[str] = mapped_column(String(3), default='CNY', comment='境内账单声明币种，不由源接口返回')
-    owner: Mapped[str | None] = mapped_column(String(36, collation='utf8mb4_bin'), comment='本配置当前执行者标识')
+    owner: Mapped[str | None] = mapped_column(String(36), comment='本配置当前执行者标识')
     generation: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), 'mysql'), default=0, server_default='0', comment='配置执行资格递增代次')
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, comment='执行资格到期UTC时刻')
     active_job_id: Mapped[int | None] = mapped_column(Integer, comment='本配置正在执行的任务标识')
@@ -433,14 +433,14 @@ class TencentSyncJob(Base):
     config_id: Mapped[int] = mapped_column(Integer, comment='所属业务配置标识')
     account_id: Mapped[int] = mapped_column(Integer, comment='所属腾讯云账号标识')
     dataset_epoch: Mapped[str] = mapped_column(SOURCE_ID, comment='受理时冻结的初始化世代，用于隔离幂等键')
-    idempotency_key: Mapped[str] = mapped_column(String(128, collation='utf8mb4_bin'), comment='配置内可靠请求幂等键')
+    idempotency_key: Mapped[str] = mapped_column(String(128), comment='配置内可靠请求幂等键')
     priority: Mapped[int] = mapped_column(Integer, default=0, server_default='0', comment='实际领取优先级：0近期或人工，20历史发现；活动重试保持资格')
     kind: Mapped[str] = mapped_column(String(16), default='period', server_default='period', comment='任务种类：batch纯汇总父批次或period实际期间')
     parent_job_id: Mapped[int | None] = mapped_column(Integer, comment='期间所属父批次标识，独立手动期间为空')
     month: Mapped[str | None] = mapped_column(String(7), comment='实际日月期间所属自然月YYYY-MM，纯汇总父批次为空')
     status: Mapped[str] = mapped_column(String(32), comment='任务状态pending、running、retry_wait、succeeded或failed')
     snapshot: Mapped[dict] = mapped_column(JSON, comment='冻结配置、口径、范围、可信发起身份及初始化世代，不含秘密')
-    request_id: Mapped[str] = mapped_column(String(36, collation='utf8mb4_bin'), comment='受理请求的服务端关联标识')
+    request_id: Mapped[str] = mapped_column(String(36), comment='受理请求的服务端关联标识')
     error_code: Mapped[str | None] = mapped_column(String(64), comment='最终稳定失败编码')
     source_job_id: Mapped[int | None] = mapped_column(Integer, comment='人工重跑关联的原逻辑任务，首次采集为空')
     commit_receipt: Mapped[dict | None] = mapped_column(JSON, comment='与费用同事务保存的原始提交回执，用于归档恢复')
@@ -466,12 +466,12 @@ class TencentSyncAttempt(Base):
     job_id: Mapped[int] = mapped_column(Integer, comment='所属逻辑任务标识')
     attempt_no: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), 'mysql'), comment='任务内实际尝试序号，从1开始')
     generation: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), 'mysql'), comment='领取时的配置执行资格代次')
-    owner: Mapped[str] = mapped_column(String(36, collation='utf8mb4_bin'), comment='本次执行者标识')
+    owner: Mapped[str] = mapped_column(String(36), comment='本次执行者标识')
     status: Mapped[str] = mapped_column(String(32), comment='尝试状态running、succeeded、failed或unknown')
     execution_input: Mapped[dict] = mapped_column(JSON, comment='执行前可靠保存的完整脱敏实际入参')
     execution_output: Mapped[dict | None] = mapped_column(JSON, comment='处理器实际返回的原子提交回执，不保存账单原文')
     return_state: Mapped[str] = mapped_column(String(32), default='UNKNOWN', server_default='UNKNOWN', comment='实际返回形态VALUE、NOT_RETURNED或UNKNOWN')
-    request_id: Mapped[str | None] = mapped_column(String(36, collation='utf8mb4_bin'), comment='本尝试独立请求关联标识，历史未采集时为空')
+    request_id: Mapped[str | None] = mapped_column(String(36), comment='本尝试独立请求关联标识，历史未采集时为空')
     failure_evidence: Mapped[dict | None] = mapped_column(JSON, comment='稳定失败分类与已核实上游请求标识，不保存报文')
     error_code: Mapped[str | None] = mapped_column(String(64), comment='明确失败或未知的稳定原因编码')
     started_at: Mapped[datetime] = mapped_column(DateTime, comment='尝试开始UTC时刻')
@@ -503,7 +503,7 @@ class TencentCostItem(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment='期间内费用产品行标识，不假设跨期稳定')
     period_id: Mapped[int] = mapped_column(Integer, comment='所属完整费用期间标识')
     row_no: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), 'mysql'), comment='本次全量结果内产品行序号')
-    business_code: Mapped[str | None] = mapped_column(String(191, collation='utf8mb4_bin'), comment='可靠映射的产品BusinessCode，不是子产品ProductCode')
+    business_code: Mapped[str | None] = mapped_column(String(191), comment='可靠映射的产品BusinessCode，不是子产品ProductCode')
     source_name: Mapped[str] = mapped_column(String(255), comment='源接口原始产品显示名称')
     mapping_status: Mapped[str] = mapped_column(String(32), comment='产品映射状态mapped、ambiguous或unmapped')
     amount: Mapped[object] = mapped_column(Numeric(24,8), comment='该原始日月期间的产品总费用，保留负退款')

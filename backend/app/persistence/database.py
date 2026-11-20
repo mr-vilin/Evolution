@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from .models import Base
 
 
-CURRENT_SCHEMA_HEAD = "0021_tencent_db_conventions"
+CURRENT_SCHEMA_HEAD = "0022_mysql_general_ci"
 REQUIRED_COLUMNS = {table.name: set(table.columns.keys()) for table in Base.metadata.tables.values()}
 
 

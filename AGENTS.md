@@ -17,7 +17,7 @@
 | 当前构建与路由 | Umi Max 4.7、Utoopack；应用路由由 Umi 配置维护（2026-10-25 按迁移方案获准替换 Vite / 手写 React Router） |
 | 后端 | Python、FastAPI、Pydantic / pydantic-settings、Uvicorn |
 | 数据访问与迁移 | SQLAlchemy 2、PyMySQL、Alembic |
-| 数据库 | MySQL 8.4、InnoDB、`utf8mb4`；当前 Compose 排序规则为 `utf8mb4_general_ci`，稳定 ID 字段保留 `utf8mb4_bin`（2026-10-22 已确认） |
+| 数据库 | MySQL 8.4、InnoDB、`utf8mb4`；数据库、业务表、字符串列及应用连接统一使用 `utf8mb4_general_ci`（自迁移 0022 起） |
 | 飞书集成 | 官方 `lark-oapi` Python SDK、HTTPX；接口和权限按实际企业配置验证 |
 | 测试 | 后端 pytest；前端 Vitest、Testing Library；关键浏览器流程按需验证 |
 | 构建与交付 | Docker 多阶段构建、Docker Compose；当前镜像使用 Node.js 24 构建前端、Python 3.13 运行后端 |

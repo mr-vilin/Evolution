@@ -64,7 +64,7 @@ def inspect_database(url: str, expected_database: str, *, migrated=False, show_d
                 assert comment and any('\u4e00' <= char <= '\u9fff' for char in comment)
                 if charset is not None:
                     assert charset == 'utf8mb4'
-                    assert collation == ('utf8mb4_bin' if name in {'operation_id', 'idempotency_key', 'actor_id', 'run_id', 'case_id', 'job_id', 'before_epoch', 'committed_epoch'} else 'utf8mb4_general_ci')
+                    assert collation == 'utf8mb4_general_ci'
             print('实际回执表:', tuple(table), '；19 列中文注释和逐列排序规则验证通过')
             ddl = db.execute(text('SHOW CREATE TABLE operation_receipt')).one()[1]
             assert 'UNIQUE KEY `uq_operation_receipt_idempotency` (`actor_id`,`environment`,`idempotency_key`)' in ddl

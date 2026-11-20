@@ -274,6 +274,6 @@ def test_actual_mysql_new_tables_preserve_character_sets_comments_and_immutable_
         assert session[1:] == ('utf8mb4','utf8mb4_general_ci','+00:00')
         columns = db.execute(text("SELECT TABLE_NAME,COLUMN_NAME,COLUMN_COMMENT,COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('tencent_account','tencent_api_call')")).all()
         assert columns and all(row.COLUMN_COMMENT.strip() for row in columns)
-        assert next(row for row in columns if row.TABLE_NAME=='tencent_account' and row.COLUMN_NAME=='uin').COLLATION_NAME == 'utf8mb4_bin'
+        assert next(row for row in columns if row.TABLE_NAME=='tencent_account' and row.COLUMN_NAME=='uin').COLLATION_NAME == 'utf8mb4_general_ci'
         tables = db.execute(text("SELECT ENGINE,TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('tencent_account','tencent_api_call')")).all()
         assert len(tables)==2 and all(tuple(row)==('InnoDB','utf8mb4_general_ci') for row in tables)

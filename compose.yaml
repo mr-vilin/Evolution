@@ -79,4 +79,4 @@ networks:
 volumes:
   mysql-data:
     external: true
-    name: organization-directory_mysql-data
+    name: ${MYSQL_VOLUME_NAME:-organization-directory_mysql-data}

@@ -51,7 +51,7 @@ def test_operation_receipt_offline_sql_contains_only_new_table():
     assert "ALTER TABLE sync_job" not in sql
 
 
-def test_operation_receipt_orm_and_migration_preserve_comments_and_binary_ids():
+def test_operation_receipt_orm_and_migration_preserve_comments_and_inherit_collation():
     table = OperationReceipt.__table__
     ddl = str(CreateTable(table).compile(dialect=mysql.dialect()))
     assert "COLLATE utf8mb4_general_ci" in ddl
@@ -59,8 +59,8 @@ def test_operation_receipt_orm_and_migration_preserve_comments_and_binary_ids():
     for column in table.columns:
         assert column.comment and any('\u4e00' <= char <= '\u9fff' for char in column.comment)
         assert column.comment in ddl
-    assert table.c.operation_id.type.collation == 'utf8mb4_bin'
-    assert table.c.idempotency_key.type.collation == 'utf8mb4_bin'
+    assert table.c.operation_id.type.collation is None
+    assert table.c.idempotency_key.type.collation is None
     source = MIGRATION.read_text(encoding='utf-8')
     for column in table.columns:
         assert column.comment in source
