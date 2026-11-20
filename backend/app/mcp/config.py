@@ -10,7 +10,7 @@ from .models import AgentPrincipal
 
 
 class MCPSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="ORG_", extra="ignore", hide_input_in_errors=True, env_ignore_empty=True)
+    model_config = SettingsConfigDict(extra="ignore", hide_input_in_errors=True, env_ignore_empty=True)
     mcp_host: str = Field(default="127.0.0.1", min_length=1, pattern=r"^[A-Za-z0-9_.:-]+$")
     mcp_port: int = Field(default=8001, ge=1, le=65535)
     mcp_service_token: SecretStr

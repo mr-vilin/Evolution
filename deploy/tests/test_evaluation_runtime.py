@@ -8,7 +8,8 @@ import sys
 def test_evaluation_module_requires_explicit_test_database(tmp_path):
     root = Path(__file__).resolve().parents[2]
     environment = {key: value for key, value in os.environ.items()
-                   if not key.upper().startswith(('ORG_', 'FEISHU_', 'LARK_', 'OPENAI_', 'ANTHROPIC_'))}
+                   if key.upper() != 'TEST_DATABASE_URL'
+                   and not key.upper().startswith(('MCP_', 'AGENT_', 'FEISHU_', 'LARK_', 'OPENAI_', 'ANTHROPIC_'))}
     environment['PYTHONPATH'] = str(root / 'backend')
     environment['PYTHONIOENCODING'] = 'utf-8'
     process = subprocess.run([sys.executable, '-m', 'app.evaluation.cli', '--suite', 'smoke',

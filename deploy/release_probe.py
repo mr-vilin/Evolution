@@ -28,6 +28,16 @@ def snapshot():
         return result
 
 
+def connection_identity():
+    from sqlalchemy import text
+    from app.config import get_settings
+    from app.persistence.database import create_mysql_engine
+    with create_mysql_engine(get_settings().database_url).connect() as conn:
+        return list(conn.execute(text(
+            'SELECT DATABASE(), CURRENT_USER(), @@character_set_connection, @@collation_connection'
+        )).one())
+
+
 def verify(base_url):
     import httpx
     from app.version import product_build_info

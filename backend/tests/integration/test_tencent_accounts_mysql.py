@@ -19,7 +19,7 @@ from app.persistence.repositories import SqlIdentityRepository
 @pytest.fixture
 def tencent_http(request):
     from app.tencent.gateway import get_tencent_transport
-    url = os.environ.get('ORG_TEST_DATABASE_URL')
+    url = os.environ.get('TEST_DATABASE_URL')
     if not url:
         if request.config.getoption('--require-mysql'):
             pytest.fail('未提供独立 MySQL 测试连接')

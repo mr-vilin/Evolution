@@ -4,8 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { buildInfo, repositoryRoot } from '../scripts/versioning.mjs';
 
-const info = process.env.ORG_BUILD_INFO_FILE
-  ? JSON.parse(readFileSync(process.env.ORG_BUILD_INFO_FILE, 'utf8'))
+const providedInfoFile = process.env.BUILD_INFO_FILE;
+const info = providedInfoFile
+  ? JSON.parse(readFileSync(providedInfoFile, 'utf8'))
   : buildInfo(repositoryRoot);
 const manifest = JSON.parse(readFileSync(`${repositoryRoot}/version.json`, 'utf8'));
 if (info.version !== manifest.version) throw new Error('构建元信息与 version.json 不一致');

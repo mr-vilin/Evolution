@@ -51,7 +51,7 @@ def environment(name, action, authorization):
     return target
 
 
-def build(release_tag=None, image_repository='organization-directory-runtime'):
+def build(release_tag=None, image_repository='evolution-runtime'):
     run(['node', 'scripts/versioning.mjs', 'check', *(['--release', '--tag', release_tag] if release_tag else [])], cwd=ROOT)
     commit = run(['git', 'rev-parse', 'HEAD'], cwd=ROOT).strip()
     dirty = bool(run(['git', 'status', '--porcelain'], cwd=ROOT).strip())
@@ -88,10 +88,10 @@ def build(release_tag=None, image_repository='organization-directory-runtime'):
         dockerfile = dockerfile.replace('FROM ' + original + ' ', 'FROM ' + pinned + ' ')
     (source / 'Dockerfile.release').write_text(dockerfile, encoding='utf-8')
     image = image_repository + ':' + release_id
-    command = ['docker', 'build', '-f', str(source / 'Dockerfile.release'), '--build-arg', 'ORG_COMMIT_SHA=' + commit,
-               '--build-arg', 'ORG_SOURCE_DIRTY=' + str(dirty).lower(), '-t', image]
+    command = ['docker', 'build', '-f', str(source / 'Dockerfile.release'), '--build-arg', 'COMMIT_SHA=' + commit,
+               '--build-arg', 'SOURCE_DIRTY=' + str(dirty).lower(), '-t', image]
     if release_tag:
-        command += ['--build-arg', 'ORG_RELEASE_TAG=' + release_tag]
+        command += ['--build-arg', 'RELEASE_TAG=' + release_tag]
     print('正在构建 ' + image, flush=True)
     # 构建上下文没有凭据，保留构建进度和原始退出码。
     subprocess.run(command + [str(source)], cwd=ROOT, check=True)
@@ -181,7 +181,7 @@ def main():
     elif args.action == 'plan':
         result = {'target': target, 'migration': '禁止自动执行', 'remote_write': False}
     elif args.action == 'build':
-        result = {'artifact': str(build(args.release_tag, target.get('image_repository', 'organization-directory-runtime')))}
+        result = {'artifact': str(build(args.release_tag, target.get('image_repository', 'evolution-runtime')))}
     elif args.action in ('inspect', 'verify'):
         if target['transport'] == 'ssh':
             result = remote_read(target, args.action)
@@ -193,7 +193,7 @@ def main():
     elif args.action == 'deploy':
         if args.environment != 'local' and not args.artifact:
             raise RuntimeError('REMOTE_REQUIRES_REVIEWED_ARTIFACT: 远端必须明确指定已验收制品')
-        artifact = args.artifact.resolve() if args.artifact else build(args.release_tag, target.get('image_repository', 'organization-directory-runtime'))
+        artifact = args.artifact.resolve() if args.artifact else build(args.release_tag, target.get('image_repository', 'evolution-runtime'))
         manifest = validate_artifact(artifact)
         if args.environment == 'production':
             receipt = artifact / 'test-deployment.json'

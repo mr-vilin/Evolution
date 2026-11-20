@@ -19,7 +19,7 @@
 - `build-info.json`：构建生成的版本、提交、工作区状态、构建时间和发行元信息，不手工编辑或提交。前后端使用同一份元信息，系统信息页核对运行版本。
 - `frontend/package.json`、`backend/pyproject.toml`：技术包版本；API 契约和 Alembic revision 分别管理，不作为产品版本来源。
 
-未带发行 tag 的构建使用 `development`、`releaseDate=null`；发行构建通过 `ORG_RELEASE_TAG` 读取已校验 tag，并使用完整 `ORG_COMMIT_SHA`。脏状态通过 `ORG_SOURCE_DIRTY` 传入。文件变化不会自动替换运行镜像；部署入口见 [环境与发布流程](../deploy/ENVIRONMENTS.md)。
+未带发行 tag 的构建使用 `development`、`releaseDate=null`；发行构建通过 `RELEASE_TAG` 读取已校验 tag，并使用完整 `COMMIT_SHA`。脏状态通过 `SOURCE_DIRTY` 传入。文件变化不会自动替换运行镜像；部署入口见 [环境与发布流程](../deploy/ENVIRONMENTS.md)。
 
 ## 校验入口
 

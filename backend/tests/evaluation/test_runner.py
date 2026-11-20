@@ -108,7 +108,7 @@ def test_real_mysql_official_mcp_vertical(filename):
     from sqlalchemy import select, func
     from app.persistence.database import create_mysql_engine
     from app.persistence.models import Base, DatasetState, WorkerLease
-    url = os.getenv('ORG_TEST_DATABASE_URL')
+    url = os.getenv('TEST_DATABASE_URL')
     if not url: pytest.skip('需要显式测试 MySQL')
     case = load_case(CASE.parent / filename)
     run = EvaluationRunner(database_url=url)
@@ -237,8 +237,8 @@ def test_provider_is_explicit_and_receives_only_restricted_inputs(monkeypatch):
             seen.update(values)
             values['mcp_client'].call_tool('get_employee',{'employee_id':'eval_employee_primary'})
             return AgentRun('done',(),{})
-    monkeypatch.setenv('ORG_EVALUATION_MODEL_ALIAS','local-stub')
-    monkeypatch.setenv('ORG_EVALUATION_MAX_TOKENS','100')
+    monkeypatch.setenv('EVALUATION_MODEL_ALIAS','local-stub')
+    monkeypatch.setenv('EVALUATION_MAX_TOKENS','100')
     run,_=runner(ProviderWorkerAgent(Provider()))
     assert run.run_case(load_case(CASE)).hard_passed
     assert set(seen)=={'goal','mcp_client','context','model_alias','max_tokens'}
@@ -277,7 +277,7 @@ def test_real_mysql_production_sync_and_sdk_polling():
     import os
     from copy import deepcopy
     from app.evaluation.harness import SystemHarness
-    url=os.getenv('ORG_TEST_DATABASE_URL')
+    url=os.getenv('TEST_DATABASE_URL')
     if not url: pytest.skip('需要显式测试 MySQL')
     fixture=deepcopy(load_case(CASE).fixture)
     for section in ('departments','employees','employee_departments','employee_stores','store_profiles'):
@@ -316,7 +316,7 @@ def test_real_mysql_production_sync_and_sdk_polling():
 
 def test_real_mysql_preview_confirmation_apply_and_final_read():
     import os
-    url=os.getenv('ORG_TEST_DATABASE_URL')
+    url=os.getenv('TEST_DATABASE_URL')
     if not url: pytest.skip('需要显式测试 MySQL')
     original=load_case(CASE)
     expected=dict(original.expected_state,version_delta=1,execution='submitted',fact_quality='resolved',
@@ -348,7 +348,7 @@ def test_real_mysql_expired_lease_release_requires_owned_generation(mismatch):
     from app.evaluation.models import AgentRunContext
     from app.persistence.models import WorkerLease
     from app.sync.worker import utcnow
-    url=os.getenv('ORG_TEST_DATABASE_URL')
+    url=os.getenv('TEST_DATABASE_URL')
     if not url: pytest.skip('需要显式测试 MySQL')
     case=load_case(CASE)
     h=SystemHarness(url,case,AgentRunContext('test-lease-lifecycle',case.case_id,'evaluation-ci','test'))

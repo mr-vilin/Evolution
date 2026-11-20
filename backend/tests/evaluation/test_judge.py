@@ -137,7 +137,7 @@ def test_no_implicit_provider_and_rule_judge_failure_remain_diagnostic():
 def test_real_mcp_runner_attaches_diagnostics_without_model_configuration():
     from app.evaluation.judge import DIMENSIONS
     from app.evaluation.runner import EvaluationRunner
-    url = os.getenv('ORG_TEST_DATABASE_URL')
+    url = os.getenv('TEST_DATABASE_URL')
     if not url:
         pytest.skip('需要显式测试 MySQL')
     case, _ = inputs()

@@ -58,12 +58,12 @@ test('开发基线和已准备的发布记录都不会把普通构建误标为�
 test('发行产物要求 tag、版本记录、提交和干净源码状态一致', t => {
   const root = fixture(t, '0.1.0-rc.1', '## [0.1.0-rc.1] — 2026-10-24\n候选');
   assert.throws(() => checkRepository(root, { tag: 'v0.1.0' }), /tag/);
-  const env = { ORG_RELEASE_TAG: 'v0.1.0-rc.1', ORG_COMMIT_SHA: 'a'.repeat(40), ORG_SOURCE_DIRTY: 'false' };
+  const env = { RELEASE_TAG: 'v0.1.0-rc.1', COMMIT_SHA: 'a'.repeat(40), SOURCE_DIRTY: 'false' };
   const info = buildInfo(root, env);
   assert.equal(info.stage, 'prerelease');
   assert.equal(info.releaseDate, '2026-10-24');
-  assert.throws(() => buildInfo(root, { ...env, ORG_SOURCE_DIRTY: 'true' }), /干净/);
-  assert.throws(() => buildInfo(root, { ...env, ORG_COMMIT_SHA: 'unknown' }), /真实提交/);
+  assert.throws(() => buildInfo(root, { ...env, SOURCE_DIRTY: 'true' }), /干净/);
+  assert.throws(() => buildInfo(root, { ...env, COMMIT_SHA: 'unknown' }), /真实提交/);
 });
 
 test('PR 基准检查允许补正既有说明和日期，保留版本历史与发行制品检查', t => {

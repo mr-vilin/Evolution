@@ -31,7 +31,7 @@ def run(argv=None, *, runner_factory=None):
     parser = _Parser(description='在专用 MySQL _test 库运行六个 scripted Agent smoke 用例。')
     parser.add_argument('--suite', choices=['smoke'], default='smoke')
     parser.add_argument('--case', action='append', dest='case_ids')
-    parser.add_argument('--database-url', default=os.getenv('ORG_TEST_DATABASE_URL'))
+    parser.add_argument('--database-url', default=os.getenv('TEST_DATABASE_URL'))
     parser.add_argument('--output', type=Path, default=Path('.evaluation-reports'))
     try:
         options = parser.parse_args(argv)

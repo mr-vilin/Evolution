@@ -82,8 +82,8 @@ def test_listener_reconcile_switches_are_independent(sessions, startup, reconnec
 
 def test_listener_defaults_skip_reconcile_but_continue_receiving_events(sessions, monkeypatch):
     from app.feishu.listener import Listener
-    monkeypatch.delenv('ORG_FEISHU_RECONCILE_ON_STARTUP', raising=False)
-    monkeypatch.delenv('ORG_FEISHU_RECONCILE_ON_RECONNECT', raising=False)
+    monkeypatch.delenv('FEISHU_RECONCILE_ON_STARTUP', raising=False)
+    monkeypatch.delenv('FEISHU_RECONCILE_ON_RECONNECT', raising=False)
     settings = Settings(feishu_app_id='a', feishu_tenant_key='t')
     assert settings.feishu_reconcile_on_startup is False
     assert settings.feishu_reconcile_on_reconnect is False
@@ -102,8 +102,8 @@ def test_listener_defaults_skip_reconcile_but_continue_receiving_events(sessions
 
 @pytest.mark.parametrize('startup,reconnect', [('true', 'false'), ('false', 'true')])
 def test_listener_reconcile_switches_load_from_environment(monkeypatch, startup, reconnect):
-    monkeypatch.setenv('ORG_FEISHU_RECONCILE_ON_STARTUP', startup)
-    monkeypatch.setenv('ORG_FEISHU_RECONCILE_ON_RECONNECT', reconnect)
+    monkeypatch.setenv('FEISHU_RECONCILE_ON_STARTUP', startup)
+    monkeypatch.setenv('FEISHU_RECONCILE_ON_RECONNECT', reconnect)
     settings = Settings()
     assert settings.feishu_reconcile_on_startup is (startup == 'true')
     assert settings.feishu_reconcile_on_reconnect is (reconnect == 'true')

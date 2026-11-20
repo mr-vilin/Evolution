@@ -252,7 +252,7 @@ def test_independent_main_process_outputs_actual_worker_start_commit_and_stop(co
     monthly(client,account,frequency='manual')
     accepted=client.post(f"/admin/api/tencent/accounts/{account['id']}/cost-jobs",json={'month':'2026-10','idempotency_key':'independent-main'})
     env=os.environ.copy()
-    env.update(ORG_SESSION_SECRET='test-pepper',ORG_TENCENT_CREDENTIALS='{"finance-a":{"label":"合成测试凭据","secret_id":"synthetic-id","secret_key":"synthetic-key"}}')
+    env.update(SESSION_SECRET='test-pepper',TENCENT_CREDENTIALS='{"finance-a":{"label":"合成测试凭据","secret_id":"synthetic-id","secret_key":"synthetic-key"}}')
     env['PYTHONPATH']=str(Path(__file__).parents[2])+os.pathsep+str(Path(__file__).parent)
     script="""
 import threading

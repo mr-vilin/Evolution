@@ -5,7 +5,7 @@ import routes from './routes';
 import settings from './defaultSettings';
 
 // scripts/run.mjs 在每次开发或构建时生成一次，并传给所有子进程。
-const info = JSON.parse(readFileSync(process.env.ORG_BUILD_INFO_FILE!, 'utf8'));
+const info = JSON.parse(readFileSync(process.env.BUILD_INFO_FILE!, 'utf8'));
 const manifest = JSON.parse(readFileSync(resolve(__dirname, '../../version.json'), 'utf8'));
 if (info.version !== manifest.version) throw new Error('构建元信息与 version.json 不一致');
 

@@ -106,9 +106,9 @@ def test_preflight_checks_actual_session_not_only_configuration(evaluation_mysql
 
 
 def test_context_cleans_seeded_facts_on_exception_and_rejects_parallel_owner():
-    url = os.environ.get('ORG_TEST_DATABASE_URL')
+    url = os.environ.get('TEST_DATABASE_URL')
     if not url:
-        pytest.skip('未提供 ORG_TEST_DATABASE_URL；Evaluation 真实 MySQL 验收尚未执行')
+        pytest.skip('未提供 TEST_DATABASE_URL；Evaluation 真实 MySQL 验收尚未执行')
     case = load_case(CASES / 'ORG_AGENT_READ_NOT_IN_STORE.yaml')
     with pytest.raises(RuntimeError, match='synthetic-case-failure'):
         with evaluation_database(url) as factory:

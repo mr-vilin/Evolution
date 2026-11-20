@@ -8,7 +8,7 @@
 
 ## 环境台账
 
-本地核实日期：2026-11-16；远端列保留 2026-10-26 的历史快照，本次未连接或发布远端。日期均为北京时间。
+本地核实日期为 2026-11-20，远端列采用 2026-10-26 的历史快照。日期均为北京时间。
 
 | 项目 | 本地 Docker | 线上测试 | 正式 |
 | --- | --- | --- | --- |
@@ -19,11 +19,17 @@
 | Compose 项目 | `evolution` | `organization-directory` | 待确认；不得与测试数据卷混用 |
 | 应用入口 | `http://127.0.0.1:8000`；仅用于本机检查，正式登录 HTTPS 入口待登记 | `https://test-organization.bzg.company` | 待确认独立 HTTPS 域名与回调 |
 | 容器 | app、mcp、mysql；migrate 为一次性服务 | 同左 | 沿用既定拓扑，实例与凭据独立 |
-| 数据库 | 实测 `0013_employee_profile`；MySQL 8.4.11 | 实测 `0010_initialization_wizard`；MySQL 8.4.11 | 待创建及实测，不能假定同测试 |
-| 最近镜像 | `evolution-runtime:release-20261116-034142-fadb8915`（原镜像新增别名） | `organization-directory-runtime:coverage-20261026-01` | 无 |
+| 数据库 | `evolution`，应用账号 `evolution`。实测 `0021_tencent_db_conventions`（MySQL 8.4.11） | 实测 `0010_initialization_wizard`；MySQL 8.4.11 | 待创建及实测，不能假定同测试 |
+| 最近镜像 | `evolution-runtime:release-20261120-024142-99f78cf8`（0.3.0 开发构建） | `organization-directory-runtime:coverage-20261026-01` | 无 |
 | 凭据来源 | 仓库 `.env` 和 Docker Desktop 当前身份 | 远端原 Compose／受限配置、SSH 当前身份、`sudo -n docker` | 独立配置，禁止复制测试凭据 |
 
-这里的版本和镜像是核实快照；每次运行 `inspect` 获取当前状态。`ORG_AGENT_ENVIRONMENT` 是能力安全策略字段，不能据它的值认定部署主机是测试或正式环境。
+这里的版本和镜像是核实快照；每次运行 `inspect` 获取当前状态。`AGENT_ENVIRONMENT` 是能力安全策略字段，不能据它的值认定部署主机是测试或正式环境。
+
+2026-11-18 已按当次授权完成本地 0013→0020 的加密备份、隔离恢复及迁移演练、业务库迁移与同制品发布；原有 22 张业务表结构及全部列的数据摘要保持一致。迁移入口见 [0020 手册](migrations/0020-tencent-finance.md)，最终验证、证据与跨迁移回退边界见[本地发布记录](../docs/architecture/local-tencent-finance-deployment-2026-11-18.md)。本记录不授权后续环境迁移或发布。
+
+2026-11-20 本地 app/MCP 发布 0.3.0 配置键过渡镜像，源码基于 `ab34919` 的工作区快照，构建时间为 `2026-11-20T10:43:46.974+08:00`。发布与独立复核通过健康、未登录访问控制、100 个静态资源和数据库状态检查。该镜像已验证仅用新键加载应用和 MCP 配置。当次发布使用的 Compose 含旧键映射，供依赖 `ORG_` 键的回退镜像使用。制品与源码清单位于 `.cache/artifacts/release-20261120-024142-99f78cf8/`，前后状态、校验结果与回退镜像位于 `.cache/releases/release-20261120-024142-99f78cf8/`。
+
+2026-11-20 本地数据库与应用账号切换为 `evolution`。沿用当前 app/MCP 镜像、MySQL 容器与数据卷。隔离演练和真实导入均核对了数据、DDL 与逐列元数据，应用健康检查通过。加密备份、切换记录和验证证据位于 `.cache/migrations/db-evolution-20261120-081224-65eea342/`。原库保留，原应用账号锁定。
 
 ## 固定工具与制品
 
@@ -92,12 +98,12 @@ backend/.venv/Scripts/python.exe deploy/release.py rollback --environment test -
 在目标环境的 `.env` 中配置以下两个独立开关；未设置时均为 `false`，更新镜像后即采用该默认值：
 
 ```dotenv
-ORG_FEISHU_RECONCILE_ON_STARTUP=false
-ORG_FEISHU_RECONCILE_ON_RECONNECT=false
+FEISHU_RECONCILE_ON_STARTUP=false
+FEISHU_RECONCILE_ON_RECONNECT=false
 ```
 
-- `ORG_FEISHU_RECONCILE_ON_STARTUP`：监听进程启动时是否提交一次全量核对。
-- `ORG_FEISHU_RECONCILE_ON_RECONNECT`：飞书连接恢复时是否提交一次全量核对。
+- `FEISHU_RECONCILE_ON_STARTUP`：监听进程启动时是否提交一次全量核对。
+- `FEISHU_RECONCILE_ON_RECONNECT`：飞书连接恢复时是否提交一次全量核对。
 
 设置为 `true` 可分别恢复对应触发方式。配置在进程启动时读取，通过标准发布流程重建应用容器后生效，不支持热更新。开关不停止已排队或正在执行的任务，不影响实时事件入箱、手动同步及管理页面中的每日定时核对设置。关闭重连核对后，断线期间可能遗漏的变更需要通过手动或每日定时全量核对补齐。
 

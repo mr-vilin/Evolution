@@ -25,9 +25,9 @@ from app.sync.publisher import Publisher
 
 @pytest.fixture
 def independent_capability_mysql():
-    url = os.environ.get('ORG_TEST_DATABASE_URL')
+    url = os.environ.get('TEST_DATABASE_URL')
     if not url:
-        pytest.skip('未提供 ORG_TEST_DATABASE_URL；MySQL 双事务旧快照验收未执行')
+        pytest.skip('未提供 TEST_DATABASE_URL；MySQL 双事务旧快照验收未执行')
     parsed = make_url(url)
     if parsed.drivername != 'mysql+pymysql' or not (parsed.database or '').endswith('_test'):
         pytest.fail('仅允许 mysql+pymysql 且数据库名以 _test 结尾的独立测试库')

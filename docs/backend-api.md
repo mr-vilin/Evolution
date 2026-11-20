@@ -127,7 +127,7 @@ worker 通过 `SqlSyncJobRepository.claim_next()` 认领任务；全局租约、
 
 `/internal/capabilities/**` 仅供可信 MCP sidecar 使用，不属于下游公共 API 契约。部署必须实施网络隔离，反向代理不得向公网或普通客户端公开 `/internal` 路径。服务令牌只授予可信 sidecar；持有令牌的服务可以声明主体与确认状态，应承担用户确认和身份核验责任。
 
-配置 `ORG_AGENT_SERVICE_TOKEN` 为独立高熵服务令牌，`ORG_AGENT_ENVIRONMENT` 为 `production`（默认）或 `test`。未配置、空值或纯空白令牌均保持禁用。禁止记录 Authorization、服务令牌或飞书/数据库凭据原文。内部服务令牌、原只读 API 凭据与管理员 Cookie 互不替代。
+配置 `AGENT_SERVICE_TOKEN` 为独立高熵服务令牌，`AGENT_ENVIRONMENT` 为 `production`（默认）或 `test`。未配置、空值或纯空白令牌均保持禁用。禁止记录 Authorization、服务令牌或飞书/数据库凭据原文。内部服务令牌、原只读 API 凭据与管理员 Cookie 互不替代。
 
 每次请求必须携带以下可信请求头，sidecar 必须覆盖调用方提供的同名头，不能透传模型生成的身份声明：
 
