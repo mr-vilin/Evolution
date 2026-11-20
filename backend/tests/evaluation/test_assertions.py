@@ -295,9 +295,9 @@ def test_real_mysql_independent_readonly_consistent_snapshot_and_cleanup(name):
     from app.persistence.database import create_mysql_engine
     from app.persistence.models import DatasetState, Base
 
-    url = os.environ.get('ORG_TEST_DATABASE_URL')
+    url = os.environ.get('TEST_DATABASE_URL')
     if not url:
-        pytest.skip('未提供 ORG_TEST_DATABASE_URL；独立只读 MySQL 验收未执行')
+        pytest.skip('未提供 TEST_DATABASE_URL；独立只读 MySQL 验收未执行')
     c = case(name)
     with evaluation_database(url) as factory:
         seed_case(factory, c)
@@ -399,9 +399,9 @@ def test_real_mysql_receipt_job_audit_facts_and_corruption(job):
     from app.evaluation.fixtures import evaluation_database, seed_case
     from app.persistence.models import ChangeLog, DatasetState, OperationReceipt, StoreProfile, SyncJob
 
-    url = os.environ.get('ORG_TEST_DATABASE_URL')
+    url = os.environ.get('TEST_DATABASE_URL')
     if not url:
-        pytest.skip('未提供 ORG_TEST_DATABASE_URL；真实回执审计验收未执行')
+        pytest.skip('未提供 TEST_DATABASE_URL；真实回执审计验收未执行')
     c, template = operation_evidence(job=job)
     with evaluation_database(url) as factory:
         seed_case(factory, c)

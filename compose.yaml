@@ -6,8 +6,8 @@ services:
     ports:
       - "127.0.0.1:${MYSQL_HOST_PORT:-13307}:3306"
     environment:
-      MYSQL_DATABASE: organization
-      MYSQL_USER: organization
+      MYSQL_DATABASE: evolution
+      MYSQL_USER: evolution
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请配置 MYSQL_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请配置 MYSQL_ROOT_PASSWORD}
     command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_general_ci"]
@@ -19,7 +19,7 @@ services:
       timeout: 5s
       retries: 30
   migrate:
-    image: evolution-runtime:${ORG_IMAGE_TAG:-local}
+    image: evolution-runtime:${APP_IMAGE_TAG:-local}
     build: .
     env_file: .env
     command: ["python", "-m", "alembic", "upgrade", "head"]
@@ -27,13 +27,13 @@ services:
       mysql:
         condition: service_healthy
   app:
-    image: evolution-runtime:${ORG_IMAGE_TAG:-local}
+    image: evolution-runtime:${APP_IMAGE_TAG:-local}
     build: .
     networks: [default, capabilities]
     env_file: .env
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${ORG_PORT:-8000}:8000"
+      - "127.0.0.1:${APP_PORT:-8000}:8000"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -45,23 +45,23 @@ services:
     stop_grace_period: 20s
   mcp:
     profiles: [agent]
-    image: evolution-runtime:${ORG_IMAGE_TAG:-local}
+    image: evolution-runtime:${APP_IMAGE_TAG:-local}
     build: .
     restart: unless-stopped
     command: ["python", "-m", "app.mcp", "--transport", "streamable-http"]
     networks: [capabilities]
     environment:
-      ORG_MCP_HOST: ${ORG_MCP_HOST:-0.0.0.0}
-      ORG_MCP_PORT: ${ORG_MCP_PORT:-8001}
-      ORG_MCP_SERVICE_TOKEN: ${ORG_MCP_SERVICE_TOKEN:-}
-      ORG_AGENT_SERVICE_TOKEN: ${ORG_AGENT_SERVICE_TOKEN:-}
-      ORG_AGENT_ENVIRONMENT: ${ORG_AGENT_ENVIRONMENT:-production}
-      ORG_MCP_CAPABILITY_BASE_URL: ${ORG_MCP_CAPABILITY_BASE_URL:-http://app:8000}
-      ORG_MCP_ACTOR_TYPE: ${ORG_MCP_ACTOR_TYPE:-}
-      ORG_MCP_ACTOR_ID: ${ORG_MCP_ACTOR_ID:-}
-      ORG_MCP_RUN_ID: ${ORG_MCP_RUN_ID:-}
-      ORG_MCP_CASE_ID: ${ORG_MCP_CASE_ID:-}
-      ORG_MCP_CONFIRMATION_TIMEOUT: ${ORG_MCP_CONFIRMATION_TIMEOUT:-60}
+      MCP_HOST: ${MCP_HOST-0.0.0.0}
+      MCP_PORT: ${MCP_PORT-8001}
+      MCP_SERVICE_TOKEN: ${MCP_SERVICE_TOKEN-}
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN-}
+      AGENT_ENVIRONMENT: ${AGENT_ENVIRONMENT-production}
+      MCP_CAPABILITY_BASE_URL: ${MCP_CAPABILITY_BASE_URL-http://app:8000}
+      MCP_ACTOR_TYPE: ${MCP_ACTOR_TYPE-}
+      MCP_ACTOR_ID: ${MCP_ACTOR_ID-}
+      MCP_RUN_ID: ${MCP_RUN_ID-}
+      MCP_CASE_ID: ${MCP_CASE_ID-}
+      MCP_CONFIRMATION_TIMEOUT: ${MCP_CONFIRMATION_TIMEOUT-60}
     depends_on:
       app:
         condition: service_healthy

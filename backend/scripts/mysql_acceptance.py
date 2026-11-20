@@ -13,6 +13,9 @@ from urllib.parse import quote, unquote
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
 
+from app.config import Settings
+from app.env import isolated_test_env
+
 
 def inspect_database(url: str, expected_database: str, *, migrated=False, show_ddl=False):
     from sqlalchemy import text
@@ -82,11 +85,8 @@ def main():
     args = parser.parse_args()
     credentials = args.credentials.resolve() if args.credentials else None
     # 单元 HTTP 测试不得继承真实数据库或飞书配置。
-    for key in list(os.environ):
-        if key.upper().startswith('ORG_'):
-            del os.environ[key]
-    os.environ['PYTHONIOENCODING'] = 'utf-8'
-    os.environ['PYTHONUTF8'] = '1'
+    env = isolated_test_env(Settings)
+    env.update(PYTHONIOENCODING='utf-8', PYTHONUTF8='1')
     os.chdir(BACKEND)
     secrets = []
 
@@ -105,18 +105,18 @@ def main():
             password = make_url(url).password or ''
             secrets.extend([url, password, unquote(password), quote(password, safe='')])
             inspect_database(url, args.expected_database, migrated=args.phase not in {'preflight', 'migrate'})
-            os.environ['ORG_TEST_DATABASE_URL'] = url
+            env['TEST_DATABASE_URL'] = url
         if args.phase == 'preflight':
             return 0
         if args.phase == 'migrate':
-            os.environ['ORG_DATABASE_URL'] = url
+            env['DATABASE_URL'] = url
             command = [sys.executable, '-m', 'alembic', 'upgrade', 'head']
         else:
             target = {'capability': 'tests/integration/test_capability_mysql.py', 'integration': 'tests/integration',
                       'backend': 'tests', 'without-database': 'tests/integration/test_capability_mysql.py'}[args.phase]
             command = [sys.executable, '-m', 'pytest', target, '-q', '-rs']
         print('执行:', ' '.join(command), flush=True)
-        result = subprocess.run(command, env=os.environ.copy(), capture_output=True, text=True, encoding='utf-8', errors='replace')
+        result = subprocess.run(command, env=env, capture_output=True, text=True, encoding='utf-8', errors='replace')
         print(redact(result.stdout), end='')
         print(redact(result.stderr), end='')
         print('退出码:', result.returncode)

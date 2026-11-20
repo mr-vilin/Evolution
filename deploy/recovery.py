@@ -61,7 +61,7 @@ def main() -> int:
         parser.error('恢复管理员必须是同应用的 ou_ 开头 open_id')
     settings = get_settings()
     if not settings.database_url:
-        parser.error('未配置 ORG_DATABASE_URL')
+        parser.error('未配置 DATABASE_URL')
     engine = create_mysql_engine(settings.database_url)
     try:
         epoch = reset_restored_state(session_factory(engine), actor=args.actor.strip(), admin_open_id=args.admin_open_id)

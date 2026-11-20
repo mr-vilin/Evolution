@@ -12,7 +12,7 @@
 
 产品版本从根目录 `version.json` 读取，版本规则统一使用全局 `version-management-guidelines` Skill，项目实现见 [版本实现说明](../docs/versioning.md)。当前重设的开发初始基线为 0.1.0，尚未正式上线。普通开发构建不显示发布日期；旧容器不会因文件修改自动更新版本，需另行构建并部署镜像后核对系统信息页。
 
-Docker 构建时生成同一份 `build-info.json`，分别注入前端和 Python 包；通过 `/admin/api/system/version`（管理员认证）读取服务端版本，不查询业务数据库。开发镜像可用 `--build-arg ORG_COMMIT_SHA=<完整SHA> --build-arg ORG_SOURCE_DIRTY=true` 标识未提交代码。发行构建由干净 tag 提交进行，同时传入 `ORG_RELEASE_TAG`、`ORG_COMMIT_SHA` 和 `ORG_SOURCE_DIRTY=false`；应用、迁移和 MCP 继续复用同一镜像。不得将未知提交或脏代码构建标记为已发行。
+Docker 构建时生成同一份 `build-info.json`，分别注入前端和 Python 包；通过 `/admin/api/system/version`（管理员认证）读取服务端版本，不查询业务数据库。开发镜像可用 `--build-arg COMMIT_SHA=<完整SHA> --build-arg SOURCE_DIRTY=true` 标识未提交代码。发行构建由干净 tag 提交进行，同时传入 `RELEASE_TAG`、`COMMIT_SHA` 和 `SOURCE_DIRTY=false`；应用、迁移和 MCP 继续复用同一镜像。不得将未知提交或脏代码构建标记为已发行。
 
 2026-10-24 的 MCP 分支整合、`0008→0009` 升级及本机容器验收见 [MCP 整合验收记录](../docs/mcp-integration-acceptance-2026-10-24.md)。app、migrate、mcp 复用同一构建镜像，避免服务与迁移代码不一致。
 
@@ -20,9 +20,21 @@ Docker 构建时生成同一份 `build-info.json`，分别注入前端和 Python
 
 ## 准备配置
 
-在项目根目录将 `.env.example` 复制为 `.env`，填写随机数据库密码、至少 32 字符的会话密钥、飞书企业自建应用信息和同应用初始管理员 `open_id`。数据库 URL 的密码与 `MYSQL_PASSWORD` 一致。部署地址需要 HTTPS，登录回调固定为 `/admin/auth/callback`。
+首次配置参考 [`.env.example`](../.env.example) 填写项目根目录的 `.env`，不要覆盖已有文件。各项按用途分组并逐项说明。数据库 URL 的密码与 `MYSQL_PASSWORD` 一致。部署地址需要 HTTPS，登录回调固定为 `/admin/auth/callback`，真实域名以飞书后台登记为准。
 
 `.env` 不进入镜像或版本控制。MySQL 容器不映射公网端口，应用默认仅监听宿主机 `127.0.0.1:8000`，由部署方的 HTTPS 入口转发。
+
+新配置使用 `DATABASE_URL`、`FEISHU_*`、`MCP_*` 等键名。原 `ORG_PORT` 改为 `APP_PORT`，原 `ORG_IMAGE_TAG` 改为 `APP_IMAGE_TAG`。MySQL 镜像仍使用 `MYSQL_*`。
+
+当前应用、MCP、Compose 和构建只读取新键。Docker Compose 的端口和镜像标签把空值按未设置处理。回退到依赖旧键的历史镜像时，须使用与该镜像配套的历史 Compose 和受限备份中的 `.env`。执行旧版数据库迁移手册时，使用对应历史制品及配套配置。
+
+| 旧名出现的位置 | 处理及影响 |
+| --- | --- |
+| 前后端包名和 npm 锁文件、构建缓存、示例回调域名 | 更新为 Evolution；首次构建会重新填充改名后的构建缓存，真实回调地址不变。 |
+| 应用镜像 | 默认使用 `evolution-runtime`；线上测试显式沿用原仓库，已有旧仓库制品仍可校验和回退。 |
+| 本地 MySQL 库名和应用账号 | 本地应用使用 `evolution` 库和 `evolution` 账号。原库留在 `organization-directory_mysql-data` 卷内，原账号已锁定，供受控回退。 |
+| 线上测试目录、域名、Compose 项目和已登记的 MCP 客户端入口 | 保留，避免断开现有部署、飞书回调和工具调用。需要分别协调服务和客户端切换。 |
+| `/organization` 页面、`/admin/api/organization/*`、组织架构模块及历史记录 | 保留；是业务语义、既有契约或历史事实，不属于项目名称。 |
 
 ```powershell
 Copy-Item -LiteralPath .env.example -Destination .env
@@ -41,13 +53,19 @@ Compose 先等待 MySQL 就绪，再运行 Alembic 迁移，迁移成功后启�
 4. 使用实际授权样本验证根节点、无部门人员、全部分页和 `orders` 主部门标识，不将 SDK 字段存在当作企业联调完成。
 5. 首次登录必须属于受控初始白名单；禁止首个访问者自动成为管理员。
 
+## 本地 MySQL 库和账号切换
+
+一次性入口为 `backend/.venv/Scripts/python.exe deploy/rename_local_database.py --authorized-local-cutover`。脚本核对本机 Docker 卷、MySQL 版本、旧账号授权和目标名称可用性，暂时停止 app/MCP，并在同镜像的隔离 MySQL 实例演练恢复。应用切换前比较整库数据、DDL 和逐列元数据。原库保留，旧应用数据库账号锁定。重新启动 app/MCP 使用当前镜像。
+
+受限证据位于 `.cache/migrations/db-evolution-*/`，包含加密数据库备份、加密原 `.env`、切换前后状态和验证记录。Fernet 密钥通过 Windows 当前用户 DPAPI 封装，独立保存在 `.cache/backup-keys/`。如果切换失败且新库已有写入，脚本保留停写状态和两库数据供核对。人工回退时先停写，再备份并核对新库。若新库有切换后写入，先完成数据回放或对账，再解锁原账号、恢复配套 `.env`，用同一镜像恢复 app/MCP 并验证。
+
 ## 一致性备份
 
-业务运行期间不执行数据库 DDL。下列命令示例在 Bash 环境执行；密码由容器内部环境传入，不打印秘密到日志：
+业务运行期间不执行数据库 DDL。以下 Bash 命令使用本地库 `evolution`，密码从容器内部环境读取。
 
 ```bash
 mkdir -p backups
-docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --single-transaction --routines --triggers --events --set-gtid-purged=OFF --no-tablespaces organization' > backups/organization.sql
+docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --single-transaction --routines --triggers --events --set-gtid-purged=OFF --no-tablespaces evolution' > backups/evolution.sql
 ```
 
 备份文件包含员工资料、会话哈希和审计信息，应使用受限存储并加密备份。配置与密钥独立备份；备份轮换由部署方的受控任务实施。
@@ -87,19 +105,19 @@ set -euo pipefail
 docker compose stop app
 
 # 2. 明确并检查目标与输入文件
-BACKUP_FILE="backups/organization.sql"
+BACKUP_FILE="backups/evolution.sql"
 test -f "$BACKUP_FILE"
 docker compose ps mysql
 
 # 3. 导入前备份目标库现状
 mkdir -p backups/pre-restore
-docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --single-transaction --routines --triggers --events --set-gtid-purged=OFF --no-tablespaces organization' > "backups/pre-restore/organization-$(date +%Y%m%d-%H%M%S).sql"
+docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --single-transaction --routines --triggers --events --set-gtid-purged=OFF --no-tablespaces evolution' > "backups/pre-restore/evolution-$(date +%Y%m%d-%H%M%S).sql"
 
-# 4. 覆盖操作：仅在恢复责任人确认目标库为 organization 且上一步现状备份成功后，清空并重建目标库
- docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -e "DROP DATABASE IF EXISTS organization; CREATE DATABASE organization CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"'
+# 4. 覆盖操作：仅在恢复责任人确认目标库为 evolution 且上一步现状备份成功后，清空并重建目标库
+ docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -e "DROP DATABASE IF EXISTS evolution; CREATE DATABASE evolution CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"'
 
 # 5. 导入已确认的 MySQL 备份
-docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot organization' < "$BACKUP_FILE"
+docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot evolution' < "$BACKUP_FILE"
 
 # 6. 执行当前版本迁移
 docker compose run --rm --no-deps app alembic upgrade head
@@ -118,9 +136,9 @@ curl --fail http://127.0.0.1:8000/health/ready
 
 ## 数据库集成测试
 
-Agent Evaluation 使用通用 Python 模块入口，默认串行。先准备独占、可清空的 MySQL 8.4 `_test` 库，字符集与排序规则为 `utf8mb4` / `utf8mb4_general_ci`；按[测试迁移与评测命令](../docs/运行与验收.md#agent-evaluation-测试迁移与命令)核实实际目标并迁移。不要把已有生产环境的 `ORG_DATABASE_URL` 带入迁移进程。
+Agent Evaluation 使用通用 Python 模块入口，默认串行。先准备独占、可清空的 MySQL 8.4 `_test` 库，字符集与排序规则为 `utf8mb4` / `utf8mb4_general_ci`；按[测试迁移与评测命令](../docs/运行与验收.md#agent-evaluation-测试迁移与命令)核实实际目标并迁移。不要把已有生产环境的 `DATABASE_URL` 带入迁移进程。
 
-从仓库根目录执行（凭据通过受控环境注入 `ORG_TEST_DATABASE_URL`，不要写入命令、报告或 Git）：
+从仓库根目录执行（凭据通过受控环境注入 `TEST_DATABASE_URL`，不要写入命令、报告或 Git）：
 
 ```powershell
 $env:PYTHONPATH = (Resolve-Path backend).Path
@@ -138,7 +156,7 @@ CLI 的 `--case ORG_AGENT_VERSION_CONFLICT` 可筛选单例；退出码 `0` 为�
 
 ## 内部能力服务与 sidecar 边界
 
-内部端点前缀为 `/internal/capabilities`。部署时配置独立随机 `ORG_AGENT_SERVICE_TOKEN` 和 `ORG_AGENT_ENVIRONMENT=production`（隔离测试实例用 `test`）。令牌留空、错误或重复身份头均拒绝；只读 API 密钥、管理员 Cookie 和 CSRF 令牌不能替代此令牌。业务数据库仍由 `ORG_DATABASE_URL` 指向，运行时还需原有 `ORG_SESSION_SECRET`；服务令牌不得进入前端构建、浏览器、URL、访问日志或业务回执。
+内部端点前缀为 `/internal/capabilities`。部署时配置独立随机 `AGENT_SERVICE_TOKEN` 和 `AGENT_ENVIRONMENT=production`（隔离测试实例用 `test`）。令牌留空、错误或重复身份头均拒绝；只读 API 密钥、管理员 Cookie 和 CSRF 令牌不能替代此令牌。业务数据库仍由 `DATABASE_URL` 指向，运行时还需原有 `SESSION_SECRET`；服务令牌不得进入前端构建、浏览器、URL、访问日志或业务回执。
 
 sidecar 直接通过受控的容器私网连接后端，生产端口继续仅映射宿主机回环地址。只有持有该令牌的受信 sidecar 能声明 `X-Agent-Actor-Type`、`X-Agent-Actor-Id`、`X-Agent-Environment`、可选 `X-Agent-Run-Id` / `X-Agent-Case-Id` 和 `X-Agent-Approved`。这些头代表受信服务的声明，部署者必须在 sidecar 验证调用者身份、权限和人工批准，再重新构造；不得透传浏览器可控头。production 写操作要求明确 `X-Agent-Approved: true`；CI 仅允许 `test` 环境、`_test` 实际数据库和 `test-` / `test_` 前缀的 run_id。
 
@@ -159,7 +177,7 @@ location ^~ /internal/ { return 404; }
 ./.venv/Scripts/python.exe -m app.sync.coverage --reference "企业验收记录-2026-09-15-02" --actor "operator:运维人员" --all-members-verified --departmentless-verified
 ```
 
-Linux 使用部署环境的 `python -m app.sync.coverage`，参数相同。沿用 `ORG_DATABASE_URL/ORG_SESSION_SECRET/ORG_FEISHU_APP_ID/ORG_FEISHU_TENANT_KEY`；执行前先迁移到最新版本（含 `0003_pending_fact`）。reference 应为验收编号/摘要，不得填写 token/secret。
+Linux 使用部署环境的 `python -m app.sync.coverage`，参数相同。沿用 `DATABASE_URL/SESSION_SECRET/FEISHU_APP_ID/FEISHU_TENANT_KEY`；执行前先迁移到最新版本（含 `0003_pending_fact`）。reference 应为验收编号/摘要，不得填写 token/secret。
 
 CLI 将新依据、标记清除、审计与新全量核对任务同事务提交，返回 job_id。该命令不会把覆盖直接改为 complete；worker 后续采集成功才能恢复，旧在途采集不能恢复。无需修改或手工删除数据库行。此文档提供执行方式，本轮没有对真实环境执行。
 
@@ -177,17 +195,17 @@ docker compose --profile agent exec -T mcp python -m app.mcp.health
 
 | 配置 | 用途与默认值 |
 | --- | --- |
-| `ORG_MCP_HOST` | CLI 监听地址；本机默认 `127.0.0.1`，Compose 默认 `0.0.0.0` |
-| `ORG_MCP_PORT` | CLI 监听端口，默认 `8001`，范围 1–65535 |
-| `ORG_MCP_SERVICE_TOKEN` | 必填，MCP 入站独立 Bearer token，仅交给受信 MCP 客户端 |
-| `ORG_AGENT_SERVICE_TOKEN` | 必填，侧车调用内部能力 HTTP 的共享 token，须与 app 一致且与 MCP token 不同 |
-| `ORG_AGENT_ENVIRONMENT` | 必填且与 app 一致，`production` 或 `test`；Compose 默认 `production` |
-| `ORG_MCP_CAPABILITY_BASE_URL` | 必填 HTTP(S) 能力服务 origin；Compose 默认 `http://app:8000` |
-| `ORG_MCP_ACTOR_TYPE` | 必填，`human_agent` 或 `ci_agent`；production 拒绝 ci_agent |
-| `ORG_MCP_ACTOR_ID` | 必填，可信 Agent 主体标识 |
-| `ORG_MCP_RUN_ID` | test 必填且以 `test-` 或 `test_` 开头；production 可省略 |
-| `ORG_MCP_CASE_ID` | 可选用例标识；每个 CI 用例应独立实例化身份 |
-| `ORG_MCP_CONFIRMATION_TIMEOUT` | 有限正数秒，默认 `60`，限制人工确认等待 |
+| `MCP_HOST` | CLI 监听地址；本机默认 `127.0.0.1`，Compose 默认 `0.0.0.0` |
+| `MCP_PORT` | CLI 监听端口，默认 `8001`，范围 1–65535 |
+| `MCP_SERVICE_TOKEN` | 必填，MCP 入站独立 Bearer token，仅交给受信 MCP 客户端 |
+| `AGENT_SERVICE_TOKEN` | 必填，侧车调用内部能力 HTTP 的共享 token，须与 app 一致且与 MCP token 不同 |
+| `AGENT_ENVIRONMENT` | 必填且与 app 一致，`production` 或 `test`；Compose 默认 `production` |
+| `MCP_CAPABILITY_BASE_URL` | 必填 HTTP(S) 能力服务 origin；Compose 默认 `http://app:8000` |
+| `MCP_ACTOR_TYPE` | 必填，`human_agent` 或 `ci_agent`；production 拒绝 ci_agent |
+| `MCP_ACTOR_ID` | 必填，可信 Agent 主体标识 |
+| `MCP_RUN_ID` | test 必填且以 `test-` 或 `test_` 开头；production 可省略 |
+| `MCP_CASE_ID` | 可选用例标识；每个 CI 用例应独立实例化身份 |
+| `MCP_CONFIRMATION_TIMEOUT` | 有限正数秒，默认 `60`，限制人工确认等待 |
 
 令牌由密码管理器分别生成并写入受限环境配置，禁止写入镜像、命令行、URL 或报告。入站与后台 token 必须不同、非空且满足 ASCII 无空白/控制字符约束。默认 profile 不增加强制令牌插值；启用侧车后缺少或错误配置会安全失败关闭。可选 run/case 的空环境值按省略处理，不存在静态 approved 配置或同义变量别名。`.env` 由 Compose 解析后逐项注入侧车；MCP Python 模块自身不读取 `.env`。
 
@@ -195,14 +213,14 @@ docker compose --profile agent exec -T mcp python -m app.mcp.health
 
 健康检查模块 `python -m app.mcp.health` 读取相同配置，通过官方 MCP SDK 对真实 `/mcp` 进行初始化和 `list_tools`，要求完整 15 工具目录；不调用业务工具、数据库或飞书。单次总异步截止 4 秒，HTTP 超时 2 秒，Compose 探针上限 8 秒。绑定 `0.0.0.0`/`::` 时分别以 IPv4/IPv6 回环探测。成功退出 0 并输出 `MCP_READY`，任何连接、认证、配置或目录错误退出 1，只输出固定 `MCP_NOT_READY`。此探针只证明适配器协议就绪，后台就绪由既有 app health 依赖负责；没有额外 `/health` 路由，也不声称后台业务事实已验证。
 
-本机调试时，在隔离 shell 注入同名合成配置，设置 `ORG_MCP_HOST=127.0.0.1` 和本机端口、`ORG_MCP_CAPABILITY_BASE_URL` 指向隔离内部服务，再从 backend 目录执行：
+本机调试时，在隔离 shell 注入同名合成配置，设置 `MCP_HOST=127.0.0.1` 和本机端口、`MCP_CAPABILITY_BASE_URL` 指向隔离内部服务，再从 backend 目录执行：
 
 ```powershell
 .venv/Scripts/python.exe -m app.mcp --transport streamable-http
 .venv/Scripts/python.exe -m app.mcp.health
 ```
 
-CLI 的 `--host` / `--port` 优先于环境配置，参数中不传令牌。ASGI 工厂仍为 `app.mcp.config:create_app`；使用 uvicorn factory 时，uvicorn 的 `--host` / `--port` 必须由部署方显式设为与 `ORG_MCP_HOST` / `ORG_MCP_PORT` 相同，工厂配置不控制 uvicorn 自身监听。推荐使用上述 MCP CLI，确保监听与 Host 防护使用同一配置。
+CLI 的 `--host` / `--port` 优先于环境配置，参数中不传令牌。ASGI 工厂仍为 `app.mcp.config:create_app`；使用 uvicorn factory 时，uvicorn 的 `--host` / `--port` 必须由部署方显式设为与 `MCP_HOST` / `MCP_PORT` 相同，工厂配置不控制 uvicorn 自身监听。推荐使用上述 MCP CLI，确保监听与 Host 防护使用同一配置。
 
 生产 human_agent 的 L2 写入须经支持官方 MCP elicitation 的受信客户端展示实际参数并取得人工确认；decline、cancel、不支持或超时均拒绝。test 环境的合法 ci_agent 可由策略自动确认，仅连接隔离 `_test` 数据库的内部服务，不能把该身份用于 production。`approved`、主体身份及内部认证头不接受模型输入或客户端任意同名头赋权。写入超时后先调用 `get_operation`，不自动重试写操作。
 
@@ -243,9 +261,9 @@ codex mcp add organization-directory-cloud -- powershell.exe -NoProfile -File "D
 
 ## Pro / Umi 管理端构建
 
-前端采用 Umi Max 4.7.23、Utoopack 和 ProComponents 3.1.14-2（预发布），沿用 Node 24 多阶段构建及 Python 3.13 单应用镜像。Docker 在复制前端、版本脚本和版本声明后执行严格 `npm ci`，postinstall 生成 Umi 类型；不复制宿主机 `.umi` 和缓存。`ORG_BUILD_INFO_FILE` 继续把同一份元信息交给前后端。
+前端采用 Umi Max 4.7.23、Utoopack 和 ProComponents 3.1.14-2（预发布），沿用 Node 24 多阶段构建及 Python 3.13 单应用镜像。Docker 在复制前端、版本脚本和版本声明后执行严格 `npm ci`，postinstall 生成 Umi 类型；不复制宿主机 `.umi` 和缓存。`BUILD_INFO_FILE` 继续把同一份元信息交给前后端。
 
-构建中的 npm 下载缓存由 BuildKit 的 cache mount 保存在构建器中（`organization-directory-npm`，挂载 `/root/.npm`）；源码改动或一次安装失败后可复用已完成的下载，不将缓存写入运行镜像。安装仍按锁文件执行严格 peer 检查和可选依赖安装，并保留 postinstall 与 Utoopack 原生模块加载检查。
+构建中的 npm 下载缓存由 BuildKit 的 cache mount 保存在构建器中（`evolution-npm`，挂载 `/root/.npm`）；源码改动或一次安装失败后可复用已完成的下载，不将缓存写入运行镜像。安装仍按锁文件执行严格 peer 检查和可选依赖安装，并保留 postinstall 与 Utoopack 原生模块加载检查。
 
 `scripts/install-frontend.mjs` 保留 npm 单请求下载重试，并在 npm 最终错误码明确为连接重置、超时或临时网络故障时，最多执行三次整次安装（间隔 5 秒、10 秒）。依赖冲突、生命周期脚本失败、进程信号中断不进行整次重试；耗尽后保留失败退出码。不会自动换包源、关闭 TLS 校验、升级 npm 或更新锁文件。持续报网络错误时需检查 Docker Desktop 的网络／代理链路；单次 `ECONNRESET` 不能据此确定具体断连方。
 
@@ -259,7 +277,7 @@ codex mcp add organization-directory-cloud -- powershell.exe -NoProfile -File "D
 
 `pip install --no-deps .` 仍会为 `pyproject.toml` 创建临时构建隔离环境并下载 `setuptools`；`--no-deps` 只跳过项目运行依赖，不跳过构建依赖。源码变化会重新执行这一步，可能在运行依赖已经安装后因 PyPI TLS 连接中断而失败；日志中的 `No matching distribution found for setuptools>=75` 在此前有 SSL 下载错误时不能直接认定为版本不存在。
 
-Docker 先按原 `backend/requirements.lock` 安装业务依赖，再通过独立的 `backend/requirements-build.lock` 固定构建工具版本和 wheel 的 SHA-256。构建工具层位于业务源码复制之前，pip 下载缓存由 BuildKit cache mount 保存（`organization-directory-pip-build`），缓存不写入运行镜像。变更构建工具时同步核对 `pyproject.toml` 的构建要求、Python 版本、发布文件及校验值。
+Docker 先按原 `backend/requirements.lock` 安装业务依赖，再通过独立的 `backend/requirements-build.lock` 固定构建工具版本和 wheel 的 SHA-256。构建工具层位于业务源码复制之前，pip 下载缓存由 BuildKit cache mount 保存（`evolution-pip-build`），缓存不写入运行镜像。变更构建工具时同步核对 `pyproject.toml` 的构建要求、Python 版本、发布文件及校验值。
 
 安装本地项目使用 `--no-build-isolation --check-build-dependencies --no-deps --no-index`，并由 Docker `RUN --network=none` 强制禁止联网；构建时同时验证依赖齐备与离线打包成功。构建工具的首次下载仍需正常的 HTTPS 网络，保留证书校验和现有包源。机制参见 [pip 官方构建隔离说明](https://pip.pypa.io/en/stable/reference/build-system/#disabling-build-isolation)与 [pip install 选项](https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-no-build-isolation)。
 

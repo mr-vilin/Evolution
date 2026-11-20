@@ -513,7 +513,7 @@ def test_queue_expiry_has_no_attempt_or_outbound_and_retry_wait_blocks_public_re
     assert worker.run_once()
     try:
         assert client.get(waiting).json()['data']['status']=='retry_wait'
-        with pytest.raises(RuntimeError,match='EVALUATION_WORKER_NOT_QUIET'):reset_test_database(os.environ['ORG_TEST_DATABASE_URL'])
+        with pytest.raises(RuntimeError,match='EVALUATION_WORKER_NOT_QUIET'):reset_test_database(os.environ['TEST_DATABASE_URL'])
         assert client.get(waiting).json()['data']['status']=='retry_wait'
     finally:
         current[0]+=timedelta(minutes=2)

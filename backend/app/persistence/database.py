@@ -23,7 +23,7 @@ class DatabaseReadinessError(RuntimeError):
 
 def create_mysql_engine(database_url: str) -> Engine:
     if not database_url.startswith("mysql+pymysql://"):
-        raise ValueError("ORG_DATABASE_URL must use mysql+pymysql")
+        raise ValueError("DATABASE_URL must use mysql+pymysql")
     engine = create_engine(
         database_url,
         pool_pre_ping=True,

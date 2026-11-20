@@ -32,15 +32,15 @@ def test_sidecar_is_optional_reuses_image_and_has_minimal_environment():
     assert mcp["command"] == ["python", "-m", "app.mcp", "--transport", "streamable-http"]
     assert mcp["depends_on"] == {"app": {"condition": "service_healthy"}}
     assert not {"ports", "network_mode", "env_file", "volumes"} & mcp.keys()
-    names = {"ORG_MCP_HOST", "ORG_MCP_PORT", "ORG_MCP_SERVICE_TOKEN", "ORG_AGENT_SERVICE_TOKEN",
-             "ORG_AGENT_ENVIRONMENT", "ORG_MCP_CAPABILITY_BASE_URL", "ORG_MCP_ACTOR_TYPE",
-             "ORG_MCP_ACTOR_ID", "ORG_MCP_RUN_ID", "ORG_MCP_CASE_ID", "ORG_MCP_CONFIRMATION_TIMEOUT"}
+    names = {"MCP_HOST", "MCP_PORT", "MCP_SERVICE_TOKEN", "AGENT_SERVICE_TOKEN",
+             "AGENT_ENVIRONMENT", "MCP_CAPABILITY_BASE_URL", "MCP_ACTOR_TYPE",
+             "MCP_ACTOR_ID", "MCP_RUN_ID", "MCP_CASE_ID", "MCP_CONFIRMATION_TIMEOUT"}
     assert set(mcp["environment"]) == names
     for name, value in mcp["environment"].items():
         assert ":?" not in value, "Disabled profile must not add mandatory interpolation"
         if "TOKEN" in name:
-            assert value == "${" + name + ":-}"
-    assert mcp["environment"]["ORG_MCP_CAPABILITY_BASE_URL"] == "${ORG_MCP_CAPABILITY_BASE_URL:-http://app:8000}"
+            assert value == "${" + name + "-}"
+    assert mcp["environment"]["MCP_CAPABILITY_BASE_URL"] == "${MCP_CAPABILITY_BASE_URL-http://app:8000}"
     assert mcp["healthcheck"]["test"] == ["CMD", "python", "-m", "app.mcp.health"]
     assert mcp["healthcheck"]["timeout"] == "8s"
 
@@ -62,8 +62,8 @@ def test_build_context_and_image_do_not_receive_private_runtime():
     assert ".superpowers" in ignored
     assert ".env" in ignored and "**/.venv" in ignored
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-    assert "ORG_MCP_SERVICE_TOKEN" not in dockerfile
-    assert "ORG_AGENT_SERVICE_TOKEN" not in dockerfile
+    assert "MCP_SERVICE_TOKEN" not in dockerfile
+    assert "AGENT_SERVICE_TOKEN" not in dockerfile
     assert 'CMD ["python", "-m", "deploy.supervise"]' in dockerfile
 
 
@@ -85,7 +85,7 @@ def test_trusted_stdio_client_discovers_tools_without_exposing_a_network_port(mo
 
 
 def clean_environment():
-    prefixes = ("ORG_", "FEISHU_", "LARK_", "OPENAI_", "ANTHROPIC_", "AZURE_OPENAI_", "COZE_", "ARK_", "DASHSCOPE_")
+    prefixes = ("MCP_", "AGENT_", "FEISHU_", "LARK_", "OPENAI_", "ANTHROPIC_", "AZURE_OPENAI_", "COZE_", "ARK_", "DASHSCOPE_")
     return {key: value for key, value in os.environ.items() if not key.startswith(prefixes)}
 
 
@@ -94,10 +94,10 @@ def runtime_environment():
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
-    env.update(ORG_MCP_SERVICE_TOKEN=secrets.token_urlsafe(32), ORG_AGENT_SERVICE_TOKEN=secrets.token_urlsafe(32),
-               ORG_MCP_CAPABILITY_BASE_URL="http://127.0.0.1:1", ORG_AGENT_ENVIRONMENT="test",
-               ORG_MCP_ACTOR_TYPE="ci_agent", ORG_MCP_ACTOR_ID="runtime-test", ORG_MCP_RUN_ID="test-runtime",
-               ORG_MCP_CASE_ID="", ORG_MCP_HOST="0.0.0.0", ORG_MCP_PORT=str(port))
+    env.update(MCP_SERVICE_TOKEN=secrets.token_urlsafe(32), AGENT_SERVICE_TOKEN=secrets.token_urlsafe(32),
+               MCP_CAPABILITY_BASE_URL="http://127.0.0.1:1", AGENT_ENVIRONMENT="test",
+               MCP_ACTOR_TYPE="ci_agent", MCP_ACTOR_ID="runtime-test", MCP_RUN_ID="test-runtime",
+               MCP_CASE_ID="", MCP_HOST="0.0.0.0", MCP_PORT=str(port))
     return env
 
 
@@ -112,7 +112,7 @@ def running_sidecar(env):
     process = subprocess.Popen([sys.executable, "-m", "app.mcp", "--transport", "streamable-http"],
                                cwd=ROOT / "backend", env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
-    endpoint = f"http://127.0.0.1:{env['ORG_MCP_PORT']}/mcp"
+    endpoint = f"http://127.0.0.1:{env['MCP_PORT']}/mcp"
     try:
         deadline = monotonic() + 8
         with httpx.Client(trust_env=False, timeout=0.2) as http:
@@ -141,13 +141,13 @@ def test_real_sidecar_env_listener_auth_discovery_host_origin_and_probe(mode):
     with running_sidecar(env) as endpoint:
         with httpx.Client(trust_env=False, timeout=2) as http:
             assert http.get(endpoint).status_code == 401
-            assert http.get(endpoint, headers={"Authorization": "Bearer " + env["ORG_AGENT_SERVICE_TOKEN"]}).status_code == 401
-            headers = {"Authorization": "Bearer " + env["ORG_MCP_SERVICE_TOKEN"], "Accept": "application/json, text/event-stream"}
+            assert http.get(endpoint, headers={"Authorization": "Bearer " + env["AGENT_SERVICE_TOKEN"]}).status_code == 401
+            headers = {"Authorization": "Bearer " + env["MCP_SERVICE_TOKEN"], "Accept": "application/json, text/event-stream"}
             assert http.get(endpoint, headers={**headers, "Host": "untrusted.invalid"}).status_code == 421
             assert http.get(endpoint, headers={**headers, "Origin": "https://untrusted.invalid"}).status_code == 403
         async def discover():
-            headers = {"Authorization": "Bearer " + env["ORG_MCP_SERVICE_TOKEN"],
-                       "Host": f"mcp:{env['ORG_MCP_PORT']}", "Origin": f"http://mcp:{env['ORG_MCP_PORT']}"}
+            headers = {"Authorization": "Bearer " + env["MCP_SERVICE_TOKEN"],
+                       "Host": f"mcp:{env['MCP_PORT']}", "Origin": f"http://mcp:{env['MCP_PORT']}"}
             async with httpx2.AsyncClient(headers=headers, trust_env=False) as http:
                 async with Client(streamable_http_client(endpoint, http_client=http), mode=mode) as client:
                     tools = (await client.list_tools()).tools
@@ -156,24 +156,24 @@ def test_real_sidecar_env_listener_auth_discovery_host_origin_and_probe(mode):
         asyncio.run(discover())
         success = run_module("app.mcp.health", env)
         assert (success.returncode, success.stdout.strip(), success.stderr) == (0, "MCP_READY", "")
-        wrong = {**env, "ORG_MCP_SERVICE_TOKEN": secrets.token_urlsafe(32)}
+        wrong = {**env, "MCP_SERVICE_TOKEN": secrets.token_urlsafe(32)}
         failure = run_module("app.mcp.health", wrong)
         assert failure.returncode == 1 and failure.stdout == ""
         assert failure.stderr.strip() == "MCP_NOT_READY"
-        assert env["ORG_MCP_SERVICE_TOKEN"] not in success.stdout + success.stderr + failure.stdout + failure.stderr
+        assert env["MCP_SERVICE_TOKEN"] not in success.stdout + success.stderr + failure.stdout + failure.stderr
 
 
 def test_probe_unavailable_or_invalid_configuration_fails_with_safe_diagnostic():
     env = runtime_environment()
-    for scenario in (env, clean_environment(), {**env, "ORG_MCP_PORT": "invalid"},
-                     {**env, "ORG_AGENT_SERVICE_TOKEN": env["ORG_MCP_SERVICE_TOKEN"]}):
+    for scenario in (env, clean_environment(), {**env, "MCP_PORT": "invalid"},
+                     {**env, "AGENT_SERVICE_TOKEN": env["MCP_SERVICE_TOKEN"]}):
         result = run_module("app.mcp.health", scenario)
         assert result.returncode == 1
         assert result.stdout == "" and result.stderr.strip() == "MCP_NOT_READY"
 
 
 def test_runtime_invalid_listener_configuration_is_safe():
-    for name, value in (("ORG_MCP_PORT", "0"), ("ORG_MCP_PORT", "65536"), ("ORG_MCP_HOST", "bad/host")):
+    for name, value in (("MCP_PORT", "0"), ("MCP_PORT", "65536"), ("MCP_HOST", "bad/host")):
         env = {**runtime_environment(), name: value}
         result = run_module("app.mcp", env)
         assert result.returncode == 2
@@ -185,9 +185,9 @@ def test_cli_listener_uses_environment_and_explicit_arguments_take_precedence(mo
     from app.mcp import __main__ as cli
     import uvicorn
     for key, value in runtime_environment().items():
-        if key.startswith("ORG_"):
+        if key.startswith(("MCP_", "AGENT_")):
             monkeypatch.setenv(key, value)
-    monkeypatch.setenv("ORG_MCP_PORT", "8123")
+    monkeypatch.setenv("MCP_PORT", "8123")
     captured = {}
     monkeypatch.setattr(cli, "create_server", lambda config: object())
     def app(server, **kwargs):
@@ -214,7 +214,7 @@ def test_probe_stalled_real_http_is_bounded_and_safe():
     http = ThreadingHTTPServer(("127.0.0.1", 0), StalledHandler)
     thread = threading.Thread(target=http.serve_forever, daemon=True)
     thread.start()
-    env = {**runtime_environment(), "ORG_MCP_PORT": str(http.server_port)}
+    env = {**runtime_environment(), "MCP_PORT": str(http.server_port)}
     start = monotonic()
     try:
         result = run_module("app.mcp.health", env)

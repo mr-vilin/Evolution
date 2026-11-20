@@ -6,14 +6,14 @@ COPY scripts/install-frontend.mjs /build/scripts/
 COPY version.json CHANGELOG.md /build/
 # 下载缓存跨源码改动和失败构建保留；仅对明确的网络故障有限重试整次严格安装。
 # 可选原生依赖下载失败时 npm 仍可能成功退出；缓存安装层前确认构建器可加载。
-RUN --mount=type=cache,id=organization-directory-npm,target=/root/.npm,sharing=locked \
+RUN --mount=type=cache,id=evolution-npm,target=/root/.npm,sharing=locked \
     node /build/scripts/install-frontend.mjs \
     && node -e "require('node:module').createRequire(require.resolve('@umijs/bundler-utoopack'))('@utoo/pack')"
-ARG ORG_COMMIT_SHA=unknown
-ARG ORG_RELEASE_TAG=
-ARG ORG_SOURCE_DIRTY=
+ARG COMMIT_SHA
+ARG RELEASE_TAG
+ARG SOURCE_DIRTY
 RUN node /build/scripts/versioning.mjs build-info --output /build/build-info.json
-ENV ORG_BUILD_INFO_FILE=/build/build-info.json
+ENV BUILD_INFO_FILE=/build/build-info.json
 RUN npm run build
 
 FROM python:3.13-slim-bookworm AS runtime
@@ -23,7 +23,7 @@ COPY backend/requirements.lock ./
 RUN pip install --no-cache-dir -r requirements.lock
 COPY backend/requirements-build.lock ./
 # 构建工具独立锁定并缓存下载，不随业务源码变化重新解析隔离构建依赖。
-RUN --mount=type=cache,id=organization-directory-pip-build,target=/root/.cache/pip,sharing=locked \
+RUN --mount=type=cache,id=evolution-pip-build,target=/root/.cache/pip,sharing=locked \
     python -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes -r requirements-build.lock
 COPY backend/ ./
 COPY --from=frontend /build/build-info.json /srv/backend/app/_build_info.json

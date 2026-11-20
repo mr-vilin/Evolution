@@ -14,11 +14,11 @@ def test_migrations_use_random_test_database_and_restore_environment(monkeypatch
     from integration import conftest as mysql_fixtures
 
     if previous_url is None:
-        monkeypatch.delenv('ORG_DATABASE_URL', raising=False)
+        monkeypatch.delenv('DATABASE_URL', raising=False)
     else:
-        monkeypatch.setenv('ORG_DATABASE_URL', previous_url)
+        monkeypatch.setenv('DATABASE_URL', previous_url)
     monkeypatch.setenv(
-        'ORG_MIGRATION_TEST_DATABASE_URL',
+        'MIGRATION_TEST_DATABASE_URL',
         'mysql+pymysql://unused:unused@localhost/isolated_test',
     )
     admin = MagicMock()
@@ -45,7 +45,7 @@ def test_migrations_use_random_test_database_and_restore_environment(monkeypatch
         finally:
             fixture.close()
 
-    assert os.getenv('ORG_DATABASE_URL') == previous_url
+    assert os.getenv('DATABASE_URL') == previous_url
     statements = [str(call.args[0]) for call in connection.execute.call_args_list]
     assert any(sql.startswith(f'CREATE DATABASE `{database}`') for sql in statements)
     assert statements[-1] == f'DROP DATABASE `{database}`'

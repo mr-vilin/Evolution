@@ -102,7 +102,7 @@ def test_http_authentication_discovery_and_identity(mode):
 
 
 def run_python(*arguments):
-    excluded = ("ORG_", "FEISHU_", "LARK_", "OPENAI_", "ANTHROPIC_", "AZURE_OPENAI_", "COZE_", "ARK_", "DASHSCOPE_")
+    excluded = ("MCP_", "AGENT_", "FEISHU_", "LARK_", "OPENAI_", "ANTHROPIC_", "AZURE_OPENAI_", "COZE_", "ARK_", "DASHSCOPE_")
     environment = {key: value for key, value in os.environ.items() if not key.startswith(excluded)}
     return subprocess.run([sys.executable, *arguments], cwd=Path(__file__).resolve().parents[1], env=environment,
                           capture_output=True, text=True, encoding="utf-8", timeout=10)
@@ -352,7 +352,7 @@ def test_http_production_elicitation_is_hidden_and_authenticated(mode, name, arg
 def test_config_rejects_incomplete_context_shared_tokens_and_production_ci(monkeypatch):
     from app.mcp.config import MCPSettings, create_server
     for key in tuple(os.environ):
-        if key.startswith("ORG_"):
+        if key.startswith(("MCP_", "AGENT_")):
             monkeypatch.delenv(key)
     with pytest.raises(ValueError, match="MCP_RUNTIME_NOT_CONFIGURED"):
         create_server()
@@ -482,11 +482,11 @@ def test_modern_input_responses_without_server_state_cannot_authorize(name, argu
 @pytest.mark.parametrize("mode", ["legacy", "auto"])
 def test_configured_cli_runs_real_http_sdk_discovery(mode):
     from time import monotonic, sleep
-    excluded = ("ORG_", "FEISHU_", "LARK_", "OPENAI_", "ANTHROPIC_", "AZURE_OPENAI_", "COZE_", "ARK_", "DASHSCOPE_")
+    excluded = ("MCP_", "AGENT_", "FEISHU_", "LARK_", "OPENAI_", "ANTHROPIC_", "AZURE_OPENAI_", "COZE_", "ARK_", "DASHSCOPE_")
     environment = {key: value for key, value in os.environ.items() if not key.startswith(excluded)}
-    environment.update(ORG_MCP_SERVICE_TOKEN="synthetic-mcp-token", ORG_AGENT_SERVICE_TOKEN="synthetic-internal-token",
-                       ORG_MCP_CAPABILITY_BASE_URL="http://127.0.0.1:1", ORG_AGENT_ENVIRONMENT="test",
-                       ORG_MCP_ACTOR_TYPE="ci_agent", ORG_MCP_ACTOR_ID="cli-agent", ORG_MCP_RUN_ID="test-cli")
+    environment.update(MCP_SERVICE_TOKEN="synthetic-mcp-token", AGENT_SERVICE_TOKEN="synthetic-internal-token",
+                       MCP_CAPABILITY_BASE_URL="http://127.0.0.1:1", AGENT_ENVIRONMENT="test",
+                       MCP_ACTOR_TYPE="ci_agent", MCP_ACTOR_ID="cli-agent", MCP_RUN_ID="test-cli")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]

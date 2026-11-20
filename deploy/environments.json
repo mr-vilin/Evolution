@@ -26,7 +26,8 @@
       "mcp"
     ],
     "base_url": "https://test-organization.bzg.company",
-    "notes": "腾讯云测试环境；sudo -n docker；配置凭据留在服务器，禁止下载。"
+    "notes": "腾讯云测试环境；sudo -n docker；配置凭据留在服务器，禁止下载。",
+    "image_repository": "organization-directory-runtime"
   },
   "production": {
     "configured": false,

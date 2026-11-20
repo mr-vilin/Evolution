@@ -25,7 +25,7 @@ def test_six_versioned_cases_have_independent_contracts():
 
 def test_cli_missing_or_non_test_database_exits_two(monkeypatch, tmp_path, capsys):
     from app.evaluation.cli import run
-    monkeypatch.delenv('ORG_TEST_DATABASE_URL', raising=False)
+    monkeypatch.delenv('TEST_DATABASE_URL', raising=False)
     assert run(['--suite', 'smoke', '--output', str(tmp_path)]) == 2
     secret_url = 'mysql+pymysql://synthetic:private-canary@127.0.0.1/production'
     assert run(['--suite', 'smoke', '--database-url', secret_url]) == 2
@@ -57,7 +57,7 @@ def test_real_mysql_smoke_six_cases_twice(tmp_path):
     from app.evaluation.cli import run
     from app.persistence.database import create_mysql_engine
     from app.persistence.models import Base, DatasetState, WorkerLease
-    url = os.getenv('ORG_TEST_DATABASE_URL')
+    url = os.getenv('TEST_DATABASE_URL')
     if not url:
         pytest.skip('需要显式测试 MySQL')
     run_ids = set()
@@ -90,7 +90,7 @@ def test_subtree_smoke_detects_lost_later_pages(resource, monkeypatch):
     from app.evaluation.fake_feishu import FakeFeishu
     from app.evaluation.runner import EvaluationRunner
     from app.evaluation.smoke import smoke_worker
-    url = os.getenv('ORG_TEST_DATABASE_URL')
+    url = os.getenv('TEST_DATABASE_URL')
     if not url:
         pytest.skip('需要显式测试 MySQL')
     original = FakeFeishu.pages
@@ -109,7 +109,7 @@ def test_apply_smoke_rejects_skipped_preview_even_when_business_write_succeeds()
     from app.evaluation.runner import EvaluationRunner
     from app.evaluation.smoke import _steps
     from app.evaluation.worker import ScriptedWorkerAgent
-    url = os.getenv('ORG_TEST_DATABASE_URL')
+    url = os.getenv('TEST_DATABASE_URL')
     if not url:
         pytest.skip('需要显式测试 MySQL')
     worker = ScriptedWorkerAgent(lambda goal, context: [step for step in _steps(goal, context)

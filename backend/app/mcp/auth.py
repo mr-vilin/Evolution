@@ -51,7 +51,7 @@ def authenticate(
     """验证单一入站 Authorization；身份只取可信参数，不读取客户端身份头。
 
     Task 4 的 HTTP 边界须先拒绝重复 Authorization；expected_token 来自
-    ORG_MCP_SERVICE_TOKEN，绝不能传入 ORG_AGENT_SERVICE_TOKEN。
+    MCP_SERVICE_TOKEN，绝不能传入 AGENT_SERVICE_TOKEN。
     """
     if not isinstance(authorization, str):
         raise AuthenticationError()

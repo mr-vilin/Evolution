@@ -6,13 +6,14 @@ import { buildInfo, repositoryRoot } from '../../scripts/versioning.mjs';
 
 const frontend = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const command = process.argv[2];
-const info = process.env.ORG_BUILD_INFO_FILE
-  ? JSON.parse(readFileSync(process.env.ORG_BUILD_INFO_FILE, 'utf8'))
+const providedInfoFile = process.env.BUILD_INFO_FILE;
+const info = providedInfoFile
+  ? JSON.parse(readFileSync(providedInfoFile, 'utf8'))
   : buildInfo(repositoryRoot);
 const infoFile = resolve(frontend, `.cache/build-info-${command}.json`);
 mkdirSync(dirname(infoFile), { recursive: true });
 writeFileSync(infoFile, JSON.stringify(info, null, 2) + '\n');
-const env = { ...process.env, ORG_BUILD_INFO_FILE: infoFile, PORT: process.env.PORT || '5173', HOST: process.env.HOST || '127.0.0.1' };
+const env = { ...process.env, BUILD_INFO_FILE: infoFile, PORT: process.env.PORT || '5173', HOST: process.env.HOST || '127.0.0.1' };
 
 function run(binary, args) {
   const result = spawnSync(process.execPath, [resolve(frontend, binary), ...args], { cwd: frontend, env, stdio: 'inherit' });

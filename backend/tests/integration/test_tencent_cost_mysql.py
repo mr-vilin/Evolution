@@ -435,7 +435,7 @@ def test_public_evaluation_reset_refuses_cloud_execution_and_preserves_the_accep
         if control=='running-job-only':config.active_job_id=None
     try:
         with pytest.raises(RuntimeError,match='EVALUATION_WORKER_NOT_QUIET'):
-            if entry=='reset':reset_test_database(os.environ['ORG_TEST_DATABASE_URL'])
+            if entry=='reset':reset_test_database(os.environ['TEST_DATABASE_URL'])
             else:seed_case(sessions,load_case(Path(__file__).parents[1]/'evaluation'/'cases'/'ORG_AGENT_READ_PRIMARY_STORE.yaml'))
         assert client.get(accepted.headers['location']).json()['data']['status']=='running'
         assert client.get('/admin/api/tencent/accounts').json()['data'][0]['uin']=='10001'

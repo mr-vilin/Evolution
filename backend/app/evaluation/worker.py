@@ -60,8 +60,8 @@ class ProviderWorkerAgent:
     """模型实现必须显式注入；本模块不创建网络客户端或读取提供商密钥。"""
     def __init__(self, provider: ModelProvider, *, model_alias=None, max_tokens=None):
         self.provider = provider
-        self.model_alias = model_alias or os.getenv('ORG_EVALUATION_MODEL_ALIAS', '')
-        self.max_tokens = max_tokens if max_tokens is not None else int(os.getenv('ORG_EVALUATION_MAX_TOKENS', '2048'))
+        self.model_alias = model_alias or os.getenv('EVALUATION_MODEL_ALIAS', '')
+        self.max_tokens = max_tokens if max_tokens is not None else int(os.getenv('EVALUATION_MAX_TOKENS', '2048'))
         if (not re.fullmatch(r'[A-Za-z0-9_.-]{1,80}', self.model_alias)
                 or type(self.max_tokens) is not int or self.max_tokens < 1):
             raise ValueError('EVALUATION_MODEL_CONFIGURATION_REQUIRED')

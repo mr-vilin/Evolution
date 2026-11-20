@@ -1,7 +1,6 @@
 """复用测试 Compose，在全新专库中执行 CI MySQL 回归；不接收业务库连接。"""
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import re
 import subprocess
@@ -15,6 +14,8 @@ BACKEND = Path(__file__).resolve().parents[1]
 ROOT = BACKEND.parent
 sys.path.insert(0, str(BACKEND))
 
+from app.config import Settings
+from app.env import isolated_test_env
 from app.persistence.database import create_mysql_engine, database_ready
 
 DATABASE = 'tencent_ci_test'
@@ -67,11 +68,11 @@ def main() -> int:
         admin.dispose()
 
     target = admin_url.set(database=DATABASE).render_as_string(hide_password=False)
-    env = {key: value for key, value in os.environ.items() if not key.upper().startswith('ORG_')}
+    env = isolated_test_env(Settings)
     env.update(
-        ORG_DATABASE_URL=target,
-        ORG_TEST_DATABASE_URL=target,
-        ORG_MIGRATION_TEST_DATABASE_URL=target,
+        DATABASE_URL=target,
+        TEST_DATABASE_URL=target,
+        MIGRATION_TEST_DATABASE_URL=target,
         PYTHONUTF8='1',
         PYTHONIOENCODING='utf-8',
     )

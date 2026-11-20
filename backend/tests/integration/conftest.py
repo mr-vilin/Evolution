@@ -15,11 +15,11 @@ from app.persistence.models import DatasetState
 
 @pytest.fixture
 def mysql_sessions(request):
-    url = os.environ.get('ORG_TEST_DATABASE_URL')
+    url = os.environ.get('TEST_DATABASE_URL')
     if not url:
         if request.config.getoption('--require-mysql'):
-            pytest.fail('未提供 ORG_TEST_DATABASE_URL；--require-mysql 要求真实 MySQL 验收')
-        pytest.skip('未提供 ORG_TEST_DATABASE_URL；真实 MySQL 验收尚未执行')
+            pytest.fail('未提供 TEST_DATABASE_URL；--require-mysql 要求真实 MySQL 验收')
+        pytest.skip('未提供 TEST_DATABASE_URL；真实 MySQL 验收尚未执行')
     parsed = make_url(url)
     if parsed.drivername != 'mysql+pymysql' or not (parsed.database or '').endswith('_test'):
         pytest.fail('集成测试仅允许 mysql+pymysql 且数据库名以 _test 结尾的独立测试库')
@@ -50,11 +50,11 @@ def mysql_sessions(request):
 
 @pytest.fixture
 def migration_database(request, monkeypatch):
-    source = os.getenv('ORG_MIGRATION_TEST_DATABASE_URL')
+    source = os.getenv('MIGRATION_TEST_DATABASE_URL')
     if not source:
         if request.config.getoption('--require-mysql'):
-            pytest.fail('未提供 ORG_MIGRATION_TEST_DATABASE_URL；--require-mysql 要求迁移演练')
-        pytest.skip('未提供 ORG_MIGRATION_TEST_DATABASE_URL；MySQL 迁移演练未执行')
+            pytest.fail('未提供 MIGRATION_TEST_DATABASE_URL；--require-mysql 要求迁移演练')
+        pytest.skip('未提供 MIGRATION_TEST_DATABASE_URL；MySQL 迁移演练未执行')
     url = make_url(source)
     if url.drivername != 'mysql+pymysql' or url.host not in {'127.0.0.1', 'localhost'} or not (url.database or '').endswith('_test'):
         pytest.fail('迁移演练只允许本机、库名以 _test 结尾的独立 MySQL 实例')
@@ -69,7 +69,7 @@ def migration_database(request, monkeypatch):
             created = True
         target = url.set(database=name).render_as_string(hide_password=False)
         # env.py 优先读取此变量；必须覆盖外部连接，确保迁移只写随机测试库。
-        monkeypatch.setenv('ORG_DATABASE_URL', target)
+        monkeypatch.setenv('DATABASE_URL', target)
         engine = create_mysql_engine(target)
         config = Config(str(Path(__file__).parents[2] / 'alembic.ini'))
         config.set_main_option('script_location', str(Path(__file__).parents[2] / 'migrations'))
@@ -88,10 +88,10 @@ def evaluation_mysql_database(request):
     """Evaluation 专用独立连接/串行 reset；不改变 mysql_sessions 的回滚语义。"""
     from app.evaluation.fixtures import evaluation_database
 
-    url = os.environ.get('ORG_TEST_DATABASE_URL')
+    url = os.environ.get('TEST_DATABASE_URL')
     if not url:
         if request.config.getoption('--require-mysql'):
-            pytest.fail('未提供 ORG_TEST_DATABASE_URL；--require-mysql 要求 Evaluation 验收')
-        pytest.skip('未提供 ORG_TEST_DATABASE_URL；Evaluation 真实 MySQL 验收尚未执行')
+            pytest.fail('未提供 TEST_DATABASE_URL；--require-mysql 要求 Evaluation 验收')
+        pytest.skip('未提供 TEST_DATABASE_URL；Evaluation 真实 MySQL 验收尚未执行')
     with evaluation_database(url) as sessions:
         yield sessions

@@ -105,15 +105,17 @@ export function checkRepository(root = repositoryRoot, { release = false, tag, b
 }
 
 export function buildInfo(root = repositoryRoot, env = process.env) {
-  const tag = env.ORG_RELEASE_TAG || undefined;
+  const tag = env.RELEASE_TAG || undefined;
   const { version, records } = checkRepository(root, { tag });
   const head = git(root, ['rev-parse', 'HEAD']);
-  const commit = env.ORG_COMMIT_SHA || head || 'unknown';
+  const configuredCommit = env.COMMIT_SHA;
+  const commit = configuredCommit || head || 'unknown';
   if (commit !== 'unknown' && !/^[0-9a-f]{40}$/.test(commit)) throw new Error('提交标识必须是完整 Git SHA');
-  if (head && env.ORG_COMMIT_SHA && commit !== head) throw new Error('构建提交与当前 Git HEAD 不一致');
+  if (head && configuredCommit && commit !== head) throw new Error('构建提交与当前 Git HEAD 不一致');
   const status = git(root, ['status', '--porcelain']);
-  if (env.ORG_SOURCE_DIRTY && !['true', 'false'].includes(env.ORG_SOURCE_DIRTY)) throw new Error('ORG_SOURCE_DIRTY 只允许 true/false');
-  const dirty = status === null ? (env.ORG_SOURCE_DIRTY ? env.ORG_SOURCE_DIRTY === 'true' : null) : status !== '';
+  const configuredDirty = env.SOURCE_DIRTY;
+  if (configuredDirty && !['true', 'false'].includes(configuredDirty)) throw new Error('SOURCE_DIRTY 只允许 true/false');
+  const dirty = status === null ? (configuredDirty ? configuredDirty === 'true' : null) : status !== '';
   if (tag && (commit === 'unknown' || dirty !== false)) throw new Error('发布构建必须提供真实提交及干净源代码状态');
   return {
     version, commit, dirty, builtAt: new Date().toISOString(),
@@ -130,7 +132,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       if (at !== -1 && (!args[at + 1] || args[at + 1].startsWith('--'))) throw new Error(`${name} 缺少参数`);
       return at === -1 ? undefined : args[at + 1];
     };
-    const options = { release: args.includes('--release'), tag: option('--tag') || process.env.ORG_RELEASE_TAG || undefined, baseRef: option('--base-ref') };
+    const options = { release: args.includes('--release'), tag: option('--tag') || process.env.RELEASE_TAG || undefined, baseRef: option('--base-ref') };
     if (command === 'check') {
       const result = checkRepository(repositoryRoot, options);
       console.log(`版本校验通过：${result.version}，${result.records.length} 条发行记录`);
@@ -138,7 +140,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       checkRepository(repositoryRoot, options);
       const output = option('--output');
       if (!output) throw new Error('build-info 需要 --output 文件路径');
-      const result = buildInfo(repositoryRoot, { ...process.env, ORG_RELEASE_TAG: options.tag });
+      const result = buildInfo(repositoryRoot, { ...process.env, RELEASE_TAG: options.tag });
       writeFileSync(resolve(output), JSON.stringify(result, null, 2) + '\n');
       console.log(`构建元信息已生成：${result.version}（${result.stage}）`);
     } else throw new Error('用法：node scripts/versioning.mjs check [--release] [--tag vX.Y.Z] [--base-ref SHA] 或 build-info --output 路径');
