@@ -1,0 +1,882 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>数据库文档</title>
+<link id="catalog-icon" rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2032%2032%22%3E%20%3Cpath%20fill%3D%22%232c1810%22%20d%3D%22M0%200h32v32H0z%22%2F%3E%20%3Cpath%20fill%3D%22%23ff6b35%22%20d%3D%22M2%202h28v28H2z%22%2F%3E%20%3Cpath%20fill%3D%22%232c1810%22%20fill-rule%3D%22evenodd%22%20d%3D%22M6.8%2010.5h3.7c3.5%200%205.6%202%205.6%205.5s-2.1%205.5-5.6%205.5H6.8zm2.3%202v7h1.25c2.16%200%203.38-1.19%203.38-3.5s-1.22-3.5-3.38-3.5z%20M17.8%2010.5h4.2c2.45%200%203.78%201.08%203.78%202.83%200%201.07-.56%201.95-1.47%202.36%201.3.4%201.98%201.32%201.98%202.59%200%202.05-1.57%203.22-4.05%203.22H17.8zm2.27%201.9v2.49h1.77c1.03%200%201.66-.44%201.66-1.24%200-.84-.61-1.25-1.68-1.25zm0%204.23v2.96h2.01c1.19%200%201.88-.49%201.88-1.46%200-.98-.69-1.5-1.88-1.5z%22%2F%3E%20%3C%2Fsvg%3E">
+<style>
+:root {
+  color-scheme: light;
+  --paper: #fffaf0;
+  --screen-motion: 440ms cubic-bezier(.22, .72, .2, 1);
+  --page-max-width: 1480px;
+  --page-gutter: 24px;
+  --page-width: min(var(--page-max-width), calc(100% - 2 * var(--page-gutter)));
+  --warm: #fff5e6;
+  --card: #fff;
+  --ink: #2c1810;
+  --muted: #6b5344;
+  --line: #e8ddd4;
+  --accent: #ff6b35;
+  --accent-dark: #e55a2b;
+  --accent-text: #9b3b1a;
+  --brown: #8b4513;
+  --green: #4a7c59;
+  --heading: "Playfair Display SC", Georgia, "Songti SC", SimSun, serif;
+  --body: Karla, "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  font-family: var(--body);
+}
+* { box-sizing: border-box }
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  margin: 0;
+  color: var(--ink);
+  background: var(--paper);
+}
+body[data-screen="catalog"] { background-color: var(--ink) }
+button, input, select { color: inherit; font: inherit }
+button { cursor: pointer }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 3px solid var(--accent-dark);
+  outline-offset: 3px;
+}
+[hidden] { display: none !important }
+h1, h2, h3, p { margin: 0 }
+code, pre { font-family: "IBM Plex Mono", Consolas, monospace }
+.screen-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: clip;
+}
+.screen-track {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  transform: translateX(0);
+}
+body[data-screen="catalog"] .screen-track { transform: translateX(-100%) }
+.screen {
+  flex: 0 0 100%;
+  min-height: 0;
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.bar {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+  width: var(--page-width);
+  min-height: 68px;
+  margin: 16px auto 0;
+  padding: 10px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px var(--ink);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font: 700 1.28rem/1.2 var(--heading);
+  color: var(--ink);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.mark {
+  display: block;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+}
+.cover-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: var(--page-width);
+  margin-inline: auto;
+  padding-block: 20px;
+  overflow: auto;
+}
+.hero {
+  flex: 0 0 auto;
+  width: 100%;
+  margin-block: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: 48px;
+}
+.database-label {
+  min-width: 0;
+  max-width: 64%;
+  color: var(--muted);
+  font-size: .75rem;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.hero h1 {
+  margin: 0 0 21px;
+  font: 700 clamp(2.8rem, 4.7vw, 4.15rem)/1.06 var(--heading);
+  letter-spacing: .015em;
+  overflow-wrap: anywhere;
+}
+.hero-name, .hero-title { display: block }
+.hero-title {
+  color: var(--accent-dark);
+  font-family: system-ui, sans-serif;
+  font-size: clamp(2.55rem, calc(4.7vw + .625rem), 5rem);
+  line-height: 1.08;
+  letter-spacing: -.05em;
+}
+.hero p {
+  max-width: 448px;
+  color: var(--muted);
+  font-size: 1.08rem;
+  line-height: 1.7;
+}
+.hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 27px }
+.branch-label {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .25rem .55rem;
+  max-width: 100%;
+  margin-bottom: 17px;
+  padding: .45rem .8rem;
+  border: 2px solid var(--ink);
+  background: var(--warm);
+  color: var(--ink);
+  font-size: .83rem;
+}
+.branch-label code { min-width: 0; color: var(--ink); overflow-wrap: anywhere }
+.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .8em;
+  min-height: 54px;
+  padding: 12px 23px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 4px 4px var(--ink);
+  color: var(--ink);
+  font-weight: 700;
+  line-height: 1.2;
+}
+.primary { background: var(--accent); color: #fff }
+.primary:hover { transform: translate(2px, 2px); box-shadow: 2px 2px var(--ink) }
+.summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px;
+  padding: 0 4px 4px 0;
+}
+.summary-column { display: grid; gap: 14px }
+.summary-column:last-child { padding-top: 25px }
+.metric, .shortcut-panel {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  padding: clamp(14px, 2vw, 25px);
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px var(--ink);
+}
+.metric {
+  min-height: clamp(145px, 13vw, 190px);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: .2rem;
+  isolation: isolate;
+}
+.metric::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 12px 16px auto auto;
+  width: 43%;
+  height: 67%;
+  opacity: .18;
+}
+.metric--tables { background: var(--accent); color: #fff }
+.metric--tables::after {
+  color: #fff;
+  border: 1px solid currentColor;
+  background:
+    linear-gradient(currentColor, currentColor) 23% 0 / 1px 100% no-repeat,
+    linear-gradient(to bottom, transparent calc(100% - 1px), currentColor 0) 0 0 / 100% calc(100% / 7) repeat-y;
+  opacity: .36;
+}
+.metric--fields { min-height: clamp(155px, 17.4vw, 250px); background: var(--ink); color: var(--paper) }
+.metric--fields::after {
+  background: radial-gradient(circle, var(--accent) 1.2px, transparent 1.6px) 0 0 / 13px 13px;
+  opacity: .55;
+}
+.metric--modules { min-height: clamp(140px, 14vw, 200px); background: var(--warm) }
+.metric--modules::after { content: none }
+.module-diagram {
+  position: absolute;
+  z-index: -1;
+  top: 17%;
+  right: 8%;
+  width: 45%;
+  height: 58%;
+  display: grid;
+  grid-template: repeat(2, minmax(0, 1fr)) / repeat(3, minmax(0, 1fr));
+  gap: 36% 9%;
+  background:
+    linear-gradient(var(--brown), var(--brown)) center 50% / 74% 1px no-repeat,
+    linear-gradient(var(--brown), var(--brown)) center / 1px 38% no-repeat,
+    linear-gradient(var(--brown), var(--brown)) 13% 60% / 1px 24% no-repeat,
+    linear-gradient(var(--brown), var(--brown)) 87% 60% / 1px 24% no-repeat;
+  opacity: .38;
+}
+.module-diagram i { grid-row: 2; background: var(--warm); border: 1px solid var(--brown) }
+.module-diagram i:first-child { grid-area: 1 / 2; background: #f9dfbc }
+.metric strong {
+  font: 700 clamp(2.6rem, 5.5vw, 4.7rem)/.95 var(--heading);
+  letter-spacing: -.03em;
+  font-variant-numeric: lining-nums;
+}
+.metric span { font-size: .95rem; font-weight: 700 }
+.shortcut-panel { background: var(--card); padding-block: 15px }
+.shortcut-panel h2 { margin-bottom: .5rem; font: 700 1rem/1.35 var(--body) }
+.shortcuts {
+  display: grid;
+  gap: 2px;
+  padding: 2px;
+}
+.shortcut {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 6px;
+  text-align: left;
+  background: var(--card);
+  border: 0;
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: .8rem;
+  overflow-wrap: anywhere;
+}
+.shortcut:hover { background: var(--warm); color: var(--accent-text) }
+.shortcut:focus-visible { outline-offset: -1px }
+.shortcut-more { font-weight: 700; letter-spacing: .08em }
+.shortcut span { color: var(--accent-text); flex: 0 0 auto }
+.footer {
+  width: 100%;
+  padding: 12px max(var(--page-gutter), calc((100% - var(--page-max-width)) / 2)) 16px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: .8rem;
+  overflow-wrap: anywhere;
+}
+.footer span:last-child { margin-inline-start: auto; text-align: right }
+#catalog {
+  --muted: #d4c1b5;
+  --line: rgb(255 250 240 / .25);
+  --surface-hover: rgb(255 250 240 / .07);
+  --surface-selected: rgb(255 107 53 / .13);
+  --accent-text: #ffa47e;
+  --green: #b0dcb5;
+  color: var(--paper);
+  background: var(--ink);
+  color-scheme: dark;
+}
+.workspace {
+  flex: 1;
+  min-height: 0;
+  width: var(--page-width);
+  margin: 20px auto;
+  display: grid;
+  grid-template-columns: minmax(148px, 15%) minmax(224px, 23%) minmax(0, 1fr);
+  gap: 13px;
+}
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.pane-title {
+  display: flex;
+  gap: .6rem;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: .95rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+.pane-title h2 { font: 700 1rem/1.35 var(--heading); letter-spacing: .02em }
+.pane-title span, .hint { font-size: .82rem; color: var(--muted) }
+.scroll { overflow: auto; min-height: 0; flex: 1 }
+#catalog ::-webkit-scrollbar { width: 2px; height: 2px }
+#catalog ::-webkit-scrollbar-track,
+#catalog ::-webkit-scrollbar-corner { background: transparent }
+#catalog ::-webkit-scrollbar-button { display: none }
+#catalog ::-webkit-scrollbar-thumb {
+  background: rgb(255 250 240 / .48);
+  border-radius: 999px;
+}
+@supports not selector(::-webkit-scrollbar) {
+  #catalog .scroll, #catalog .table-wrap {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 250 240 / .48) transparent;
+  }
+}
+.modules, .table-list { padding: .4rem .65rem }
+.module, .table-choice {
+  display: block;
+  width: 100%;
+  padding: .64rem .68rem;
+  border: 1px solid transparent;
+  border-bottom-color: var(--line);
+  background: transparent;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.module { display: flex; justify-content: space-between; align-items: center; gap: .5rem; font-size: .87rem }
+.module small, .table-choice small { color: var(--muted) }
+.module:last-child, .table-choice:last-child { border-bottom-color: transparent }
+.module:hover, .table-choice:hover { background: var(--surface-hover) }
+.module[aria-pressed=true], .table-choice[aria-pressed=true] {
+  background: var(--surface-selected);
+  border-bottom-color: var(--line);
+  box-shadow: inset 2px 0 var(--accent);
+}
+.table-choice code { display: block; margin-bottom: .23rem; font-size: .88rem; font-weight: 700 }
+.table-choice small { display: block; line-height: 1.45 }
+.filters { display: grid; gap: .55rem; padding: .7rem .8rem; border-bottom: 1px solid var(--line) }
+.filters label { display: grid; gap: .24rem; font-size: .76rem; font-weight: 700 }
+.filters input, .filters select {
+  width: 100%;
+  min-height: 2.25rem;
+  padding: .4rem .52rem;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  font-size: .83rem;
+}
+.filters input::placeholder { color: var(--muted) }
+.filters option { background: var(--ink); color: var(--paper) }
+.badge {
+  display: inline-block;
+  vertical-align: baseline;
+  margin-top: .36rem;
+  padding: .12rem .44rem;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: .74rem;
+  font-weight: 600;
+}
+.badge[data-status="启用中"] { color: var(--green) }
+.badge[data-status="未启用"] { color: #f4cf91 }
+.badge[data-status="已废弃"] { color: #ffb3a2 }
+.detail { padding: 1.15rem clamp(.9rem, 2.3vw, 2rem) 2rem }
+.detail h2 { font-size: clamp(1.16rem, 2.35vw, 1.95rem); overflow-wrap: anywhere }
+.detail h3 { margin: 1.25rem 0 .48rem; font: 700 1rem/1.4 var(--heading) }
+.detail-panel { margin-top: .95rem }
+.detail-panel > h3:first-child { margin-top: 0 }
+.detail p { margin: .5rem 0; line-height: 1.6; overflow-wrap: anywhere }
+.detail-meta {
+  padding: .64rem .76rem;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  color: var(--muted);
+  font-size: .8rem;
+  overflow-wrap: anywhere;
+}
+.tabbar { display: flex; flex-wrap: wrap; gap: .36rem; margin-top: 1.05rem; border-bottom: 1px solid var(--line) }
+.tabbar button {
+  padding: .58rem .57rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  font-size: .85rem;
+}
+.tabbar button:hover { background: var(--surface-hover) }
+.tabbar button[aria-pressed=true] { background: var(--surface-selected); color: var(--accent-text); border-color: var(--accent); font-weight: 700 }
+.table-wrap { width: 100%; overflow: auto; border: 1px solid var(--line) }
+table { width: 100%; border-collapse: collapse; font-size: .83rem }
+th, td { padding: .54rem .62rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top }
+th { white-space: nowrap }
+th:not(:last-child), td:not(:last-child) { border-right: 1px solid var(--line) }
+td { line-height: 1.5 }
+td code { overflow-wrap: anywhere }
+tr:last-child td { border-bottom: 0 }
+.field-name { display: inline-flex; align-items: center; gap: .45rem }
+.pk-tab {
+  padding: .05rem .224rem;
+  border: 1px solid var(--accent-text);
+  background: var(--surface-selected);
+  color: var(--accent-text);
+  font-size: .52rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.fields td:nth-child(-n+2) code { white-space: nowrap }
+.fields td:last-child { min-width: 12ch }
+.example td { min-width: 7ch; max-width: 20ch }
+.empty { padding: 1.05rem; color: var(--muted) }
+.warning { color: var(--accent-text); font-size: .875rem }
+.warning summary { cursor: pointer }
+.warning ul { padding-left: 1.4rem; line-height: 1.65 }
+.rel-link { padding: 0; border: 0; background: transparent; color: var(--accent-text); text-decoration: underline; overflow-wrap: anywhere }
+.mobile-nav { display: none }
+@media (max-width: 850px) {
+  :root { --page-gutter: 14px }
+  .bar { min-height: 54px; padding: 7px 11px; margin-top: 9px }
+  .brand { font-size: 1.1rem }
+  .mark { width: 27px; height: 27px; flex-basis: 27px }
+  .database-label { font-size: .69rem }
+  .cover-main { padding-block: 23px }
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 25px }
+  .hero h1 { margin-bottom: 15px; font-size: clamp(2.55rem, 8.5vw, 3.7rem) }
+  .hero-title { font-size: clamp(2.2rem, calc(8.5vw + .6rem), 4.65rem) }
+  .hero p { font-size: 1rem }
+  .hero-actions { margin-top: 19px }
+  .hero-actions button { min-height: 45px; padding: 9px 14px; font-size: .89rem }
+  .summary { gap: 10px }
+  .summary-column { gap: 10px }
+  .summary-column:last-child { padding-top: 16px }
+  .shortcut-panel { padding-inline: 10px }
+  .workspace { display: flex; margin: 10px auto }
+  .pane { width: 100% }
+  .pane:not([data-visible]) { display: none }
+  .mobile-nav { display: flex; gap: .4rem; width: var(--page-width); margin: .66rem auto 0 }
+  .mobile-nav button {
+    flex: 1;
+    min-height: 2.2rem;
+    border: 1px solid var(--line);
+    background: transparent;
+    font-size: .83rem;
+  }
+  .mobile-nav button[aria-pressed=true] { background: var(--surface-selected); border-color: var(--accent); font-weight: 700 }
+}
+@media (prefers-reduced-motion: no-preference) {
+  body[data-ready] { transition: background-color var(--screen-motion) }
+  body[data-ready] .screen-track { transition: transform var(--screen-motion) }
+  .primary { transition: transform .15s, box-shadow .15s, background .15s }
+}
+</style>
+</head>
+<body data-screen="home">
+<header class="bar">
+  <a class="brand" id="back" href="#" aria-label="返回首页"><img class="mark" id="brand-mark" alt=""><span data-project></span></a>
+  <span class="database-label" data-database></span>
+</header>
+<div class="screen-viewport">
+<div class="screen-track" id="screen-track">
+<section class="screen" id="home" aria-labelledby="home-title" tabindex="-1">
+  <main class="cover-main">
+    <div class="hero">
+      <div class="hero-intro">
+        <span class="branch-label">整理分支 <code id="snapshot-branch"></code></span>
+        <h1 id="home-title"><span class="hero-name" data-project></span><span class="hero-title">数据库文档</span></h1>
+        <p>按业务模块查阅当前代码定义的表结构、字段备注与示例数据。</p>
+        <div class="hero-actions">
+          <button type="button" class="primary" id="browse">浏览数据表 <span aria-hidden="true">→</span></button>
+        </div>
+      </div>
+      <section class="summary" aria-label="数据库概况">
+        <div class="summary-column">
+          <div class="metric metric--tables"><strong data-count="tables"></strong><span>数据表</span></div>
+          <div class="shortcut-panel">
+            <h2 id="module-overview">主要业务模块</h2>
+            <nav id="module-shortcuts" aria-labelledby="module-overview">
+              <div class="shortcuts" id="shortcuts"></div>
+            </nav>
+          </div>
+        </div>
+        <div class="summary-column">
+          <div class="metric metric--fields"><strong data-count="fields"></strong><span>字段</span></div>
+          <div class="metric metric--modules">
+            <strong data-count="modules"></strong><span>业务模块</span>
+            <div class="module-diagram" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <footer class="footer"><span>Design By Vilin</span><span id="snapshot-time"></span></footer>
+</section>
+<section class="screen" id="catalog" aria-label="数据库目录" tabindex="-1" inert>
+  <nav class="mobile-nav" aria-label="目录栏目"></nav>
+  <div class="workspace">
+    <section class="pane" id="module-pane">
+      <div class="pane-title"><h2>业务模块</h2></div>
+      <nav class="scroll modules" id="modules" aria-label="业务模块"></nav>
+    </section>
+    <section class="pane" id="list-pane" data-visible>
+      <div class="pane-title"><h2>数据表</h2><span id="result-count" aria-live="polite"></span></div>
+      <div class="filters">
+        <label>搜索<input id="search" type="search" placeholder="表名、字段或备注"></label>
+        <label>表状态<select id="status"><option value="">全部状态</option><option>启用中</option><option>未启用</option><option>已废弃</option><option>待确认</option></select></label>
+      </div>
+      <div class="scroll table-list" id="table-list"></div>
+    </section>
+    <article class="pane" id="detail-pane" aria-label="表详情">
+      <div class="scroll detail" id="detail"></div>
+    </article>
+  </div>
+</section>
+</div>
+</div>
+<script id="catalog-data" type="application/json">{"project":"Evolution","database":"MySQL 8.4 · SQLAlchemy / Alembic","branch":"codex/env-config","generated":"2026-11-20 15:17 UTC+08:00","warnings":[{"source":{"file":"backend/migrations/versions/0007_schema_alignment.py","line":24},"message":"这段 SQL 在迁移运行时拼接"},{"source":{"file":"backend/migrations/versions/0007_schema_alignment.py","line":26},"message":"这段 SQL 在迁移运行时拼接"},{"source":{"file":"backend/migrations/versions/0021_tencent_db_conventions.py","line":28},"message":"这段 SQL 在迁移运行时拼接"}],"tables":[{"name":"admin_allowlist","comment":"管理员白名单","columns":[{"name":"open_id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"管理员飞书开放标识","source":{"file":"backend/app/persistence/models.py","line":179},"references":[],"enum":[]},{"name":"created_at","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"加入白名单时间","source":{"file":"backend/app/persistence/models.py","line":180},"references":[],"enum":[]}],"constraints":[],"class":"AdminAllowlist","source":{"file":"backend/app/persistence/models.py","line":177},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":22},"differences":[],"module":"登录与权限","business":"身份与访问","status":"启用中","status_source":"OAuth 登录检查管理员白名单 · backend/app/feishu/oauth.py","example_columns":["open_id","created_at"],"examples":[{"open_id":"demo-001","created_at":"2026-01-01 09:00:00"},{"open_id":"demo-002","created_at":"2026-01-02 09:00:00"}],"relations":[]},{"name":"admin_session","comment":"管理员登录会话","columns":[{"name":"id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"管理员会话内部标识","source":{"file":"backend/app/persistence/models.py","line":186},"references":[],"enum":[]},{"name":"token_digest","type":"VARCHAR(64)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"管理员会话令牌 SHA-256 摘要","source":{"file":"backend/app/persistence/models.py","line":187},"references":[],"enum":[]},{"name":"open_id","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":false,"index":true,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"管理员飞书开放标识","source":{"file":"backend/app/persistence/models.py","line":188},"references":[],"enum":[]},{"name":"csrf_hash","type":"VARCHAR(64)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"CSRF 令牌摘要","source":{"file":"backend/app/persistence/models.py","line":189},"references":[],"enum":[]},{"name":"expires_at","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"会话过期时间","source":{"file":"backend/app/persistence/models.py","line":190},"references":[],"enum":[]},{"name":"revoked_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"会话撤销时间","source":{"file":"backend/app/persistence/models.py","line":191},"references":[],"enum":[]}],"constraints":[{"kind":"UniqueConstraint","name":"uq_admin_session_token_digest","columns":["token_digest"],"references":[]}],"class":"AdminSession","source":{"file":"backend/app/persistence/models.py","line":184},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":23},"differences":[],"module":"登录与权限","business":"身份与访问","status":"启用中","status_source":"身份仓储查询管理员会话 · backend/app/persistence/repositories.py","example_columns":["id","token_digest","open_id","csrf_hash","expires_at","revoked_at"],"examples":[{"id":"demo-001","token_digest":"〈已省略〉","open_id":"demo-001","csrf_hash":"〈已省略〉","expires_at":"2026-01-01 09:00:00","revoked_at":"2026-01-01 09:00:00"},{"id":"demo-002","token_digest":"〈已省略〉","open_id":"demo-002","csrf_hash":"〈已省略〉","expires_at":"2026-01-02 09:00:00","revoked_at":"2026-01-02 09:00:00"}],"relations":[]},{"name":"api_client","comment":"只读 API 客户端","columns":[{"name":"id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"API 客户端标识","source":{"file":"backend/app/persistence/models.py","line":197},"references":[],"enum":[]},{"name":"name","type":"VARCHAR(255)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"API 客户端名称","source":{"file":"backend/app/persistence/models.py","line":198},"references":[],"enum":[]},{"name":"secret_hash","type":"VARCHAR(255)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"客户端密钥摘要","source":{"file":"backend/app/persistence/models.py","line":199},"references":[],"enum":[]},{"name":"created_at","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"创建时间","source":{"file":"backend/app/persistence/models.py","line":200},"references":[],"enum":[]},{"name":"revoked_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"撤销时间","source":{"file":"backend/app/persistence/models.py","line":201},"references":[],"enum":[]}],"constraints":[],"class":"ApiClient","source":{"file":"backend/app/persistence/models.py","line":195},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":25},"differences":[],"module":"登录与权限","business":"身份与访问","status":"启用中","status_source":"API 客户端管理入口查询配置 · backend/app/admin/router.py","example_columns":["id","name","secret_hash","created_at","revoked_at"],"examples":[{"id":"demo-001","name":"示例1","secret_hash":"〈已省略〉","created_at":"2026-01-01 09:00:00","revoked_at":"2026-01-01 09:00:00"},{"id":"demo-002","name":"示例2","secret_hash":"〈已省略〉","created_at":"2026-01-02 09:00:00","revoked_at":"2026-01-02 09:00:00"}],"relations":[]},{"name":"change_log","comment":"数据变更审计日志","columns":[{"name":"id","type":"BIGINT","nullable":false,"pk":true,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"变更日志自增标识","source":{"file":"backend/app/persistence/models.py","line":273},"references":[],"enum":[]},{"name":"object_type","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"变更对象类型","source":{"file":"backend/app/persistence/models.py","line":274},"references":[],"enum":[]},{"name":"object_id","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"变更对象标识","source":{"file":"backend/app/persistence/models.py","line":275},"references":[],"enum":[]},{"name":"source","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"变更来源","source":{"file":"backend/app/persistence/models.py","line":276},"references":[],"enum":[]},{"name":"actor","type":"VARCHAR(255)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"操作主体","source":{"file":"backend/app/persistence/models.py","line":277},"references":[],"enum":[]},{"name":"job_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"关联同步任务标识","source":{"file":"backend/app/persistence/models.py","line":278},"references":[],"enum":[]},{"name":"before_data","type":"JSON","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"变更前数据","source":{"file":"backend/app/persistence/models.py","line":279},"references":[],"enum":[]},{"name":"after_data","type":"JSON","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"变更后数据","source":{"file":"backend/app/persistence/models.py","line":280},"references":[],"enum":[]},{"name":"committed_at","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":true,"collation":"","db_default":"","app_default":"","comment":"变更提交时间","source":{"file":"backend/app/persistence/models.py","line":281},"references":[],"enum":[]}],"constraints":[],"class":"ChangeLog","source":{"file":"backend/app/persistence/models.py","line":271},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":31},"differences":[],"module":"操作审计","business":"运行治理","status":"启用中","status_source":"初始化服务记录变更 · backend/app/initialization/service.py","example_columns":["id","object_type","object_id","source","actor","job_id","before_data","after_data","committed_at"],"examples":[{"id":1,"object_type":"demo-001","object_id":"demo-001","source":"demo-001","actor":"demo-001","job_id":"demo-001","before_data":{},"after_data":{},"committed_at":"2026-01-01 09:00:00"},{"id":2,"object_type":"demo-002","object_id":"demo-002","source":"demo-002","actor":"demo-002","job_id":"demo-002","before_data":{},"after_data":{},"committed_at":"2026-01-02 09:00:00"}],"relations":[]},{"name":"dataset_state","comment":"组织数据集状态单例","columns":[{"name":"id","type":"INTEGER","nullable":false,"pk":true,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"数据集状态单例标识","source":{"file":"backend/app/persistence/models.py","line":67},"references":[],"enum":[]},{"name":"dataset_epoch","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"数据集世代标识","source":{"file":"backend/app/persistence/models.py","line":68},"references":[],"enum":[]},{"name":"data_version","type":"BIGINT","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"0","comment":"已提交数据版本号","source":{"file":"backend/app/persistence/models.py","line":69},"references":[],"enum":[]},{"name":"initialization_status","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"pending","comment":"初始化状态","source":{"file":"backend/app/persistence/models.py","line":70},"references":[],"enum":[]},{"name":"coverage_status","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"unknown","comment":"通讯录覆盖状态","source":{"file":"backend/app/persistence/models.py","line":71},"references":[],"enum":[]},{"name":"last_full_sync_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"最近一次全量同步时间","source":{"file":"backend/app/persistence/models.py","line":72},"references":[],"enum":[]}],"constraints":[],"class":"DatasetState","source":{"file":"backend/app/persistence/models.py","line":65},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":18},"differences":[],"module":"同步与初始化","business":"数据同步","status":"启用中","status_source":"组织目录读取数据集状态 · backend/app/directory/organization.py","example_columns":["id","dataset_epoch","data_version","initialization_status","coverage_status","last_full_sync_at"],"examples":[{"id":1,"dataset_epoch":"demo-001","data_version":1,"initialization_status":"pending","coverage_status":"unknown","last_full_sync_at":"2026-01-01 09:00:00"},{"id":2,"dataset_epoch":"demo-002","data_version":2,"initialization_status":"pending","coverage_status":"unknown","last_full_sync_at":"2026-01-02 09:00:00"}],"relations":[]},{"name":"department","comment":"飞书部门目录","columns":[{"name":"id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"内部部门稳定标识","source":{"file":"backend/app/persistence/models.py","line":85},"references":[],"enum":[]},{"name":"feishu_department_id","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":true,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"飞书部门标识","source":{"file":"backend/app/persistence/models.py","line":86},"references":[],"enum":[]},{"name":"parent_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"父部门标识","source":{"file":"backend/app/persistence/models.py","line":87},"references":["department.id"],"enum":[]},{"name":"name","type":"VARCHAR(255)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"部门名称","source":{"file":"backend/app/persistence/models.py","line":88},"references":[],"enum":[]},{"name":"sort_order","type":"INTEGER UNSIGNED","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"0","app_default":"0","comment":"同父级共享的本地展示顺序，非负整数，普通同步保留","source":{"file":"backend/app/persistence/models.py","line":89},"references":[],"enum":[]},{"name":"leader_user_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"部门负责人用户标识","source":{"file":"backend/app/persistence/models.py","line":90},"references":[],"enum":[]},{"name":"status","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"active","comment":"部门状态","source":{"file":"backend/app/persistence/models.py","line":91},"references":[],"enum":[]},{"name":"sync_quality","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"unknown","comment":"部门同步质量","source":{"file":"backend/app/persistence/models.py","line":92},"references":[],"enum":[]},{"name":"is_virtual_root","type":"BOOLEAN","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"False","comment":"是否为虚拟根部门","source":{"file":"backend/app/persistence/models.py","line":93},"references":[],"enum":[]},{"name":"last_seen_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"最近一次从飞书看到的时间","source":{"file":"backend/app/persistence/models.py","line":94},"references":[],"enum":[]}],"constraints":[{"kind":"Index","name":"idx_department_order","columns":["parent_id","sort_order","id"],"references":[]}],"class":"Department","source":{"file":"backend/app/persistence/models.py","line":83},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":20},"differences":[],"module":"组织与人员","business":"组织目录","status":"启用中","status_source":"组织目录读取部门 · backend/app/persistence/read_service.py","example_columns":["id","feishu_department_id","parent_id","name","sort_order","leader_user_id","status","sync_quality","is_virtual_root","last_seen_at"],"examples":[{"id":"demo-org-001","feishu_department_id":"demo-001","parent_id":null,"name":"示例总部","sort_order":1,"leader_user_id":"demo-001","status":"active","sync_quality":"demo-001","is_virtual_root":0,"last_seen_at":"2026-01-01 09:00:00"},{"id":"demo-org-002","feishu_department_id":"demo-002","parent_id":"demo-org-001","name":"示例门店部","sort_order":2,"leader_user_id":"demo-002","status":"active","sync_quality":"demo-002","is_virtual_root":1,"last_seen_at":"2026-01-02 09:00:00"}],"relations":[{"column":"parent_id","target":"department.id","kind":"外键"}]},{"name":"employee","comment":"飞书员工目录","columns":[{"name":"id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"内部员工稳定标识","source":{"file":"backend/app/persistence/models.py","line":100},"references":[],"enum":[]},{"name":"feishu_user_id","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":true,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"飞书用户标识","source":{"file":"backend/app/persistence/models.py","line":101},"references":[],"enum":[]},{"name":"open_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":true,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"飞书用户开放标识","source":{"file":"backend/app/persistence/models.py","line":102},"references":[],"enum":[]},{"name":"name","type":"VARCHAR(255)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"员工姓名","source":{"file":"backend/app/persistence/models.py","line":103},"references":[],"enum":[]},{"name":"employee_no","type":"VARCHAR(128)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"员工工号","source":{"file":"backend/app/persistence/models.py","line":104},"references":[],"enum":[]},{"name":"mobile","type":"VARCHAR(128)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"飞书完整手机号，空值含义由字段可读性说明","source":{"file":"backend/app/persistence/models.py","line":105},"references":[],"enum":[]},{"name":"email","type":"VARCHAR(254)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"飞书人员邮箱，缺省或不可读时为空，可读性记录于 field_readability","source":{"file":"backend/app/persistence/models.py","line":106},"references":[],"enum":[]},{"name":"avatar_url","type":"VARCHAR(2048)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"飞书人员头像 HTTPS 地址，缺省或不可读时为空","source":{"file":"backend/app/persistence/models.py","line":107},"references":[],"enum":[]},{"name":"join_time","type":"BIGINT","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"飞书入职时间 Unix 秒时间戳，按北京时间展示日期，未填写或不可读时为空","source":{"file":"backend/app/persistence/models.py","line":108},"references":[],"enum":[]},{"name":"is_frozen","type":"BOOLEAN","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"飞书账号是否暂停，NULL 表示未知","source":{"file":"backend/app/persistence/models.py","line":109},"references":[],"enum":[]},{"name":"is_resigned","type":"BOOLEAN","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"飞书账号是否离职，NULL 表示未知","source":{"file":"backend/app/persistence/models.py","line":110},"references":[],"enum":[]},{"name":"is_activated","type":"BOOLEAN","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"飞书账号是否已激活，NULL 表示未知","source":{"file":"backend/app/persistence/models.py","line":111},"references":[],"enum":[]},{"name":"is_exited","type":"BOOLEAN","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"飞书账号是否主动退出，NULL 表示未知","source":{"file":"backend/app/persistence/models.py","line":112},"references":[],"enum":[]},{"name":"is_unjoin","type":"BOOLEAN","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"飞书账号是否未加入，NULL 表示未知","source":{"file":"backend/app/persistence/models.py","line":113},"references":[],"enum":[]},{"name":"field_readability","type":"JSON","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"手机号和账号标志可读性：readable、not_collected、unreadable","source":{"file":"backend/app/persistence/models.py","line":114},"references":[],"enum":[]},{"name":"employee_type_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"员工类型枚举选项标识","source":{"file":"backend/app/persistence/models.py","line":115},"references":[],"enum":[]},{"name":"employee_type_name","type":"VARCHAR(255)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"员工类型展示名称","source":{"file":"backend/app/persistence/models.py","line":116},"references":[],"enum":[]},{"name":"job_title","type":"VARCHAR(255)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"员工职务","source":{"file":"backend/app/persistence/models.py","line":117},"references":[],"enum":[]},{"name":"leader_user_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"直属上级用户标识","source":{"file":"backend/app/persistence/models.py","line":118},"references":[],"enum":[]},{"name":"permission_role_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"权限角色选项标识","source":{"file":"backend/app/persistence/models.py","line":119},"references":[],"enum":[]},{"name":"permission_role_name","type":"VARCHAR(255)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"权限角色展示名称","source":{"file":"backend/app/persistence/models.py","line":120},"references":[],"enum":[]},{"name":"store_attribute_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"门店属性选项标识","source":{"file":"backend/app/persistence/models.py","line":121},"references":[],"enum":[]},{"name":"store_attribute_name","type":"VARCHAR(255)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"门店属性展示名称","source":{"file":"backend/app/persistence/models.py","line":122},"references":[],"enum":[]},{"name":"status","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"active","comment":"员工状态","source":{"file":"backend/app/persistence/models.py","line":123},"references":[],"enum":[]},{"name":"sync_quality","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"unknown","comment":"员工同步质量","source":{"file":"backend/app/persistence/models.py","line":124},"references":[],"enum":[]},{"name":"primary_department_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"主部门标识","source":{"file":"backend/app/persistence/models.py","line":125},"references":["department.id"],"enum":[]},{"name":"primary_store_status","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"unknown","comment":"主门店解析状态","source":{"file":"backend/app/persistence/models.py","line":126},"references":[],"enum":[]},{"name":"last_seen_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"最近一次从飞书看到的时间","source":{"file":"backend/app/persistence/models.py","line":127},"references":[],"enum":[]}],"constraints":[],"class":"Employee","source":{"file":"backend/app/persistence/models.py","line":98},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":33},"differences":[],"module":"组织与人员","business":"组织目录","status":"启用中","status_source":"人员详情读取员工 · backend/app/directory/details.py","example_columns":["id","feishu_user_id","open_id","name","employee_no","mobile","email","avatar_url","join_time","is_frozen","is_resigned","is_activated","is_exited","is_unjoin","field_readability","employee_type_id","employee_type_name","job_title","leader_user_id","permission_role_id","permission_role_name","store_attribute_id","store_attribute_name","status","sync_quality","primary_department_id","primary_store_status","last_seen_at"],"examples":[{"id":"demo-emp-001","feishu_user_id":"demo-001","open_id":"demo-001","name":"示例员工甲","employee_no":"demo-001","mobile":null,"email":"demo1@example.invalid","avatar_url":"demo-001","join_time":1,"is_frozen":0,"is_resigned":0,"is_activated":0,"is_exited":0,"is_unjoin":0,"field_readability":{},"employee_type_id":"demo-001","employee_type_name":"demo-001","job_title":"demo-001","leader_user_id":"demo-001","permission_role_id":"demo-001","permission_role_name":"demo-001","store_attribute_id":"demo-001","store_attribute_name":"demo-001","status":"active","sync_quality":"demo-001","primary_department_id":"demo-org-001","primary_store_status":"unknown","last_seen_at":"2026-01-01 09:00:00"},{"id":"demo-emp-002","feishu_user_id":"demo-002","open_id":"demo-002","name":"示例员工乙","employee_no":"demo-002","mobile":null,"email":"demo2@example.invalid","avatar_url":"demo-002","join_time":2,"is_frozen":1,"is_resigned":1,"is_activated":1,"is_exited":1,"is_unjoin":1,"field_readability":{},"employee_type_id":"demo-002","employee_type_name":"demo-002","job_title":"demo-002","leader_user_id":"demo-002","permission_role_id":"demo-002","permission_role_name":"demo-002","store_attribute_id":"demo-002","store_attribute_name":"demo-002","status":"active","sync_quality":"demo-002","primary_department_id":"demo-org-002","primary_store_status":"unknown","last_seen_at":"2026-01-02 09:00:00"}],"relations":[{"column":"primary_department_id","target":"department.id","kind":"外键"}]},{"name":"employee_department","comment":"员工部门关系","columns":[{"name":"employee_id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"员工标识","source":{"file":"backend/app/persistence/models.py","line":133},"references":["employee.id"],"enum":[]},{"name":"department_id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"部门标识","source":{"file":"backend/app/persistence/models.py","line":134},"references":["department.id"],"enum":[]},{"name":"is_primary","type":"BOOLEAN","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"False","comment":"是否为主部门关系","source":{"file":"backend/app/persistence/models.py","line":135},"references":[],"enum":[]},{"name":"active","type":"BOOLEAN","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"True","comment":"关系是否有效","source":{"file":"backend/app/persistence/models.py","line":136},"references":[],"enum":[]}],"constraints":[],"class":"EmployeeDepartment","source":{"file":"backend/app/persistence/models.py","line":131},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":37},"differences":[],"module":"组织与人员","business":"组织目录","status":"启用中","status_source":"组织目录查询员工与部门的关系 · backend/app/directory/organization.py","example_columns":["employee_id","department_id","is_primary","active"],"examples":[{"employee_id":"demo-emp-001","department_id":"demo-org-001","is_primary":0,"active":0},{"employee_id":"demo-emp-002","department_id":"demo-org-002","is_primary":1,"active":1}],"relations":[{"column":"employee_id","target":"employee.id","kind":"外键"},{"column":"department_id","target":"department.id","kind":"外键"}]},{"name":"employee_store","comment":"员工门店关系","columns":[{"name":"employee_id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"员工标识","source":{"file":"backend/app/persistence/models.py","line":159},"references":["employee.id"],"enum":[]},{"name":"store_id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"门店部门标识","source":{"file":"backend/app/persistence/models.py","line":160},"references":["department.id"],"enum":[]},{"name":"is_primary","type":"BOOLEAN","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"False","comment":"是否为主门店关系","source":{"file":"backend/app/persistence/models.py","line":161},"references":[],"enum":[]},{"name":"path","type":"JSON","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"门店路径标识列表","source":{"file":"backend/app/persistence/models.py","line":162},"references":[],"enum":[]}],"constraints":[],"class":"EmployeeStore","source":{"file":"backend/app/persistence/models.py","line":157},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":38},"differences":[],"module":"门店档案","business":"组织与门店","status":"启用中","status_source":"人员查询使用员工与门店的关系 · backend/app/persistence/read_service.py","example_columns":["employee_id","store_id","is_primary","path"],"examples":[{"employee_id":"demo-emp-001","store_id":"demo-org-001","is_primary":0,"path":{}},{"employee_id":"demo-emp-002","store_id":"demo-org-002","is_primary":1,"path":{}}],"relations":[{"column":"employee_id","target":"employee.id","kind":"外键"},{"column":"store_id","target":"department.id","kind":"外键"}]},{"name":"event_inbox","comment":"飞书事件收件箱","columns":[{"name":"event_id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"飞书事件标识","source":{"file":"backend/app/persistence/models.py","line":252},"references":[],"enum":[]},{"name":"event_type","type":"VARCHAR(128)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"飞书事件类型","source":{"file":"backend/app/persistence/models.py","line":253},"references":[],"enum":[]},{"name":"object_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"事件对象标识","source":{"file":"backend/app/persistence/models.py","line":254},"references":[],"enum":[]},{"name":"payload","type":"JSON","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"事件原始载荷","source":{"file":"backend/app/persistence/models.py","line":255},"references":[],"enum":[]},{"name":"status","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":true,"collation":"","db_default":"","app_default":"","comment":"事件处理状态","source":{"file":"backend/app/persistence/models.py","line":256},"references":[],"enum":[]},{"name":"attempts","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"0","comment":"事件处理尝试次数","source":{"file":"backend/app/persistence/models.py","line":257},"references":[],"enum":[]},{"name":"received_at","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"事件接收时间","source":{"file":"backend/app/persistence/models.py","line":258},"references":[],"enum":[]}],"constraints":[],"class":"EventInbox","source":{"file":"backend/app/persistence/models.py","line":250},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":29},"differences":[],"module":"飞书集成","business":"外部连接","status":"启用中","status_source":"飞书事件处理写入收件箱 · backend/app/feishu/events.py","example_columns":["event_id","event_type","object_id","payload","status","attempts","received_at"],"examples":[{"event_id":"demo-001","event_type":"demo-001","object_id":"demo-001","payload":{},"status":"待补案例","attempts":1,"received_at":"2026-01-01 09:00:00"},{"event_id":"demo-002","event_type":"demo-002","object_id":"demo-002","payload":{},"status":"待补案例","attempts":2,"received_at":"2026-01-02 09:00:00"}],"relations":[]},{"name":"feishu_connection","comment":"飞书连接配置","columns":[{"name":"id","type":"INTEGER","nullable":false,"pk":true,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"飞书连接单例标识","source":{"file":"backend/app/persistence/models.py","line":168},"references":[],"enum":[]},{"name":"tenant_key","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":true,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"飞书租户标识","source":{"file":"backend/app/persistence/models.py","line":169},"references":[],"enum":[]},{"name":"app_id","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"飞书应用标识","source":{"file":"backend/app/persistence/models.py","line":170},"references":[],"enum":[]},{"name":"status","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"连接状态","source":{"file":"backend/app/persistence/models.py","line":171},"references":[],"enum":[]},{"name":"coverage_status","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"unknown","comment":"连接覆盖状态","source":{"file":"backend/app/persistence/models.py","line":172},"references":[],"enum":[]},{"name":"custom_attrs","type":"JSON","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"('{}')","app_default":"见源码","comment":"自定义字段映射与选项定义","source":{"file":"backend/app/persistence/models.py","line":173},"references":[],"enum":[]}],"constraints":[],"class":"FeishuConnection","source":{"file":"backend/app/persistence/models.py","line":166},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":21},"differences":[],"module":"飞书集成","business":"外部连接","status":"启用中","status_source":"初始化流程读取飞书连接设置 · backend/app/initialization/service.py","example_columns":["id","tenant_key","app_id","status","coverage_status","custom_attrs"],"examples":[{"id":1,"tenant_key":"demo-001","app_id":"demo-001","status":"待补案例","coverage_status":"unknown","custom_attrs":{}},{"id":2,"tenant_key":"demo-002","app_id":"demo-002","status":"待补案例","coverage_status":"unknown","custom_attrs":{}}],"relations":[]},{"name":"login_identity","comment":"飞书登录身份映射","columns":[{"name":"open_id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"飞书开放标识","source":{"file":"backend/app/persistence/models.py","line":40},"references":[],"enum":[]},{"name":"user_id","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"飞书用户标识","source":{"file":"backend/app/persistence/models.py","line":41},"references":[],"enum":[]},{"name":"tenant_key","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"飞书租户标识","source":{"file":"backend/app/persistence/models.py","line":42},"references":[],"enum":[]}],"constraints":[],"class":"LoginIdentity","source":{"file":"backend/app/persistence/models.py","line":38},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0002_feishu_runtime.py","line":15},"differences":[],"module":"登录与权限","business":"身份与访问","status":"启用中","status_source":"OAuth 登录时查询飞书身份映射 · backend/app/feishu/oauth.py","example_columns":["open_id","user_id","tenant_key"],"examples":[{"open_id":"demo-001","user_id":"demo-001","tenant_key":"demo-001"},{"open_id":"demo-002","user_id":"demo-002","tenant_key":"demo-002"}],"relations":[]},{"name":"oauth_state","comment":"OAuth 登录状态记录","columns":[{"name":"digest","type":"VARCHAR(64)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"OAuth 状态摘要","source":{"file":"backend/app/persistence/models.py","line":33},"references":[],"enum":[]},{"name":"expires_at","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"OAuth 状态过期时间","source":{"file":"backend/app/persistence/models.py","line":34},"references":[],"enum":[]}],"constraints":[],"class":"OAuthState","source":{"file":"backend/app/persistence/models.py","line":31},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0002_feishu_runtime.py","line":14},"differences":[],"module":"登录与权限","business":"身份与访问","status":"启用中","status_source":"OAuth 发起时保存状态摘要 · backend/app/feishu/oauth.py","example_columns":["digest","expires_at"],"examples":[{"digest":"〈已省略〉","expires_at":"2026-01-01 09:00:00"},{"digest":"〈已省略〉","expires_at":"2026-01-02 09:00:00"}],"relations":[]},{"name":"operation_receipt","comment":"Agent 操作回执记录","columns":[{"name":"operation_id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"Agent 能力调用的一次操作稳定标识","source":{"file":"backend/app/persistence/models.py","line":289},"references":[],"enum":[]},{"name":"idempotency_key","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"用于防止重复提交的幂等键","source":{"file":"backend/app/persistence/models.py","line":292},"references":[],"enum":[]},{"name":"capability","type":"VARCHAR(128)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"被调用的能力名称","source":{"file":"backend/app/persistence/models.py","line":295},"references":[],"enum":[]},{"name":"actor_type","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"调用主体类型，例如人工、Agent 或 CI","source":{"file":"backend/app/persistence/models.py","line":298},"references":[],"enum":[]},{"name":"actor_id","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"调用主体的稳定身份标识","source":{"file":"backend/app/persistence/models.py","line":301},"references":[],"enum":[]},{"name":"environment","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"操作运行环境，例如 production 或 test","source":{"file":"backend/app/persistence/models.py","line":304},"references":[],"enum":[]},{"name":"run_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"关联的 Agent 运行标识","source":{"file":"backend/app/persistence/models.py","line":307},"references":[],"enum":[]},{"name":"case_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"关联的 Evaluation 用例标识","source":{"file":"backend/app/persistence/models.py","line":310},"references":[],"enum":[]},{"name":"request_hash","type":"VARCHAR(64)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"规范化请求内容的摘要","source":{"file":"backend/app/persistence/models.py","line":313},"references":[],"enum":[]},{"name":"status","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"操作回执状态","source":{"file":"backend/app/persistence/models.py","line":316},"references":[],"enum":[]},{"name":"job_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"关联的同步任务标识","source":{"file":"backend/app/persistence/models.py","line":319},"references":[],"enum":[]},{"name":"before_epoch","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"请求开始时的数据集世代标识","source":{"file":"backend/app/persistence/models.py","line":322},"references":[],"enum":[]},{"name":"before_version","type":"BIGINT","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"请求开始时的数据版本号","source":{"file":"backend/app/persistence/models.py","line":325},"references":[],"enum":[]},{"name":"committed_epoch","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"业务提交后的数据集世代标识","source":{"file":"backend/app/persistence/models.py","line":328},"references":[],"enum":[]},{"name":"committed_version","type":"BIGINT","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"业务提交后的数据版本号","source":{"file":"backend/app/persistence/models.py","line":331},"references":[],"enum":[]},{"name":"result_summary","type":"JSON","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"脱敏后的结构化结果摘要","source":{"file":"backend/app/persistence/models.py","line":334},"references":[],"enum":[]},{"name":"error_code","type":"VARCHAR(64)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"最近一次失败的稳定错误编码","source":{"file":"backend/app/persistence/models.py","line":337},"references":[],"enum":[]},{"name":"created_at","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"操作回执创建时间","source":{"file":"backend/app/persistence/models.py","line":340},"references":[],"enum":[]},{"name":"updated_at","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"操作回执最近更新时间","source":{"file":"backend/app/persistence/models.py","line":343},"references":[],"enum":[]}],"constraints":[{"kind":"UniqueConstraint","name":"uq_operation_receipt_idempotency","columns":["actor_id","environment","idempotency_key"],"references":[]},{"kind":"Index","name":"ix_operation_receipt_capability","columns":["capability"],"references":[]},{"kind":"Index","name":"ix_operation_receipt_actor_id","columns":["actor_id"],"references":[]},{"kind":"Index","name":"ix_operation_receipt_environment","columns":["environment"],"references":[]},{"kind":"Index","name":"ix_operation_receipt_run_id","columns":["run_id"],"references":[]},{"kind":"Index","name":"ix_operation_receipt_case_id","columns":["case_id"],"references":[]},{"kind":"Index","name":"ix_operation_receipt_status","columns":["status"],"references":[]},{"kind":"Index","name":"ix_operation_receipt_job_id","columns":["job_id"],"references":[]},{"kind":"Index","name":"ix_operation_receipt_error_code","columns":["error_code"],"references":[]},{"kind":"Index","name":"ix_operation_receipt_created_at","columns":["created_at"],"references":[]}],"class":"OperationReceipt","source":{"file":"backend/app/persistence/models.py","line":285},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0009_operation_receipt.py","line":15},"differences":[],"module":"登录与权限","business":"身份与访问","status":"启用中","status_source":"执行回执服务查询回执 · backend/app/capabilities/receipts.py","example_columns":["operation_id","idempotency_key","capability","actor_type","actor_id","environment","run_id","case_id","request_hash","status","job_id","before_epoch","before_version","committed_epoch","committed_version","result_summary","error_code","created_at","updated_at"],"examples":[{"operation_id":"demo-001","idempotency_key":"demo-001","capability":"demo-001","actor_type":"demo-001","actor_id":"demo-001","environment":"demo-001","run_id":"demo-001","case_id":"demo-001","request_hash":"demo-001","status":"待补案例","job_id":"demo-001","before_epoch":"demo-001","before_version":1,"committed_epoch":"demo-001","committed_version":1,"result_summary":{},"error_code":"demo-001","created_at":"2026-01-01 09:00:00","updated_at":"2026-01-01 09:00:00"},{"operation_id":"demo-002","idempotency_key":"demo-002","capability":"demo-002","actor_type":"demo-002","actor_id":"demo-002","environment":"demo-002","run_id":"demo-002","case_id":"demo-002","request_hash":"demo-002","status":"待补案例","job_id":"demo-002","before_epoch":"demo-002","before_version":2,"committed_epoch":"demo-002","committed_version":2,"result_summary":{},"error_code":"demo-002","created_at":"2026-01-02 09:00:00","updated_at":"2026-01-02 09:00:00"}],"relations":[]},{"name":"pending_fact","comment":"待核实同步事实","columns":[{"name":"object_type","type":"VARCHAR(32)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"待核实对象类型","source":{"file":"backend/app/persistence/models.py","line":57},"references":[],"enum":[]},{"name":"source_id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"待核实来源标识","source":{"file":"backend/app/persistence/models.py","line":58},"references":[],"enum":[]},{"name":"normalized_data","type":"JSON","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"待核实规范化数据","source":{"file":"backend/app/persistence/models.py","line":59},"references":[],"enum":[]},{"name":"error_code","type":"VARCHAR(64)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"待核实错误编码","source":{"file":"backend/app/persistence/models.py","line":60},"references":[],"enum":[]},{"name":"updated_at","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"待核实记录更新时间","source":{"file":"backend/app/persistence/models.py","line":61},"references":[],"enum":[]}],"constraints":[],"class":"PendingFact","source":{"file":"backend/app/persistence/models.py","line":55},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0003_pending_fact.py","line":12},"differences":[],"module":"同步与初始化","business":"数据同步","status":"启用中","status_source":"同步发布器读取待核实事实 · backend/app/sync/publisher.py","example_columns":["object_type","source_id","normalized_data","error_code","updated_at"],"examples":[{"object_type":"demo-001","source_id":"demo-001","normalized_data":{},"error_code":"demo-001","updated_at":"2026-01-01 09:00:00"},{"object_type":"demo-002","source_id":"demo-002","normalized_data":{},"error_code":"demo-002","updated_at":"2026-01-02 09:00:00"}],"relations":[]},{"name":"store_code_reservation","comment":"门店编码预留","columns":[{"name":"store_code","type":"VARCHAR(128)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"预留门店编码","source":{"file":"backend/app/persistence/models.py","line":151},"references":[],"enum":[]},{"name":"department_id","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"占用该编码的部门标识","source":{"file":"backend/app/persistence/models.py","line":152},"references":["department.id"],"enum":[]},{"name":"reserved_at","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"编码预留时间","source":{"file":"backend/app/persistence/models.py","line":153},"references":[],"enum":[]}],"constraints":[],"class":"StoreCodeReservation","source":{"file":"backend/app/persistence/models.py","line":149},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":35},"differences":[],"module":"门店档案","business":"组织与门店","status":"启用中","status_source":"门店服务核对编码预留 · backend/app/stores/service.py","example_columns":["store_code","department_id","reserved_at"],"examples":[{"store_code":"demo-001","department_id":"demo-org-001","reserved_at":"2026-01-01 09:00:00"},{"store_code":"demo-002","department_id":"demo-org-002","reserved_at":"2026-01-02 09:00:00"}],"relations":[{"column":"department_id","target":"department.id","kind":"外键"}]},{"name":"store_profile","comment":"门店资料","columns":[{"name":"department_id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"门店对应部门标识","source":{"file":"backend/app/persistence/models.py","line":142},"references":["department.id"],"enum":[]},{"name":"is_store","type":"BOOLEAN","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"False","comment":"是否标记为门店","source":{"file":"backend/app/persistence/models.py","line":143},"references":[],"enum":[]},{"name":"store_code","type":"VARCHAR(128)","nullable":true,"pk":false,"unique":true,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"门店编码","source":{"file":"backend/app/persistence/models.py","line":144},"references":[],"enum":[]},{"name":"notes","type":"TEXT","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"门店备注","source":{"file":"backend/app/persistence/models.py","line":145},"references":[],"enum":[]}],"constraints":[],"class":"StoreProfile","source":{"file":"backend/app/persistence/models.py","line":140},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":34},"differences":[],"module":"门店档案","business":"组织与门店","status":"启用中","status_source":"门店服务读取档案 · backend/app/stores/service.py","example_columns":["department_id","is_store","store_code","notes"],"examples":[{"department_id":"demo-org-001","is_store":0,"store_code":"demo-001","notes":"demo-001"},{"department_id":"demo-org-002","is_store":1,"store_code":"demo-002","notes":"demo-002"}],"relations":[{"column":"department_id","target":"department.id","kind":"外键"}]},{"name":"sync_job","comment":"同步任务","columns":[{"name":"id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"同步任务标识","source":{"file":"backend/app/persistence/models.py","line":207},"references":[],"enum":[]},{"name":"type","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"同步任务类型","source":{"file":"backend/app/persistence/models.py","line":208},"references":[],"enum":[]},{"name":"name","type":"VARCHAR(255)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"同步任务名称","source":{"file":"backend/app/persistence/models.py","line":209},"references":[],"enum":[]},{"name":"trigger_source","type":"VARCHAR(32)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务触发来源","source":{"file":"backend/app/persistence/models.py","line":210},"references":[],"enum":[]},{"name":"description","type":"TEXT","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"同步任务说明","source":{"file":"backend/app/persistence/models.py","line":211},"references":[],"enum":[]},{"name":"root_department_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"子树同步根部门标识","source":{"file":"backend/app/persistence/models.py","line":212},"references":[],"enum":[]},{"name":"requested_by","type":"VARCHAR(255)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务请求方","source":{"file":"backend/app/persistence/models.py","line":213},"references":[],"enum":[]},{"name":"status","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":true,"collation":"","db_default":"","app_default":"","comment":"任务状态","source":{"file":"backend/app/persistence/models.py","line":214},"references":[],"enum":[]},{"name":"phase","type":"VARCHAR(64)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务阶段","source":{"file":"backend/app/persistence/models.py","line":215},"references":[],"enum":[]},{"name":"attempt","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"1","comment":"任务尝试次数","source":{"file":"backend/app/persistence/models.py","line":216},"references":[],"enum":[]},{"name":"execution_count","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"0","app_default":"0","comment":"任务执行次数","source":{"file":"backend/app/persistence/models.py","line":217},"references":[],"enum":[]},{"name":"retry_count","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"0","app_default":"0","comment":"任务重试次数","source":{"file":"backend/app/persistence/models.py","line":218},"references":[],"enum":[]},{"name":"total_count","type":"INTEGER","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务对象总数","source":{"file":"backend/app/persistence/models.py","line":219},"references":[],"enum":[]},{"name":"success_count","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"0","app_default":"0","comment":"任务成功对象数","source":{"file":"backend/app/persistence/models.py","line":220},"references":[],"enum":[]},{"name":"failure_count","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"0","app_default":"0","comment":"任务失败对象数","source":{"file":"backend/app/persistence/models.py","line":221},"references":[],"enum":[]},{"name":"lease_generation","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"0","comment":"任务租约世代号","source":{"file":"backend/app/persistence/models.py","line":222},"references":[],"enum":[]},{"name":"lease_expires_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务租约过期时间","source":{"file":"backend/app/persistence/models.py","line":223},"references":[],"enum":[]},{"name":"error_code","type":"VARCHAR(64)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务错误编码","source":{"file":"backend/app/persistence/models.py","line":224},"references":[],"enum":[]},{"name":"error_detail","type":"TEXT","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务错误详情","source":{"file":"backend/app/persistence/models.py","line":225},"references":[],"enum":[]},{"name":"created_at","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务创建时间","source":{"file":"backend/app/persistence/models.py","line":226},"references":[],"enum":[]},{"name":"updated_at","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务更新时间","source":{"file":"backend/app/persistence/models.py","line":227},"references":[],"enum":[]},{"name":"started_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务开始时间","source":{"file":"backend/app/persistence/models.py","line":228},"references":[],"enum":[]},{"name":"finished_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务结束时间","source":{"file":"backend/app/persistence/models.py","line":229},"references":[],"enum":[]}],"constraints":[{"kind":"Index","name":"ix_sync_job_scope","columns":["type","root_department_id","status"],"references":[]}],"class":"SyncJob","source":{"file":"backend/app/persistence/models.py","line":205},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":26},"differences":[],"module":"同步与初始化","business":"数据同步","status":"启用中","status_source":"同步 Worker 读取任务 · backend/app/sync/worker.py","example_columns":["id","type","name","trigger_source","description","root_department_id","requested_by","status","phase","attempt","execution_count","retry_count","total_count","success_count","failure_count","lease_generation","lease_expires_at","error_code","error_detail","created_at","updated_at","started_at","finished_at"],"examples":[{"id":"demo-001","type":"待补案例","name":"示例1","trigger_source":"demo-001","description":"demo-001","root_department_id":"demo-001","requested_by":"demo-001","status":"待补案例","phase":"待补案例","attempt":1,"execution_count":1,"retry_count":1,"total_count":1,"success_count":1,"failure_count":1,"lease_generation":1,"lease_expires_at":"2026-01-01 09:00:00","error_code":"demo-001","error_detail":"demo-001","created_at":"2026-01-01 09:00:00","updated_at":"2026-01-01 09:00:00","started_at":"2026-01-01 09:00:00","finished_at":"2026-01-01 09:00:00"},{"id":"demo-002","type":"待补案例","name":"示例2","trigger_source":"demo-002","description":"demo-002","root_department_id":"demo-002","requested_by":"demo-002","status":"待补案例","phase":"待补案例","attempt":2,"execution_count":2,"retry_count":2,"total_count":2,"success_count":2,"failure_count":2,"lease_generation":2,"lease_expires_at":"2026-01-02 09:00:00","error_code":"demo-002","error_detail":"demo-002","created_at":"2026-01-02 09:00:00","updated_at":"2026-01-02 09:00:00","started_at":"2026-01-02 09:00:00","finished_at":"2026-01-02 09:00:00"}],"relations":[]},{"name":"sync_job_detail","comment":"同步任务明细","columns":[{"name":"id","type":"BIGINT","nullable":false,"pk":true,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务明细自增标识","source":{"file":"backend/app/persistence/models.py","line":235},"references":[],"enum":[]},{"name":"job_id","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":false,"index":true,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"所属同步任务标识","source":{"file":"backend/app/persistence/models.py","line":236},"references":["sync_job.id"],"enum":[]},{"name":"object_type","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务对象类型","source":{"file":"backend/app/persistence/models.py","line":237},"references":[],"enum":[]},{"name":"object_id","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"任务对象标识","source":{"file":"backend/app/persistence/models.py","line":238},"references":[],"enum":[]},{"name":"object_name","type":"VARCHAR(255)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务对象名称快照","source":{"file":"backend/app/persistence/models.py","line":239},"references":[],"enum":[]},{"name":"status","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"对象处理状态","source":{"file":"backend/app/persistence/models.py","line":240},"references":[],"enum":[]},{"name":"error_code","type":"VARCHAR(64)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"对象错误编码","source":{"file":"backend/app/persistence/models.py","line":241},"references":[],"enum":[]},{"name":"error_message","type":"TEXT","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"对象错误摘要","source":{"file":"backend/app/persistence/models.py","line":242},"references":[],"enum":[]},{"name":"attempt","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"1","comment":"对象处理尝试次数","source":{"file":"backend/app/persistence/models.py","line":243},"references":[],"enum":[]},{"name":"started_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"对象处理开始时间","source":{"file":"backend/app/persistence/models.py","line":244},"references":[],"enum":[]},{"name":"finished_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"对象处理结束时间","source":{"file":"backend/app/persistence/models.py","line":245},"references":[],"enum":[]},{"name":"change_log_id","type":"BIGINT","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"关联变更日志标识","source":{"file":"backend/app/persistence/models.py","line":246},"references":[],"enum":[]}],"constraints":[{"kind":"UniqueConstraint","name":"uq_sync_job_detail_object","columns":["job_id","object_type","object_id"],"references":[]}],"class":"SyncJobDetail","source":{"file":"backend/app/persistence/models.py","line":233},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0005_sync_job_ledger.py","line":29},"differences":[],"module":"同步与初始化","business":"数据同步","status":"启用中","status_source":"任务回执读取明细 · backend/app/capabilities/receipts.py","example_columns":["id","job_id","object_type","object_id","object_name","status","error_code","error_message","attempt","started_at","finished_at","change_log_id"],"examples":[{"id":1,"job_id":"demo-001","object_type":"demo-001","object_id":"demo-001","object_name":"demo-001","status":"待补案例","error_code":"demo-001","error_message":"demo-001","attempt":1,"started_at":"2026-01-01 09:00:00","finished_at":"2026-01-01 09:00:00","change_log_id":1},{"id":2,"job_id":"demo-002","object_type":"demo-002","object_id":"demo-002","object_name":"demo-002","status":"待补案例","error_code":"demo-002","error_message":"demo-002","attempt":2,"started_at":"2026-01-02 09:00:00","finished_at":"2026-01-02 09:00:00","change_log_id":2}],"relations":[{"column":"job_id","target":"sync_job.id","kind":"外键"}]},{"name":"sync_staging","comment":"同步暂存数据","columns":[{"name":"job_id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"所属同步任务标识","source":{"file":"backend/app/persistence/models.py","line":264},"references":["sync_job.id"],"enum":[]},{"name":"object_type","type":"VARCHAR(32)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"暂存对象类型","source":{"file":"backend/app/persistence/models.py","line":265},"references":[],"enum":[]},{"name":"source_id","type":"VARCHAR(191)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"来源对象标识","source":{"file":"backend/app/persistence/models.py","line":266},"references":[],"enum":[]},{"name":"normalized_data","type":"JSON","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"规范化对象数据","source":{"file":"backend/app/persistence/models.py","line":267},"references":[],"enum":[]}],"constraints":[],"class":"SyncStaging","source":{"file":"backend/app/persistence/models.py","line":262},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":36},"differences":[],"module":"同步与初始化","business":"数据同步","status":"启用中","status_source":"同步发布器暂存对象 · backend/app/sync/publisher.py","example_columns":["job_id","object_type","source_id","normalized_data"],"examples":[{"job_id":"demo-001","object_type":"demo-001","source_id":"demo-001","normalized_data":{}},{"job_id":"demo-002","object_type":"demo-002","source_id":"demo-002","normalized_data":{}}],"relations":[{"column":"job_id","target":"sync_job.id","kind":"外键"}]},{"name":"system_setting","comment":"系统设置","columns":[{"name":"key","type":"VARCHAR(128)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"系统设置键名","source":{"file":"backend/app/persistence/models.py","line":78},"references":[],"enum":[]},{"name":"value","type":"TEXT","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"系统设置值","source":{"file":"backend/app/persistence/models.py","line":79},"references":[],"enum":[]}],"constraints":[],"class":"SystemSetting","source":{"file":"backend/app/persistence/models.py","line":76},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0001_initial.py","line":19},"differences":[],"module":"同步与初始化","business":"数据同步","status":"启用中","status_source":"同步管理视图读取设置 · backend/app/admin/sync_views.py","example_columns":["key","value"],"examples":[{"key":"demo-001","value":"demo-001"},{"key":"demo-002","value":"demo-002"}],"relations":[]},{"name":"tencent_account","comment":"独立腾讯云账号及受控凭据绑定","columns":[{"name":"id","type":"INTEGER","nullable":false,"pk":true,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"腾讯云账号内部标识","source":{"file":"backend/app/persistence/models.py","line":365},"references":[],"enum":[]},{"name":"uin","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"不可重新绑定的腾讯云主账号 UIN 字符串","source":{"file":"backend/app/persistence/models.py","line":366},"references":[],"enum":[]},{"name":"alias","type":"VARCHAR(128)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"管理员维护的中文账号别名","source":{"file":"backend/app/persistence/models.py","line":367},"references":[],"enum":[]},{"name":"credential_ref","type":"VARCHAR(64)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"后端受控凭据注册表引用，不保存可用密钥","source":{"file":"backend/app/persistence/models.py","line":368},"references":[],"enum":[]},{"name":"revision","type":"INTEGER UNSIGNED","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"1","app_default":"1","comment":"账号维护并发修订号，每次有效维护递增","source":{"file":"backend/app/persistence/models.py","line":369},"references":[],"enum":[]},{"name":"credential_revision","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"敏感字段默认值已省略","app_default":"敏感字段默认值已省略","comment":"账号安全修订号，凭据轮换或启停后隔离旧在途结果","source":{"file":"backend/app/persistence/models.py","line":370},"references":[],"enum":[]},{"name":"is_enabled","type":"TINYINT UNSIGNED","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"1","app_default":"True","comment":"账号总开关：1启用，0停用并禁止新结果","source":{"file":"backend/app/persistence/models.py","line":371},"references":[],"enum":[]},{"name":"verification_status","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"归属验证状态，仅 verified 可执行查询","source":{"file":"backend/app/persistence/models.py","line":372},"references":[],"enum":[]},{"name":"verified_at","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"最近一次实际归属验证成功的 UTC 时间","source":{"file":"backend/app/persistence/models.py","line":373},"references":[],"enum":[]},{"name":"create_time","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"CURRENT_TIMESTAMP","app_default":"","comment":"账号登记 UTC 时间","source":{"file":"backend/app/persistence/models.py","line":374},"references":[],"enum":[]},{"name":"update_time","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP","app_default":"","comment":"账号最后修改 UTC 时间","source":{"file":"backend/app/persistence/models.py","line":375},"references":[],"enum":[]}],"constraints":[{"kind":"UniqueConstraint","name":"uk_tencent_account_uin","columns":["uin"],"references":[]}],"class":"TencentAccount","source":{"file":"backend/app/persistence/models.py","line":363},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0014_tencent_accounts.py","line":13},"differences":[],"module":"腾讯云费用","business":"云账号与成本","status":"启用中","status_source":"腾讯云账号访问读取账号表 · backend/app/tencent/access.py","example_columns":["id","uin","alias","credential_ref","revision","credential_revision","is_enabled","verification_status","verified_at","create_time","update_time"],"examples":[{"id":1,"uin":"demo-001","alias":"demo-001","credential_ref":"〈已省略〉","revision":1,"credential_revision":"〈已省略〉","is_enabled":0,"verification_status":"verified","verified_at":"2026-01-01 09:00:00","create_time":"2026-01-01 09:00:00","update_time":"2026-01-01 09:00:00"},{"id":2,"uin":"demo-002","alias":"demo-002","credential_ref":"〈已省略〉","revision":2,"credential_revision":"〈已省略〉","is_enabled":1,"verification_status":"verified","verified_at":"2026-01-02 09:00:00","create_time":"2026-01-02 09:00:00","update_time":"2026-01-02 09:00:00"}],"relations":[]},{"name":"tencent_api_call","comment":"腾讯云模块实际请求事实，元信息白名单且不保存财务正文","columns":[{"name":"id","type":"VARCHAR(36)","nullable":false,"pk":true,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"每次实际调用的唯一审计事件标识","source":{"file":"backend/app/persistence/models.py","line":381},"references":[],"enum":[]},{"name":"request_id","type":"VARCHAR(36)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"服务端生成的本次入站请求关联标识","source":{"file":"backend/app/persistence/models.py","line":382},"references":[],"enum":[]},{"name":"direction","type":"VARCHAR(16)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"调用方向：inbound入站，outbound腾讯云出站","source":{"file":"backend/app/persistence/models.py","line":383},"references":[],"enum":[]},{"name":"action","type":"VARCHAR(64)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"服务端登记的业务动作，未知为 unknown","source":{"file":"backend/app/persistence/models.py","line":384},"references":[],"enum":[]},{"name":"permission_code","type":"VARCHAR(64)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"本次服务端实际执行的独立权限动作","source":{"file":"backend/app/persistence/models.py","line":385},"references":[],"enum":[]},{"name":"actor_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"已认证管理员开放标识，匿名拒绝为空","source":{"file":"backend/app/persistence/models.py","line":386},"references":[],"enum":[]},{"name":"target_id","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"必要的账号 UIN 或外部操作目标，不保存财务正文","source":{"file":"backend/app/persistence/models.py","line":387},"references":[],"enum":[]},{"name":"method","type":"VARCHAR(16)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"实际 HTTP 方法或 SDK 调用方式","source":{"file":"backend/app/persistence/models.py","line":388},"references":[],"enum":[]},{"name":"route","type":"VARCHAR(255)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"规范接口模板或腾讯云官方动作名称","source":{"file":"backend/app/persistence/models.py","line":389},"references":[],"enum":[]},{"name":"status_code","type":"INTEGER","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"已观察到的 HTTP 状态码，未返回时为空","source":{"file":"backend/app/persistence/models.py","line":390},"references":[],"enum":[]},{"name":"outcome","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"调用结果：running、succeeded、failed、unknown","source":{"file":"backend/app/persistence/models.py","line":391},"references":[],"enum":[]},{"name":"reason_code","type":"VARCHAR(64)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"稳定错误码，不保存外部异常原文","source":{"file":"backend/app/persistence/models.py","line":392},"references":[],"enum":[]},{"name":"upstream_request_id","type":"VARCHAR(128)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"腾讯云返回的请求标识，不保存余额或账单","source":{"file":"backend/app/persistence/models.py","line":393},"references":[],"enum":[]},{"name":"started_at","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"实际调用开始 UTC 时间","source":{"file":"backend/app/persistence/models.py","line":394},"references":[],"enum":[]},{"name":"returned_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"观察到实际响应返回的 UTC 时间，未观测为空","source":{"file":"backend/app/persistence/models.py","line":395},"references":[],"enum":[]},{"name":"finished_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"调用结束 UTC 时间，未结束为空","source":{"file":"backend/app/persistence/models.py","line":396},"references":[],"enum":[]},{"name":"duration_ms","type":"INTEGER","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"单调时钟测量的实际耗时毫秒数","source":{"file":"backend/app/persistence/models.py","line":397},"references":[],"enum":[]}],"constraints":[{"kind":"Index","name":"idx_tencent_api_call_request_id","columns":["request_id"],"references":[]},{"kind":"Index","name":"idx_tencent_api_call_rate_window","columns":["direction","action","target_id","started_at"],"references":[]}],"class":"TencentApiCall","source":{"file":"backend/app/persistence/models.py","line":379},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0014_tencent_accounts.py","line":26},"differences":[],"module":"腾讯云费用","business":"云账号与成本","status":"启用中","status_source":"腾讯云调用审计写入记录 · backend/app/tencent/audit.py","example_columns":["id","request_id","direction","action","permission_code","actor_id","target_id","method","route","status_code","outcome","reason_code","upstream_request_id","started_at","returned_at","finished_at","duration_ms"],"examples":[{"id":"demo-001","request_id":"demo-001","direction":"demo-001","action":"demo-001","permission_code":"demo-001","actor_id":"demo-001","target_id":"demo-001","method":"demo-001","route":"demo-001","status_code":1,"outcome":"demo-001","reason_code":"demo-001","upstream_request_id":"demo-001","started_at":"2026-01-01 09:00:00","returned_at":"2026-01-01 09:00:00","finished_at":"2026-01-01 09:00:00","duration_ms":1},{"id":"demo-002","request_id":"demo-002","direction":"demo-002","action":"demo-002","permission_code":"demo-002","actor_id":"demo-002","target_id":"demo-002","method":"demo-002","route":"demo-002","status_code":2,"outcome":"demo-002","reason_code":"demo-002","upstream_request_id":"demo-002","started_at":"2026-01-02 09:00:00","returned_at":"2026-01-02 09:00:00","finished_at":"2026-01-02 09:00:00","duration_ms":2}],"relations":[]},{"name":"tencent_cost_item","comment":"原始期间全量产品行，未映射和同名行保持独立","columns":[{"name":"id","type":"INTEGER","nullable":false,"pk":true,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"期间内费用产品行标识，不假设跨期稳定","source":{"file":"backend/app/persistence/models.py","line":503},"references":[],"enum":[]},{"name":"period_id","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"所属完整费用期间标识","source":{"file":"backend/app/persistence/models.py","line":504},"references":[],"enum":[]},{"name":"row_no","type":"INTEGER UNSIGNED","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"本次全量结果内产品行序号","source":{"file":"backend/app/persistence/models.py","line":505},"references":[],"enum":[]},{"name":"business_code","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"可靠映射的产品BusinessCode，不是子产品ProductCode","source":{"file":"backend/app/persistence/models.py","line":506},"references":[],"enum":[]},{"name":"source_name","type":"VARCHAR(255)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"源接口原始产品显示名称","source":{"file":"backend/app/persistence/models.py","line":507},"references":[],"enum":[]},{"name":"mapping_status","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"产品映射状态mapped、ambiguous或unmapped","source":{"file":"backend/app/persistence/models.py","line":508},"references":[],"enum":[]},{"name":"amount","type":"NUMERIC(24,8)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"该原始日月期间的产品总费用，保留负退款","source":{"file":"backend/app/persistence/models.py","line":509},"references":[],"enum":[]},{"name":"create_time","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"CURRENT_TIMESTAMP","app_default":"","comment":"当前产品行创建UTC时间","source":{"file":"backend/app/persistence/models.py","line":510},"references":[],"enum":[]},{"name":"update_time","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP","app_default":"","comment":"当前产品行最后更新UTC时间","source":{"file":"backend/app/persistence/models.py","line":511},"references":[],"enum":[]}],"constraints":[{"kind":"UniqueConstraint","name":"uk_tencent_item_row","columns":["period_id","row_no"],"references":[]}],"class":"TencentCostItem","source":{"file":"backend/app/persistence/models.py","line":501},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0015_tencent_cost.py","line":85},"differences":[],"module":"腾讯云费用","business":"云账号与成本","status":"启用中","status_source":"腾讯云费用面板查询产品行 · backend/app/tencent/cost_dashboard.py","example_columns":["id","period_id","row_no","business_code","source_name","mapping_status","amount","create_time","update_time"],"examples":[{"id":1,"period_id":1,"row_no":1,"business_code":"demo-001","source_name":"示例1","mapping_status":"待补案例","amount":1,"create_time":"2026-01-01 09:00:00","update_time":"2026-01-01 09:00:00"},{"id":2,"period_id":2,"row_no":2,"business_code":"demo-002","source_name":"示例2","mapping_status":"待补案例","amount":2,"create_time":"2026-01-02 09:00:00","update_time":"2026-01-02 09:00:00"}],"relations":[{"column":"period_id","target":"tencent_cost_period.id","kind":"业务关联"}]},{"name":"tencent_cost_period","comment":"腾讯云原始日月费用及一致覆盖回执","columns":[{"name":"id","type":"INTEGER","nullable":false,"pk":true,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"当前完整费用期间标识","source":{"file":"backend/app/persistence/models.py","line":486},"references":[],"enum":[]},{"name":"account_id","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"所属腾讯云账号标识","source":{"file":"backend/app/persistence/models.py","line":487},"references":[],"enum":[]},{"name":"month","type":"VARCHAR(7)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"Asia/Shanghai费用所属自然月YYYY-MM","source":{"file":"backend/app/persistence/models.py","line":488},"references":[],"enum":[]},{"name":"granularity","type":"VARCHAR(8)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"month","app_default":"month","comment":"来源真实粒度day单日或month完整月","source":{"file":"backend/app/persistence/models.py","line":489},"references":[],"enum":[]},{"name":"period_key","type":"VARCHAR(10)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"见源码","comment":"原始期间身份：月YYYY-MM或日YYYY-MM-DD","source":{"file":"backend/app/persistence/models.py","line":490},"references":[],"enum":[]},{"name":"currency","type":"VARCHAR(3)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"独立金额维度的账单声明币种","source":{"file":"backend/app/persistence/models.py","line":491},"references":[],"enum":[]},{"name":"total","type":"NUMERIC(24,8)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"费用账单总费用，保留8位小数及负退款","source":{"file":"backend/app/persistence/models.py","line":492},"references":[],"enum":[]},{"name":"coverage","type":"JSON","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"完整边界、费用口径及零值和完整性证明摘要","source":{"file":"backend/app/persistence/models.py","line":493},"references":[],"enum":[]},{"name":"latest_job_id","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"最近成功提交本期间的任务标识","source":{"file":"backend/app/persistence/models.py","line":494},"references":[],"enum":[]},{"name":"latest_attempt_id","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"最近成功提交本期间的尝试标识","source":{"file":"backend/app/persistence/models.py","line":495},"references":[],"enum":[]},{"name":"create_time","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"CURRENT_TIMESTAMP","app_default":"","comment":"期间首次创建UTC时间","source":{"file":"backend/app/persistence/models.py","line":496},"references":[],"enum":[]},{"name":"update_time","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP","app_default":"","comment":"完整期间最后替换UTC时间","source":{"file":"backend/app/persistence/models.py","line":497},"references":[],"enum":[]}],"constraints":[{"kind":"UniqueConstraint","name":"uk_tencent_period_scope","columns":["account_id","period_key","currency"],"references":[]},{"kind":"Index","name":"idx_tencent_period_month","columns":["account_id","currency","month"],"references":[]}],"class":"TencentCostPeriod","source":{"file":"backend/app/persistence/models.py","line":484},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0015_tencent_cost.py","line":69},"differences":[],"module":"腾讯云费用","business":"云账号与成本","status":"启用中","status_source":"腾讯云费用 Worker 查询期间 · backend/app/tencent/cost_worker.py","example_columns":["id","account_id","month","granularity","period_key","currency","total","coverage","latest_job_id","latest_attempt_id","create_time","update_time"],"examples":[{"id":1,"account_id":1,"month":"2026-01","granularity":"month","period_key":"demo-001","currency":"CNY","total":1,"coverage":{},"latest_job_id":1,"latest_attempt_id":1,"create_time":"2026-01-01 09:00:00","update_time":"2026-01-01 09:00:00"},{"id":2,"account_id":2,"month":"2026-01","granularity":"month","period_key":"demo-002","currency":"CNY","total":2,"coverage":{},"latest_job_id":2,"latest_attempt_id":2,"create_time":"2026-01-02 09:00:00","update_time":"2026-01-02 09:00:00"}],"relations":[{"column":"account_id","target":"tencent_account.id","kind":"业务关联"},{"column":"latest_job_id","target":"tencent_sync_job.id","kind":"业务关联"},{"column":"latest_attempt_id","target":"tencent_sync_attempt.id","kind":"业务关联"}]},{"name":"tencent_sync_attempt","comment":"腾讯云真实尝试事实，失败记录独立于费用回滚","columns":[{"name":"id","type":"INTEGER","nullable":false,"pk":true,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"一次真实执行尝试标识","source":{"file":"backend/app/persistence/models.py","line":465},"references":[],"enum":[]},{"name":"job_id","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"所属逻辑任务标识","source":{"file":"backend/app/persistence/models.py","line":466},"references":[],"enum":[]},{"name":"attempt_no","type":"INTEGER UNSIGNED","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务内实际尝试序号，从1开始","source":{"file":"backend/app/persistence/models.py","line":467},"references":[],"enum":[]},{"name":"generation","type":"INTEGER UNSIGNED","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"领取时的配置执行资格代次","source":{"file":"backend/app/persistence/models.py","line":468},"references":[],"enum":[]},{"name":"owner","type":"VARCHAR(36)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"本次执行者标识","source":{"file":"backend/app/persistence/models.py","line":469},"references":[],"enum":[]},{"name":"status","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"尝试状态running、succeeded、failed或unknown","source":{"file":"backend/app/persistence/models.py","line":470},"references":[],"enum":[]},{"name":"execution_input","type":"JSON","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"执行前可靠保存的完整脱敏实际入参","source":{"file":"backend/app/persistence/models.py","line":471},"references":[],"enum":[]},{"name":"execution_output","type":"JSON","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"处理器实际返回的原子提交回执，不保存账单原文","source":{"file":"backend/app/persistence/models.py","line":472},"references":[],"enum":[]},{"name":"return_state","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"UNKNOWN","app_default":"UNKNOWN","comment":"实际返回形态VALUE、NOT_RETURNED或UNKNOWN","source":{"file":"backend/app/persistence/models.py","line":473},"references":[],"enum":[]},{"name":"request_id","type":"VARCHAR(36)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"本尝试独立请求关联标识，历史未采集时为空","source":{"file":"backend/app/persistence/models.py","line":474},"references":[],"enum":[]},{"name":"failure_evidence","type":"JSON","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"稳定失败分类与已核实上游请求标识，不保存报文","source":{"file":"backend/app/persistence/models.py","line":475},"references":[],"enum":[]},{"name":"error_code","type":"VARCHAR(64)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"明确失败或未知的稳定原因编码","source":{"file":"backend/app/persistence/models.py","line":476},"references":[],"enum":[]},{"name":"started_at","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"尝试开始UTC时刻","source":{"file":"backend/app/persistence/models.py","line":477},"references":[],"enum":[]},{"name":"finished_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"尝试终结UTC时刻","source":{"file":"backend/app/persistence/models.py","line":478},"references":[],"enum":[]},{"name":"create_time","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"CURRENT_TIMESTAMP","app_default":"","comment":"尝试事实创建UTC时间","source":{"file":"backend/app/persistence/models.py","line":479},"references":[],"enum":[]},{"name":"update_time","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP","app_default":"","comment":"尝试事实更新UTC时间","source":{"file":"backend/app/persistence/models.py","line":480},"references":[],"enum":[]}],"constraints":[{"kind":"UniqueConstraint","name":"uk_tencent_attempt_number","columns":["job_id","attempt_no"],"references":[]}],"class":"TencentSyncAttempt","source":{"file":"backend/app/persistence/models.py","line":463},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0015_tencent_cost.py","line":50},"differences":[],"module":"腾讯云费用","business":"云账号与成本","status":"启用中","status_source":"腾讯云费用入口查询每次任务尝试 · backend/app/tencent/cost_router.py","example_columns":["id","job_id","attempt_no","generation","owner","status","execution_input","execution_output","return_state","request_id","failure_evidence","error_code","started_at","finished_at","create_time","update_time"],"examples":[{"id":1,"job_id":1,"attempt_no":1,"generation":1,"owner":"demo-001","status":"succeeded","execution_input":{},"execution_output":{},"return_state":"demo-001","request_id":"demo-001","failure_evidence":{},"error_code":"demo-001","started_at":"2026-01-01 09:00:00","finished_at":"2026-01-01 09:00:00","create_time":"2026-01-01 09:00:00","update_time":"2026-01-01 09:00:00"},{"id":2,"job_id":2,"attempt_no":2,"generation":2,"owner":"demo-002","status":"succeeded","execution_input":{},"execution_output":{},"return_state":"demo-002","request_id":"demo-002","failure_evidence":{},"error_code":"demo-002","started_at":"2026-01-02 09:00:00","finished_at":"2026-01-02 09:00:00","create_time":"2026-01-02 09:00:00","update_time":"2026-01-02 09:00:00"}],"relations":[{"column":"job_id","target":"tencent_sync_job.id","kind":"业务关联"}]},{"name":"tencent_sync_config","comment":"腾讯云账号按业务独立配置及执行互斥","columns":[{"name":"id","type":"INTEGER","nullable":false,"pk":true,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"腾讯云业务配置标识","source":{"file":"backend/app/persistence/models.py","line":407},"references":[],"enum":[]},{"name":"account_id","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"所属腾讯云账号标识","source":{"file":"backend/app/persistence/models.py","line":408},"references":[],"enum":[]},{"name":"business","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"cost","comment":"业务类型，cost表示成本","source":{"file":"backend/app/persistence/models.py","line":409},"references":[],"enum":[]},{"name":"is_enabled","type":"TINYINT UNSIGNED","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"0","app_default":"False","comment":"成本能力开关，默认关闭","source":{"file":"backend/app/persistence/models.py","line":410},"references":[],"enum":[]},{"name":"revision","type":"INTEGER UNSIGNED","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"1","app_default":"1","comment":"配置并发修订号，普通编辑仅影响新轮次","source":{"file":"backend/app/persistence/models.py","line":411},"references":[],"enum":[]},{"name":"control_revision","type":"INTEGER UNSIGNED","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"1","app_default":"1","comment":"启停控制修订号，隔离停用前旧任务","source":{"file":"backend/app/persistence/models.py","line":412},"references":[],"enum":[]},{"name":"run_policy","type":"JSON","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"经过校验的重试预算、租约心跳及排队策略","source":{"file":"backend/app/persistence/models.py","line":413},"references":[],"enum":[]},{"name":"frequency","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"manual","comment":"执行频率：manual手动、monthly每月三日、daily每日或weekly每周日","source":{"file":"backend/app/persistence/models.py","line":414},"references":[],"enum":[]},{"name":"execution_time","type":"VARCHAR(5)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"13:30","app_default":"13:30","comment":"自动计划的北京时间时分，默认建议13:30可修改","source":{"file":"backend/app/persistence/models.py","line":415},"references":[],"enum":[]},{"name":"history_progress","type":"JSON","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"经类型校验的历史发现检查点，来源窗口不代表账号历史起点","source":{"file":"backend/app/persistence/models.py","line":416},"references":[],"enum":[]},{"name":"schedule_start_date","type":"DATE","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"首次日周计划的补漏日期锚点，不代表已核验历史起点","source":{"file":"backend/app/persistence/models.py","line":417},"references":[],"enum":[]},{"name":"schedule_start_month","type":"VARCHAR(7)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"首次启用月模式时的补漏起点，不代表已核验历史起点","source":{"file":"backend/app/persistence/models.py","line":418},"references":[],"enum":[]},{"name":"currency","type":"VARCHAR(3)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"CNY","comment":"境内账单声明币种，不由源接口返回","source":{"file":"backend/app/persistence/models.py","line":419},"references":[],"enum":[]},{"name":"owner","type":"VARCHAR(36)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"本配置当前执行者标识","source":{"file":"backend/app/persistence/models.py","line":420},"references":[],"enum":[]},{"name":"generation","type":"INTEGER UNSIGNED","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"0","app_default":"0","comment":"配置执行资格递增代次","source":{"file":"backend/app/persistence/models.py","line":421},"references":[],"enum":[]},{"name":"lease_expires_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"执行资格到期UTC时刻","source":{"file":"backend/app/persistence/models.py","line":422},"references":[],"enum":[]},{"name":"active_job_id","type":"INTEGER","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"本配置正在执行的任务标识","source":{"file":"backend/app/persistence/models.py","line":423},"references":[],"enum":[]},{"name":"last_success_month","type":"VARCHAR(7)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"最近一次完整提交的账月","source":{"file":"backend/app/persistence/models.py","line":424},"references":[],"enum":[]},{"name":"create_time","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"CURRENT_TIMESTAMP","app_default":"","comment":"配置创建UTC时间","source":{"file":"backend/app/persistence/models.py","line":425},"references":[],"enum":[]},{"name":"update_time","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP","app_default":"","comment":"配置更新UTC时间","source":{"file":"backend/app/persistence/models.py","line":426},"references":[],"enum":[]}],"constraints":[{"kind":"UniqueConstraint","name":"uk_tencent_config_business","columns":["account_id","business"],"references":[]}],"class":"TencentSyncConfig","source":{"file":"backend/app/persistence/models.py","line":405},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0015_tencent_cost.py","line":10},"differences":[],"module":"腾讯云费用","business":"云账号与成本","status":"启用中","status_source":"费用路由使用该业务配置模型 · backend/app/tencent/cost_router.py","example_columns":["id","account_id","business","is_enabled","revision","control_revision","run_policy","frequency","execution_time","history_progress","schedule_start_date","schedule_start_month","currency","owner","generation","lease_expires_at","active_job_id","last_success_month","create_time","update_time"],"examples":[{"id":1,"account_id":1,"business":"demo-001","is_enabled":0,"revision":1,"control_revision":1,"run_policy":{},"frequency":"manual","execution_time":"09:00","history_progress":{},"schedule_start_date":"2026-01-01","schedule_start_month":"2026-01","currency":"CNY","owner":"demo-001","generation":1,"lease_expires_at":"2026-01-01 09:00:00","active_job_id":1,"last_success_month":"2026-01","create_time":"2026-01-01 09:00:00","update_time":"2026-01-01 09:00:00"},{"id":2,"account_id":2,"business":"demo-002","is_enabled":1,"revision":2,"control_revision":2,"run_policy":{},"frequency":"manual","execution_time":"09:00","history_progress":{},"schedule_start_date":"2026-01-02","schedule_start_month":"2026-01","currency":"CNY","owner":"demo-002","generation":2,"lease_expires_at":"2026-01-02 09:00:00","active_job_id":2,"last_success_month":"2026-01","create_time":"2026-01-02 09:00:00","update_time":"2026-01-02 09:00:00"}],"relations":[{"column":"account_id","target":"tencent_account.id","kind":"业务关联"},{"column":"active_job_id","target":"tencent_sync_job.id","kind":"业务关联"}]},{"name":"tencent_sync_job","comment":"腾讯云单月逻辑执行任务，不依赖浏览器会话存活","columns":[{"name":"id","type":"INTEGER","nullable":false,"pk":true,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"一次逻辑成本任务标识","source":{"file":"backend/app/persistence/models.py","line":432},"references":[],"enum":[]},{"name":"config_id","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"所属业务配置标识","source":{"file":"backend/app/persistence/models.py","line":433},"references":[],"enum":[]},{"name":"account_id","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"所属腾讯云账号标识","source":{"file":"backend/app/persistence/models.py","line":434},"references":[],"enum":[]},{"name":"dataset_epoch","type":"VARCHAR(191)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"受理时冻结的初始化世代，用于隔离幂等键","source":{"file":"backend/app/persistence/models.py","line":435},"references":[],"enum":[]},{"name":"idempotency_key","type":"VARCHAR(128)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"配置内可靠请求幂等键","source":{"file":"backend/app/persistence/models.py","line":436},"references":[],"enum":[]},{"name":"priority","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"0","app_default":"0","comment":"实际领取优先级：0近期或人工，20历史发现；活动重试保持资格","source":{"file":"backend/app/persistence/models.py","line":437},"references":[],"enum":[]},{"name":"kind","type":"VARCHAR(16)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"period","app_default":"period","comment":"任务种类：batch纯汇总父批次或period实际期间","source":{"file":"backend/app/persistence/models.py","line":438},"references":[],"enum":[]},{"name":"parent_job_id","type":"INTEGER","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"期间所属父批次标识，独立手动期间为空","source":{"file":"backend/app/persistence/models.py","line":439},"references":[],"enum":[]},{"name":"month","type":"VARCHAR(7)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"实际日月期间所属自然月YYYY-MM，纯汇总父批次为空","source":{"file":"backend/app/persistence/models.py","line":440},"references":[],"enum":[]},{"name":"status","type":"VARCHAR(32)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务状态pending、running、retry_wait、succeeded或failed","source":{"file":"backend/app/persistence/models.py","line":441},"references":[],"enum":[]},{"name":"snapshot","type":"JSON","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"冻结配置、口径、范围、可信发起身份及初始化世代，不含秘密","source":{"file":"backend/app/persistence/models.py","line":442},"references":[],"enum":[]},{"name":"request_id","type":"VARCHAR(36)","nullable":false,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"受理请求的服务端关联标识","source":{"file":"backend/app/persistence/models.py","line":443},"references":[],"enum":[]},{"name":"error_code","type":"VARCHAR(64)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"最终稳定失败编码","source":{"file":"backend/app/persistence/models.py","line":444},"references":[],"enum":[]},{"name":"source_job_id","type":"INTEGER","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"人工重跑关联的原逻辑任务，首次采集为空","source":{"file":"backend/app/persistence/models.py","line":445},"references":[],"enum":[]},{"name":"commit_receipt","type":"JSON","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"与费用同事务保存的原始提交回执，用于归档恢复","source":{"file":"backend/app/persistence/models.py","line":446},"references":[],"enum":[]},{"name":"next_attempt_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"等待重试最早可领取UTC时刻","source":{"file":"backend/app/persistence/models.py","line":447},"references":[],"enum":[]},{"name":"deadline_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"首次领取后执行与重试共同截止UTC时刻","source":{"file":"backend/app/persistence/models.py","line":448},"references":[],"enum":[]},{"name":"queue_deadline_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"受理后首次领取排队截止UTC时刻","source":{"file":"backend/app/persistence/models.py","line":449},"references":[],"enum":[]},{"name":"started_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"首次实际执行UTC时刻","source":{"file":"backend/app/persistence/models.py","line":450},"references":[],"enum":[]},{"name":"finished_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"任务终结UTC时刻","source":{"file":"backend/app/persistence/models.py","line":451},"references":[],"enum":[]},{"name":"create_time","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"CURRENT_TIMESTAMP","app_default":"","comment":"任务可靠受理UTC时间","source":{"file":"backend/app/persistence/models.py","line":452},"references":[],"enum":[]},{"name":"update_time","type":"DATETIME","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP","app_default":"","comment":"任务状态更新UTC时间","source":{"file":"backend/app/persistence/models.py","line":453},"references":[],"enum":[]}],"constraints":[{"kind":"UniqueConstraint","name":"uk_tencent_job_request","columns":["config_id","dataset_epoch","kind","idempotency_key"],"references":[]},{"kind":"Index","name":"idx_tencent_job_claim","columns":["status","config_id","id"],"references":[]},{"kind":"Index","name":"idx_tencent_job_priority","columns":["config_id","status","priority","id"],"references":[]},{"kind":"Index","name":"idx_tencent_sync_job_parent_job_id","columns":["parent_job_id"],"references":[]}],"class":"TencentSyncJob","source":{"file":"backend/app/persistence/models.py","line":430},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0015_tencent_cost.py","line":30},"differences":[],"module":"腾讯云费用","business":"云账号与成本","status":"启用中","status_source":"费用面板读取同步任务 · backend/app/tencent/cost_dashboard.py","example_columns":["id","config_id","account_id","dataset_epoch","idempotency_key","priority","kind","parent_job_id","month","status","snapshot","request_id","error_code","source_job_id","commit_receipt","next_attempt_at","deadline_at","queue_deadline_at","started_at","finished_at","create_time","update_time"],"examples":[{"id":1,"config_id":1,"account_id":1,"dataset_epoch":"demo-001","idempotency_key":"demo-001","priority":1,"kind":"batch","parent_job_id":null,"month":"2026-01","status":"succeeded","snapshot":{},"request_id":"demo-001","error_code":"demo-001","source_job_id":null,"commit_receipt":{},"next_attempt_at":"2026-01-01 09:00:00","deadline_at":"2026-01-01 09:00:00","queue_deadline_at":"2026-01-01 09:00:00","started_at":"2026-01-01 09:00:00","finished_at":"2026-01-01 09:00:00","create_time":"2026-01-01 09:00:00","update_time":"2026-01-01 09:00:00"},{"id":2,"config_id":2,"account_id":2,"dataset_epoch":"demo-002","idempotency_key":"demo-002","priority":2,"kind":"period","parent_job_id":1,"month":"2026-01","status":"succeeded","snapshot":{},"request_id":"demo-002","error_code":"demo-002","source_job_id":null,"commit_receipt":{},"next_attempt_at":"2026-01-02 09:00:00","deadline_at":"2026-01-02 09:00:00","queue_deadline_at":"2026-01-02 09:00:00","started_at":"2026-01-02 09:00:00","finished_at":"2026-01-02 09:00:00","create_time":"2026-01-02 09:00:00","update_time":"2026-01-02 09:00:00"}],"relations":[{"column":"account_id","target":"tencent_account.id","kind":"业务关联"},{"column":"config_id","target":"tencent_sync_config.id","kind":"业务关联"},{"column":"parent_job_id","target":"tencent_sync_job.id","kind":"业务关联"},{"column":"source_job_id","target":"tencent_sync_job.id","kind":"业务关联"}]},{"name":"worker_lease","comment":"同步 Worker 租约","columns":[{"name":"id","type":"INTEGER","nullable":false,"pk":true,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"worker 租约单例标识","source":{"file":"backend/app/persistence/models.py","line":48},"references":[],"enum":[]},{"name":"owner","type":"VARCHAR(191)","nullable":true,"pk":false,"unique":false,"index":false,"collation":"utf8mb4_bin","db_default":"","app_default":"","comment":"当前 worker 标识","source":{"file":"backend/app/persistence/models.py","line":49},"references":[],"enum":[]},{"name":"generation","type":"INTEGER","nullable":false,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"0","comment":"租约世代号","source":{"file":"backend/app/persistence/models.py","line":50},"references":[],"enum":[]},{"name":"expires_at","type":"DATETIME","nullable":true,"pk":false,"unique":false,"index":false,"collation":"","db_default":"","app_default":"","comment":"租约过期时间","source":{"file":"backend/app/persistence/models.py","line":51},"references":[],"enum":[]}],"constraints":[],"class":"WorkerLease","source":{"file":"backend/app/persistence/models.py","line":46},"options":{"mysql_engine":"InnoDB","mysql_charset":"utf8mb4","mysql_collate":"utf8mb4_general_ci"},"ddl_source":{"file":"backend/migrations/versions/0002_feishu_runtime.py","line":16},"differences":[],"module":"同步与初始化","business":"数据同步","status":"启用中","status_source":"同步 Worker 读取执行租约 · backend/app/sync/worker.py","example_columns":["id","owner","generation","expires_at"],"examples":[{"id":1,"owner":"demo-001","generation":1,"expires_at":"2026-01-01 09:00:00"},{"id":2,"owner":"demo-002","generation":2,"expires_at":"2026-01-02 09:00:00"}],"relations":[]}]}</script>
+<script>
+"use strict";
+const doc = JSON.parse(document.getElementById("catalog-data").textContent);
+const get = id => document.getElementById(id);
+const states = { module: "", table: "", tab: "字段", mobile: "list" };
+const modules = new Map();
+const tables = new Map(doc.tables.map(table => [table.name, table]));
+const labels = { Index: "索引", UniqueConstraint: "唯一约束", ForeignKeyConstraint: "外键",
+                 PrimaryKeyConstraint: "主键", CheckConstraint: "校验约束" };
+for (const table of doc.tables) {
+  modules.set(table.module, (modules.get(table.module) || 0) + 1);
+  table.search = [table.name, table.comment, table.module, table.business, ...table.columns.map(column =>
+    [column.name, column.comment, column.type].join(" "))].join(" ").toLowerCase();
+}
+function element(tag, text = "", cls = "") {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  if (cls) node.className = cls;
+  return node;
+}
+function button(text, cls, action, pressed) {
+  const node = element("button", text, cls);
+  node.type = "button";
+  if (pressed !== undefined) node.setAttribute("aria-pressed", String(pressed));
+  node.addEventListener("click", action);
+  return node;
+}
+function badge(status) {
+  const node = element("span", status, "badge");
+  node.dataset.status = status;
+  return node;
+}
+function source(ref) { return ref.file + ":" + ref.line; }
+function setMobile(target) {
+  states.mobile = target;
+  for (const key of ["module","list","detail"]) {
+    get(key + "-pane").toggleAttribute("data-visible", key === target);
+    get("nav-" + key).setAttribute("aria-pressed", String(key === target));
+  }
+}
+function show(screen) {
+  const previous = document.body.dataset.screen;
+  if (screen === previous) return;
+  const outgoing = get(previous);
+  const incoming = get(screen);
+  const moveFocus = outgoing.contains(document.activeElement);
+  incoming.inert = false;
+  outgoing.inert = true;
+  document.body.dataset.screen = screen;
+  if (moveFocus) incoming.focus({ preventScroll: true });
+}
+function tableLink(name) {
+  return "#table=" + encodeURIComponent(name);
+}
+function setTable(name, userAction = false) {
+  states.table = name;
+  states.tab = "字段";
+  history.replaceState(null, "", name ? tableLink(name) : "#catalog");
+  if (userAction) setMobile("detail");
+  renderList(matching());
+  renderDetails();
+}
+function selectModule(module) {
+  states.module = module;
+  get("search").value = "";
+  get("status").value = "";
+  show("catalog");
+  setMobile("list");
+  render();
+}
+function matching() {
+  const query = get("search").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const status = get("status").value;
+  return doc.tables.filter(row => (!states.module || row.module === states.module) &&
+                                  (!status || row.status === status) && query.every(word => row.search.includes(word)));
+}
+function renderModules() {
+  const entries = [["",doc.tables.length], ...modules];
+  get("modules").replaceChildren(...entries.map(([key,count]) => {
+    const node = button(key || "全部模块", "module", () => selectModule(key), key === states.module);
+    node.append(element("small", String(count)));
+    return node;
+  }));
+}
+function renderList(rows) {
+  get("result-count").textContent = rows.length + " 张";
+  const items = rows.map(row => {
+    const node = button("", "table-choice", () => setTable(row.name, true), row.name === states.table);
+    node.append(element("code", row.name), element("small", row.comment || "备注未填写"), badge(row.status));
+    return node;
+  });
+  get("table-list").replaceChildren(...(items.length ? items : [element("p","没有匹配的数据表","empty")]));
+}
+function grid(headers, rows, cls = "") {
+  const table = element("table", "", cls);
+  const head = table.createTHead().insertRow();
+  for (const header of headers) {
+    const cell = element("th", header);
+    cell.scope = "col";
+    head.append(cell);
+  }
+  const body = table.createTBody();
+  for (const row of rows) {
+    const target = body.insertRow();
+    for (const value of row) {
+      const cell = target.insertCell();
+      if (value instanceof Node) cell.append(value);
+      else cell.textContent = value ?? "NULL";
+    }
+  }
+  const wrap = element("div", "", "table-wrap");
+  wrap.append(table);
+  return wrap;
+}
+function fieldInfo(column) {
+  const parts = [column.comment || "未填写"];
+  if (column.enum.length) parts.push("取值 " + column.enum.join("、"));
+  if (column.collation) parts.push("排序规则 " + column.collation);
+  return parts.join(" · ");
+}
+function renderFields(row) {
+  const rows = row.columns.map(column => {
+    const name = element("span", "", "field-name");
+    name.append(element("code", column.name));
+    if (column.pk) {
+      const primaryKey = element("span", "PK", "pk-tab");
+      primaryKey.title = "主键";
+      name.append(primaryKey);
+    }
+    let defaultValue = column.db_default ?? "";
+    if (defaultValue === "") {
+      const applicationDefault = column.app_default ?? "";
+      defaultValue = applicationDefault === "" ? "-" : "- / " + applicationDefault + "（应用默认" + applicationDefault + "）";
+    }
+    return [name, element("code", column.type), column.nullable ? "是" : "否", defaultValue, fieldInfo(column)];
+  });
+  return grid(["字段", "类型", "可空", "数据库默认值", "备注"], rows, "fields");
+}
+function relationTarget(target) {
+  const tableName = target.slice(0,target.lastIndexOf("."));
+  if (!tables.has(tableName)) return element("code", target);
+  return button(target, "rel-link", () => {
+    states.module = "";
+    get("search").value = "";
+    get("status").value = "";
+    setTable(tableName, true);
+    renderModules();
+  });
+}
+function renderRelationships(row) {
+  const fragment = document.createDocumentFragment();
+  const indexes = row.constraints.map(item => [
+    labels[item.kind] || item.kind,
+    item.kind === "PrimaryKeyConstraint" ? "PRIMARY" : (item.name || "-"),
+    item.columns.join("、") || "-",
+  ]);
+  const primary = row.columns.filter(col => col.pk).map(col => col.name);
+  if (primary.length && !row.constraints.some(item => item.kind === "PrimaryKeyConstraint")) indexes.unshift(["主键","PRIMARY",primary.join("、")]);
+  for (const col of row.columns) {
+    if (col.unique) indexes.push(["唯一约束","-",col.name]);
+    if (col.index) indexes.push(["索引","-",col.name]);
+  }
+  fragment.append(element("h3","约束与索引"), indexes.length ? grid(["类型","名称","字段"],indexes) :
+    element("p","源码中未定位到约束或索引","hint"), element("h3","表关系"));
+  fragment.append(row.relations.length ? grid(["字段","类型","目标"], row.relations.map(item =>
+    [element("code", item.column), item.kind, relationTarget(item.target)])) : element("p","源码中未定位到关联","hint"));
+  return fragment;
+}
+function renderExamples(row) {
+  const fragment = document.createDocumentFragment();
+  fragment.append(element("p","以下为本地合成示例。敏感字段以占位符显示。","hint"));
+  const rows = row.examples.map(record => row.example_columns.map(name => {
+    const value = record[name];
+    if (value === undefined) return element("code", "-");
+    const formatted = value !== null && typeof value === "object" ? JSON.stringify(value) : String(value);
+    return element("code", formatted);
+  }));
+  fragment.append(grid(row.example_columns, rows, "example"));
+  return fragment;
+}
+function renderSources(row) {
+  const fragment = document.createDocumentFragment();
+  fragment.append(element("p", "当前定义 " + source(row.source)));
+  if (row.ddl_source) fragment.append(element("p", "建表来源 " + source(row.ddl_source)));
+  const optionDescriptions = new Map([
+    ["mysql_engine", "存储引擎，决定表如何存储数据以及支持哪些事务和锁机制。"],
+    ["mysql_charset", "默认字符集，决定文本字段可存储哪些字符。"],
+    ["mysql_collate", "默认排序规则，决定文本如何比较和排序。"],
+  ]);
+  const options = Object.entries(row.options).map(([name, value]) =>
+    [name, value, optionDescriptions.get(name) || "-"]);
+  if (options.length) fragment.append(grid(["表选项","值","中文说明"],options));
+  if (row.status_source) fragment.append(element("p", "状态依据 " + row.status_source, "hint"));
+  if (row.differences.length) {
+    const list = element("ul");
+    list.append(...row.differences.map(text => element("li",text)));
+    fragment.append(element("h3","结构待核对"), list);
+  }
+  if (doc.warnings.length) {
+    const details = element("details", "", "warning");
+    const list = element("ul");
+    list.append(...doc.warnings.map(item => element("li",item.message + " · " + source(item.source))));
+    details.append(
+      element("summary", "需查看实际数据库确认的迁移（" + doc.warnings.length + " 项）"),
+      element("p", "生成目录时只读取项目文件。以下提示适用于整个项目。涉及运行时拼接的 SQL 时，目录无法仅凭文件确认哪些表或字段会被修改。实际结构以目标数据库为准。", "hint"),
+      list,
+    );
+    fragment.append(details);
+  }
+  return fragment;
+}
+function renderDetails() {
+  const detail = get("detail");
+  detail.replaceChildren();
+  const row = tables.get(states.table);
+  if (!row) {
+    detail.append(element("p","选择数据表后查看字段、备注与示例数据。","empty"));
+    return;
+  }
+  const heading = element("h2");
+  heading.append(element("code",row.name));
+  detail.append(heading, badge(row.status));
+  detail.append(element("p",row.comment || "表备注未填写"));
+  const description = [row.module, row.business, source(row.source)].filter(Boolean).join(" · ");
+  detail.append(element("div",description,"detail-meta"));
+  const tabs = element("div","","tabbar");
+  tabs.setAttribute("role","group");
+  tabs.setAttribute("aria-label","表详情栏目");
+  const content = {"字段":renderFields, "索引与表关系":renderRelationships, "示例数据":renderExamples, "来源与核对":renderSources};
+  for (const name of Object.keys(content)) {
+    const choice = button(name, "", () => {
+      states.tab = name;
+      renderDetails();
+      detail.querySelector('[aria-pressed="true"]').focus();
+    }, name === states.tab);
+    tabs.append(choice);
+  }
+  detail.append(tabs);
+  const panel = element("section", "", "detail-panel");
+  panel.setAttribute("aria-label", states.tab);
+  panel.append(content[states.tab](row));
+  detail.append(panel);
+  detail.scrollTop = 0;
+}
+function render() {
+  const rows = matching();
+  if (!rows.some(table => table.name === states.table)) {
+    states.table = rows[0]?.name || "";
+    states.tab = "字段";
+  }
+  history.replaceState(null, "", states.table ? tableLink(states.table) : "#catalog");
+  renderModules();
+  renderList(rows);
+  renderDetails();
+}
+function fromLocation() {
+  if (!location.hash) {
+    show("home");
+    return;
+  }
+  const key = new URLSearchParams(location.hash.slice(1)).get("table");
+  show("catalog");
+  states.table = tables.has(key) ? key : "";
+  if (states.table) setMobile("detail");
+  render();
+}
+get("brand-mark").src = get("catalog-icon").href;
+document.title = doc.project + " · 数据库文档";
+document.querySelectorAll("[data-project]").forEach(node => { node.textContent = doc.project; });
+document.querySelectorAll("[data-database]").forEach(node => { node.textContent = doc.database; });
+get("snapshot-branch").textContent = doc.branch || "未记录";
+get("snapshot-time").textContent = "整理时间 · " + doc.generated;
+const counts = {
+  tables: doc.tables.length,
+  fields: doc.tables.reduce((total, row) => total + row.columns.length, 0),
+  modules: modules.size
+};
+document.querySelectorAll("[data-count]").forEach(node => {
+  node.textContent = counts[node.dataset.count].toLocaleString("zh-CN");
+});
+const modulePreviewLimit = 10;
+const moduleOrder = [...modules.keys()];
+if (modules.size > modulePreviewLimit) {
+  moduleOrder.sort((left, right) => modules.get(right) - modules.get(left));
+}
+get("shortcuts").append(...moduleOrder.slice(0, modulePreviewLimit).map(key => {
+  const link = button(key, "shortcut", () => selectModule(key));
+  const arrow = element("span", "↗");
+  arrow.setAttribute("aria-hidden", "true");
+  link.append(arrow);
+  return link;
+}));
+if (modules.size > modulePreviewLimit) {
+  const more = button("...", "shortcut shortcut-more", () => {
+    selectModule("");
+    setMobile("module");
+    get("modules").querySelector("button").focus({ preventScroll: true });
+  });
+  more.setAttribute("aria-label", "查看全部 " + modules.size + " 个业务模块");
+  get("module-shortcuts").append(more);
+}
+const mobileNav = document.querySelector(".mobile-nav");
+for (const [key, text] of [["module","模块"],["list","数据表"],["detail","详情"]]) {
+  const control = button(text, "", () => setMobile(key), key === states.mobile);
+  control.id = "nav-" + key;
+  control.setAttribute("aria-controls",key + "-pane");
+  mobileNav.append(control);
+}
+get("search").addEventListener("input",render);
+get("status").addEventListener("change",render);
+get("browse").addEventListener("click", () => selectModule(""));
+get("back").addEventListener("click", event => {
+  event.preventDefault();
+  history.replaceState(null, "", location.href.split("#")[0]);
+  show("home");
+});
+window.addEventListener("wheel", event => {
+  if (document.body.dataset.screen !== "home" || event.ctrlKey ||
+      event.deltaY <= 0 || Math.abs(event.deltaX) > event.deltaY) return;
+  const cover = get("home").querySelector(".cover-main");
+  const hasRoomToScroll = cover.scrollTop + cover.clientHeight < cover.scrollHeight - 1;
+  if (cover.contains(event.target) && hasRoomToScroll) return;
+  event.preventDefault();
+  selectModule("");
+}, { passive: false });
+window.addEventListener("hashchange", fromLocation);
+fromLocation();
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => { document.body.dataset.ready = ""; });
+});
+</script>
+</body>
+</html>

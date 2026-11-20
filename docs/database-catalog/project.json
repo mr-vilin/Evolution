@@ -1,0 +1,316 @@
+{
+  "project": "Evolution",
+  "database": "MySQL 8.4 · SQLAlchemy / Alembic",
+  "dialect": "mysql",
+  "sources": [
+    "backend/app/persistence/models.py",
+    "backend/migrations/versions/*.py"
+  ],
+  "modules": [
+    {
+      "name": "登录与权限",
+      "business": "身份与访问",
+      "match": [
+        "oauth_state",
+        "login_identity",
+        "admin_allowlist",
+        "admin_session",
+        "api_client",
+        "operation_receipt"
+      ]
+    },
+    {
+      "name": "组织与人员",
+      "business": "组织目录",
+      "match": [
+        "department",
+        "employee",
+        "employee_department"
+      ]
+    },
+    {
+      "name": "门店档案",
+      "business": "组织与门店",
+      "match": [
+        "store_profile",
+        "store_code_reservation",
+        "employee_store"
+      ]
+    },
+    {
+      "name": "飞书集成",
+      "business": "外部连接",
+      "match": [
+        "feishu_connection",
+        "event_inbox"
+      ]
+    },
+    {
+      "name": "同步与初始化",
+      "business": "数据同步",
+      "match": [
+        "sync_job*",
+        "worker_lease",
+        "pending_fact",
+        "sync_staging",
+        "dataset_state",
+        "system_setting"
+      ]
+    },
+    {
+      "name": "操作审计",
+      "business": "运行治理",
+      "match": [
+        "change_log"
+      ]
+    },
+    {
+      "name": "腾讯云费用",
+      "business": "云账号与成本",
+      "match": [
+        "tencent_*"
+      ]
+    }
+  ],
+  "tables": {
+    "department": {
+      "examples": [
+        {
+          "id": "demo-org-001",
+          "name": "示例总部",
+          "parent_id": null
+        },
+        {
+          "id": "demo-org-002",
+          "name": "示例门店部",
+          "parent_id": "demo-org-001"
+        }
+      ],
+      "status": "启用中",
+      "basis": "组织目录读取部门",
+      "evidence": "backend/app/persistence/read_service.py",
+      "match": "select(Department)"
+    },
+    "employee": {
+      "examples": [
+        {
+          "id": "demo-emp-001",
+          "name": "示例员工甲"
+        },
+        {
+          "id": "demo-emp-002",
+          "name": "示例员工乙"
+        }
+      ],
+      "status": "启用中",
+      "basis": "人员详情读取员工",
+      "evidence": "backend/app/directory/details.py",
+      "match": "select(Employee)"
+    },
+    "employee_department": {
+      "relations": {
+        "employee_id": "employee.id",
+        "department_id": "department.id"
+      },
+      "status": "启用中",
+      "basis": "组织目录查询员工与部门的关系",
+      "evidence": "backend/app/directory/organization.py",
+      "match": "select(EmployeeDepartment.employee_id)"
+    },
+    "employee_store": {
+      "relations": {
+        "employee_id": "employee.id",
+        "store_id": "department.id"
+      },
+      "status": "启用中",
+      "basis": "人员查询使用员工与门店的关系",
+      "evidence": "backend/app/persistence/read_service.py",
+      "match": "select(EmployeeStore.employee_id)"
+    },
+    "tencent_sync_config": {
+      "relations": {
+        "account_id": "tencent_account.id",
+        "active_job_id": "tencent_sync_job.id"
+      },
+      "status": "启用中",
+      "basis": "费用路由使用该业务配置模型",
+      "evidence": "backend/app/tencent/cost_router.py",
+      "match": "select(TencentSyncConfig)"
+    },
+    "tencent_sync_job": {
+      "relations": {
+        "account_id": "tencent_account.id",
+        "config_id": "tencent_sync_config.id",
+        "parent_job_id": "tencent_sync_job.id",
+        "source_job_id": "tencent_sync_job.id"
+      },
+      "examples": [
+        {
+          "kind": "batch",
+          "status": "succeeded",
+          "source_job_id": null,
+          "parent_job_id": null
+        },
+        {
+          "kind": "period",
+          "status": "succeeded",
+          "source_job_id": null,
+          "parent_job_id": 1
+        }
+      ],
+      "status": "启用中",
+      "basis": "费用面板读取同步任务",
+      "evidence": "backend/app/tencent/cost_dashboard.py",
+      "match": "select(TencentSyncJob)"
+    },
+    "tencent_sync_attempt": {
+      "relations": {
+        "job_id": "tencent_sync_job.id"
+      },
+      "status": "启用中",
+      "basis": "腾讯云费用入口查询每次任务尝试",
+      "evidence": "backend/app/tencent/cost_router.py",
+      "match": "select(TencentSyncAttempt)"
+    },
+    "tencent_cost_period": {
+      "relations": {
+        "account_id": "tencent_account.id",
+        "latest_job_id": "tencent_sync_job.id",
+        "latest_attempt_id": "tencent_sync_attempt.id"
+      },
+      "status": "启用中",
+      "basis": "腾讯云费用 Worker 查询期间",
+      "evidence": "backend/app/tencent/cost_worker.py",
+      "match": "select(TencentCostPeriod)"
+    },
+    "tencent_cost_item": {
+      "relations": {
+        "period_id": "tencent_cost_period.id"
+      },
+      "status": "启用中",
+      "basis": "腾讯云费用面板查询产品行",
+      "evidence": "backend/app/tencent/cost_dashboard.py",
+      "match": "select(TencentCostItem)"
+    },
+    "oauth_state": {
+      "status": "启用中",
+      "basis": "OAuth 发起时保存状态摘要",
+      "evidence": "backend/app/feishu/oauth.py",
+      "match": "db.add(OAuthState"
+    },
+    "event_inbox": {
+      "status": "启用中",
+      "basis": "飞书事件处理写入收件箱",
+      "evidence": "backend/app/feishu/events.py",
+      "match": "db.add(EventInbox"
+    },
+    "sync_job": {
+      "status": "启用中",
+      "basis": "同步 Worker 读取任务",
+      "evidence": "backend/app/sync/worker.py",
+      "match": "select(SyncJob)"
+    },
+    "sync_job_detail": {
+      "status": "启用中",
+      "basis": "任务回执读取明细",
+      "evidence": "backend/app/capabilities/receipts.py",
+      "match": "select(SyncJobDetail.id)"
+    },
+    "change_log": {
+      "status": "启用中",
+      "basis": "初始化服务记录变更",
+      "evidence": "backend/app/initialization/service.py",
+      "match": "db.add(ChangeLog"
+    },
+    "tencent_account": {
+      "status": "启用中",
+      "basis": "腾讯云账号访问读取账号表",
+      "evidence": "backend/app/tencent/access.py",
+      "match": "select(TencentAccount)"
+    },
+    "tencent_api_call": {
+      "status": "启用中",
+      "basis": "腾讯云调用审计写入记录",
+      "evidence": "backend/app/tencent/audit.py",
+      "match": "db.add(TencentApiCall"
+    },
+    "login_identity": {
+      "status": "启用中",
+      "basis": "OAuth 登录时查询飞书身份映射",
+      "evidence": "backend/app/feishu/oauth.py",
+      "match": "select(LoginIdentity)"
+    },
+    "worker_lease": {
+      "status": "启用中",
+      "basis": "同步 Worker 读取执行租约",
+      "evidence": "backend/app/sync/worker.py",
+      "match": "select(WorkerLease)"
+    },
+    "pending_fact": {
+      "status": "启用中",
+      "basis": "同步发布器读取待核实事实",
+      "evidence": "backend/app/sync/publisher.py",
+      "match": "db.get(PendingFact"
+    },
+    "dataset_state": {
+      "status": "启用中",
+      "basis": "组织目录读取数据集状态",
+      "evidence": "backend/app/directory/organization.py",
+      "match": "select(DatasetState)"
+    },
+    "system_setting": {
+      "status": "启用中",
+      "basis": "同步管理视图读取设置",
+      "evidence": "backend/app/admin/sync_views.py",
+      "match": "select(SystemSetting)"
+    },
+    "store_profile": {
+      "status": "启用中",
+      "basis": "门店服务读取档案",
+      "evidence": "backend/app/stores/service.py",
+      "match": "db.get(StoreProfile"
+    },
+    "store_code_reservation": {
+      "status": "启用中",
+      "basis": "门店服务核对编码预留",
+      "evidence": "backend/app/stores/service.py",
+      "match": "select(StoreCodeReservation)"
+    },
+    "feishu_connection": {
+      "status": "启用中",
+      "basis": "初始化流程读取飞书连接设置",
+      "evidence": "backend/app/initialization/service.py",
+      "match": "db.get(FeishuConnection"
+    },
+    "admin_allowlist": {
+      "status": "启用中",
+      "basis": "OAuth 登录检查管理员白名单",
+      "evidence": "backend/app/feishu/oauth.py",
+      "match": "select(AdminAllowlist)"
+    },
+    "admin_session": {
+      "status": "启用中",
+      "basis": "身份仓储查询管理员会话",
+      "evidence": "backend/app/persistence/repositories.py",
+      "match": "select(AdminSession)"
+    },
+    "api_client": {
+      "status": "启用中",
+      "basis": "API 客户端管理入口查询配置",
+      "evidence": "backend/app/admin/router.py",
+      "match": "select(ApiClient)"
+    },
+    "sync_staging": {
+      "status": "启用中",
+      "basis": "同步发布器暂存对象",
+      "evidence": "backend/app/sync/publisher.py",
+      "match": "db.merge(SyncStaging"
+    },
+    "operation_receipt": {
+      "status": "启用中",
+      "basis": "执行回执服务查询回执",
+      "evidence": "backend/app/capabilities/receipts.py",
+      "match": "select(OperationReceipt)"
+    }
+  }
+}
