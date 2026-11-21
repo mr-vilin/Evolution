@@ -107,7 +107,7 @@ export default function InitializationPage({ onComplete }: { onComplete?: () => 
   const elapsed = data.job?.started_at ? Math.max(0, Math.floor(((data.job.finished_at ? new Date(data.job.finished_at).getTime() : Date.now()) - new Date(data.job.started_at).getTime()) / 1000)) : 0;
   const enter = onComplete ?? (() => window.location.assign('/organization'));
   return <main className="initialization-page"><div className="initialization-shell">
-    <header className="initialization-header"><div><span className="initialization-eyebrow">组织服务 · 管理员初始化</span><h1>准备好企业组织数据</h1><p>逐项完成检查，再同步企业的全部部门与人员。</p></div><Button onClick={async () => { await request('/admin/auth/logout', { method: 'POST' }); window.location.reload(); }}>退出登录</Button></header>
+    <header className="initialization-header"><div><span className="initialization-eyebrow">Evolution · 管理员初始化</span><h1>准备好企业组织数据</h1><p>逐项完成检查，再同步企业的全部部门与人员。</p></div><Button onClick={async () => { await request('/admin/auth/logout', { method: 'POST' }); window.location.reload(); }}>退出登录</Button></header>
     <Steps current={current} items={titles.map((title, index) => ({ title, status: data.complete ? 'finish' : index === 4 ? data.phase === 'failed' ? 'error' : running ? 'process' : 'wait' : data.checks.find(check => check.step === index + 1)?.status === 'passed' ? 'finish' : failed?.step === index + 1 ? 'error' : current === index ? 'process' : 'wait' }))} />
     {networkError && <Alert type="warning" showIcon title="连接暂时中断，正在重新连接" description={networkError} />}
     {data.complete ? <Result status="success" title="初始化完成" subTitle={`已同步 ${data.counts?.departments ?? 0} 个部门、${data.counts?.employees ?? 0} 位人员，全部校验通过。`} extra={<Button type="primary" onClick={enter}>进入系统</Button>} /> : <>

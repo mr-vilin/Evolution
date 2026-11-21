@@ -26,7 +26,7 @@ export const layout: RunTimeLayoutConfig = () => {
   return {
     ...settings,
     ...preferences.settings,
-    logo: <img src={themeLogoUrl(colors.primary)} alt="EVOLUTION Logo" />,
+    logo: <img src={themeLogoUrl(colors.primary)} alt="" />,
     colorPrimary: colors.primary,
     token: {
       bgLayout: colors.canvas,

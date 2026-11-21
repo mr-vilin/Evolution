@@ -10,7 +10,7 @@ export default function LoginExample() {
   const [mode, setMode] = useState('account');
   const [captcha, setCaptcha] = useState(false);
   return <ExampleFrame title="登录" description="体验账户和手机号登录表单，不切换当前真实管理员身份。">
-    <Card title="组织服务 · 演示登录" className="example-account">
+    <Card title="Evolution · 演示登录" className="example-account">
       <p className="muted">企业级中后台界面的本地模拟流程</p>
       <Tabs activeKey={mode} onChange={value => { setMode(value); setReceipt(''); setCaptcha(false); form.resetFields(); }} items={[{ key: 'account', label: '账户密码登录' }, { key: 'mobile', label: '手机号登录' }]} />
       <Form form={form} layout="vertical" autoComplete="off" onFinish={values => { setReceipt(loginReceipt(values.account ?? '演示手机号')); form.setFieldValue('password', ''); form.setFieldValue('code', ''); }}>
