@@ -3,9 +3,10 @@ import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { colorVariables, createTheme, defaultColors, isHexColor, readColors, themeStorageKey, type ColorRole, type ThemeColors } from './colors';
 import { themeLogoUrl } from '../branding/logo';
+import { readRenamedPreference } from '../services/browserPreferences';
 
 function loadColors() {
-  try { return readColors(JSON.parse(localStorage.getItem(themeStorageKey) ?? 'null')); }
+  try { return readColors(JSON.parse(readRenamedPreference(themeStorageKey, 'organization.design-colors.v1') ?? 'null')); }
   catch { return { ...defaultColors }; }
 }
 const ThemeContext = createContext({ colors: defaultColors, savedColors: defaultColors, setColor: (_role: ColorRole, _value: string) => {}, saveColor: (_role: ColorRole): boolean => false, resetColor: (_role: ColorRole) => {}, reset: () => {}, storageError: '' });

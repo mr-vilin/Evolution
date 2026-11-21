@@ -1,11 +1,12 @@
 import { createContext, type ReactNode, useContext, useState } from 'react';
 import { Alert, Button, Drawer, Form, Radio, Space, Switch } from 'antd';
+import { readRenamedPreference } from '../services/browserPreferences';
 
 const defaults = { contentWidth: 'Fluid' as 'Fluid' | 'Fixed', fixedHeader: true, fixSiderbar: true };
-const storageKey = 'organization.workspace-layout.v1';
+const storageKey = 'evolution.workspace-layout.v1';
 function loadSettings() {
   try {
-    const saved = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
+    const saved = JSON.parse(readRenamedPreference(storageKey, 'organization.workspace-layout.v1') ?? 'null');
     if (saved && ['Fluid', 'Fixed'].includes(saved.contentWidth) && typeof saved.fixedHeader === 'boolean' && typeof saved.fixSiderbar === 'boolean') return { contentWidth: saved.contentWidth as 'Fluid' | 'Fixed', fixedHeader: saved.fixedHeader, fixSiderbar: saved.fixSiderbar };
   } catch { /* 浏览器拒绝存储或旧设置损坏时使用默认布局。 */ }
   return defaults;

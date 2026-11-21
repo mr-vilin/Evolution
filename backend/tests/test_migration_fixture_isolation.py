@@ -35,7 +35,7 @@ def test_migrations_use_random_test_database_and_restore_environment(monkeypatch
         try:
             target_url = factory.call_args_list[1].args[0]
             database = make_url(target_url).database
-            assert database.startswith('tmp_org_') and database.endswith('_test')
+            assert database.startswith('tmp_evolution_') and database.endswith('_test')
             assert database != 'isolated_test'
             assert engine is target_engine
             config.output_buffer = StringIO()

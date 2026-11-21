@@ -59,7 +59,7 @@ def migration_database(request, monkeypatch):
     if url.drivername != 'mysql+pymysql' or url.host not in {'127.0.0.1', 'localhost'} or not (url.database or '').endswith('_test'):
         pytest.fail('迁移演练只允许本机、库名以 _test 结尾的独立 MySQL 实例')
     admin = create_mysql_engine(source)
-    name = 'tmp_org_' + uuid.uuid4().hex[:12] + '_test'
+    name = 'tmp_evolution_' + uuid.uuid4().hex[:11] + '_test'
     created = False
     engine = None
     try:

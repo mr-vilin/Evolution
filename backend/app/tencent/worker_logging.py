@@ -24,7 +24,7 @@ def safe_exception(exc):
 class WorkerJsonFormatter(logging.Formatter):
     def format(self,record):
         # 已登记的腾讯事件文本仅含安全关联；第三方日志不复制任意正文。
-        own=record.name.startswith('organization.tencent.')
+        own=record.name.startswith('evolution.tencent.')
         message=record.getMessage() if own else ''
         event=message.split(' ',1)[0] if re.match(r'^tencent[.][a-zA-Z0-9_]+(?: |$)',message) else 'runtime.diagnostic'
         data={'timestamp':datetime.fromtimestamp(record.created,timezone.utc).isoformat(),

@@ -93,5 +93,5 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
-          docker build --build-arg RELEASE_TAG="$RELEASE_TAG" --build-arg COMMIT_SHA="$COMMIT_SHA" --build-arg SOURCE_DIRTY=false -t organization-version-check .
-          docker run --rm --entrypoint python organization-version-check -c 'import json; from pathlib import Path; from app.version import product_build_info; info=product_build_info(); assert info == json.loads(Path("/srv/frontend/dist/build-info.json").read_text()); assert info["stage"] in {"release", "prerelease"}'
+          docker build --build-arg RELEASE_TAG="$RELEASE_TAG" --build-arg COMMIT_SHA="$COMMIT_SHA" --build-arg SOURCE_DIRTY=false -t evolution-version-check .
+          docker run --rm --entrypoint python evolution-version-check -c 'import json; from pathlib import Path; from app.version import product_build_info; info=product_build_info(); assert info == json.loads(Path("/srv/frontend/dist/build-info.json").read_text()); assert info["stage"] in {"release", "prerelease"}'

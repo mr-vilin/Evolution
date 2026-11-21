@@ -13,9 +13,9 @@ export const logoMarkPath = `
 
 // 保留三立方体轮廓，白底固定，图形颜色由当前主题传入。
 export function themeLogoUrl(primary: string) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 1254 1254" fill="none" role="img" aria-labelledby="organization-logo-title organization-logo-desc">
-  <title id="organization-logo-title">Evolution 三立方体 Logo</title>
-  <desc id="organization-logo-desc">居中的白色圆角正方形背景，主题色线条与实心面构成三个交错立方体；图形外轮廓和九个镂空面的拐角均使用半径 12 的圆弧，背景圆角之外透明。</desc>
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 1254 1254" fill="none" role="img" aria-labelledby="evolution-logo-title evolution-logo-desc">
+  <title id="evolution-logo-title">Evolution 三立方体 Logo</title>
+  <desc id="evolution-logo-desc">居中的白色圆角正方形背景，主题色线条与实心面构成三个交错立方体；图形外轮廓和九个镂空面的拐角均使用半径 12 的圆弧，背景圆角之外透明。</desc>
   <rect x="42" y="42" width="1170" height="1170" rx="174" fill="#FFFFFF"/>
   <path fill="${primary}" fill-rule="evenodd" d="${logoMarkPath}"/>
 </svg>`;

@@ -21,6 +21,9 @@ from .persistence.repositories import SqlIdentityRepository, SqlSyncJobRepositor
 from .services import UninitializedReadService
 
 
+SESSION_COOKIE_NAME = "session"
+
+
 @dataclass(frozen=True)
 class Runtime:
     engine: object
@@ -64,9 +67,13 @@ def get_public_identity(authorization: str | None = Header(default=None), runtim
     raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "只读 API 凭据无效"})
 
 
-def get_admin_identity(request: Request, org_session: str | None = Cookie(default=None), runtime: Runtime | None = Depends(get_runtime)):
-    if runtime is not None and org_session:
-        identity = runtime.identities.authenticate_session(org_session, datetime.now(timezone.utc).replace(tzinfo=None))
+def get_admin_identity(
+    request: Request,
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+    runtime: Runtime | None = Depends(get_runtime),
+):
+    if runtime is not None and session_token:
+        identity = runtime.identities.authenticate_session(session_token, datetime.now(timezone.utc).replace(tzinfo=None))
         if identity is not None:
             if not (request.url.path.startswith('/admin/auth/') or request.url.path == '/admin/api/initialization'
                     or request.url.path.startswith('/admin/api/initialization/')):

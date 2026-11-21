@@ -68,7 +68,7 @@ def tencent_http(request):
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_tencent_transport] = lambda: transport
     client = TestClient(app)
-    client.cookies.set('org_session', issued.token)
+    client.cookies.set('session', issued.token)
     client.headers['X-CSRF-Token'] = 'test-csrf'
     try:
         yield client, sessions, calls

@@ -11,7 +11,7 @@ import time
 import uuid
 from app.persistence.models import TencentApiCall
 
-log = logging.getLogger('organization.tencent.audit')
+log = logging.getLogger('evolution.tencent.audit')
 
 def now():
     return datetime.now(timezone.utc).replace(tzinfo=None)

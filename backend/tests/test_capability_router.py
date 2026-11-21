@@ -400,7 +400,7 @@ def test_auth_validation_does_not_echo_body_secrets(http):
 
 def test_admin_cookie_and_public_credentials_do_not_replace_service_token(boundary):
     client, runtime = boundary
-    for headers in [{'Authorization': 'Bearer client.secret'}, {'Cookie': 'org_session=synthetic-session; org_csrf=synthetic-csrf'}]:
+    for headers in [{'Authorization': 'Bearer client.secret'}, {'Cookie': 'session=synthetic-session; csrf=synthetic-csrf'}]:
         response = client.get('/internal/capabilities/status', headers={**HEADERS, 'Authorization': '', **headers})
         assert response.status_code == 401
         assert response.json()['error']['code'] == 'AGENT_SERVICE_UNAUTHORIZED'

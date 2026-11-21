@@ -38,9 +38,13 @@ it('动态主题不重新挂载内容，派生色、全局 CSS、弹窗和刷新
   expect(JSON.parse(localStorage.getItem(themeStorageKey)!)).toEqual(defaultColors);
 });
 
-it('恢复合法的八种职责色，过滤损坏配置并响应其他标签页恢复默认', () => {
-  localStorage.setItem(themeStorageKey, JSON.stringify({ ...defaultColors, primary: 'invalid', canvas: '#f1ede4', surface: '#fffaf0', text: '#182834', muted: '#637788', line: '#d6c9b7', auxiliary: '#205c66', accent: '#a74612' }));
+it('迁移旧配色，过滤损坏配置并响应其他标签页恢复默认', () => {
+  const legacyKey = 'organization.design-colors.v1';
+  const saved = JSON.stringify({ ...defaultColors, primary: 'invalid', canvas: '#f1ede4', surface: '#fffaf0', text: '#182834', muted: '#637788', line: '#d6c9b7', auxiliary: '#205c66', accent: '#a74612' });
+  localStorage.setItem(legacyKey, saved);
   render(<ThemeProvider><App><Probe mount={() => {}} /></App></ThemeProvider>);
+  expect(localStorage.getItem(themeStorageKey)).toBe(saved);
+  expect(localStorage.getItem(legacyKey)).toBeNull();
   expect(JSON.parse(screen.getByTestId('tokens').textContent!)).toMatchObject({ primary: defaultColors.primary.toLowerCase(), canvas: '#F1EDE4', surface: '#FFFAF0', text: '#182834', muted: '#637788', line: '#D6C9B7', auxiliary: '#205C66', accent: '#A74612' });
   fireEvent(window, new StorageEvent('storage', { key: themeStorageKey, newValue: null }));
   expect(JSON.parse(screen.getByTestId('tokens').textContent!)).toMatchObject({ canvas: defaultColors.canvas, surface: defaultColors.surface });

@@ -53,7 +53,7 @@ function packageArchive() {
 }
 
 test('真实 npm 下载中断后重装成功，再次安装可从缓存完成', { timeout: 30000 }, async t => {
-  const directory = mkdtempSync(join(tmpdir(), 'organization-npm-network-'));
+  const directory = mkdtempSync(join(tmpdir(), 'evolution-npm-network-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const archive = packageArchive();
   let requests = 0;

@@ -13,7 +13,7 @@ from .cost_policy import effective_policy
 from .credentials import CredentialRegistry
 from .errors import TencentError
 
-log=logging.getLogger('organization.tencent.cost_scheduler')
+log=logging.getLogger('evolution.tencent.cost_scheduler')
 SHANGHAI=ZoneInfo('Asia/Shanghai')
 
 

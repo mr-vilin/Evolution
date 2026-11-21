@@ -41,7 +41,7 @@ class SupervisionTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 supervise([
                     [sys.executable, '-c', 'import time; time.sleep(60)'],
-                    ['organization-nonexistent-test-executable'],
+                    ['evolution-nonexistent-test-executable'],
                 ], poll_interval=0.02)
         self.assertTrue(all(child.poll() is not None for child in children))
 

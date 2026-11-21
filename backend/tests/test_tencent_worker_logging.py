@@ -9,7 +9,7 @@ def test_worker_logging_enables_structured_info_in_new_interpreter():
     code="""from app.tencent.worker_logging import configure_logging
 import logging
 configure_logging()
-log=logging.getLogger('organization.tencent.cost_worker')
+log=logging.getLogger('evolution.tencent.cost_worker')
 log.info('tencent.cost_worker_started')
 log.info('tencent.cost_committed job_id=1 attempt_id=2 row_count=3')
 print(log.isEnabledFor(logging.INFO), bool(logging.getLogger().handlers))

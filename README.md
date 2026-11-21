@@ -19,7 +19,7 @@ Evolution 支持独立部署，同步一家企业的飞书部门、人员和部�
 
 旧路径 `D:\WorkBench\AI Projects\OrganizationalStructure` 是指向新目录的 Junction 兼容入口，两处路径访问同一份文件。Codex 项目登记、Python 激活脚本和命令启动器均已迁移到新路径；部分历史聊天仍保存旧工作目录，尚未退出的旧 MCP 进程也可能继续引用旧路径，因此兼容入口暂时保留。需要用户操作的收尾步骤见 [项目改名收尾](docs/项目改名收尾.md)。
 
-MCP 接入示例使用新目录；已有客户端需重新加载配置。本地 Docker Compose 项目名为 `evolution`，应用镜像仓库名为 `evolution-runtime`；数据库固定复用原卷 `organization-directory_mysql-data`。本地改名核验见[切换记录](docs/architecture/local-docker-rename-2026-11-16.md)。改名前历史验收文档保留当时路径；[改名脚本](scripts/rename-project-to-evolution.ps1) 保留供核查和重复预检，无需再次改名。
+MCP 接入示例使用 Evolution 注册名和项目目录。本地 Docker Compose 项目名为 `evolution`，应用镜像仓库名为 `evolution-runtime`。当前数据卷及历史回退点见[环境登记](deploy/ENVIRONMENTS.md)，代码命名和旧标识依赖见[改名收尾记录](docs/项目改名收尾.md#2026-11-21-代码命名清理)。
 
 ## 开发与运行
 

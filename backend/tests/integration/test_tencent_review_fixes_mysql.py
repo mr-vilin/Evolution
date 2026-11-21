@@ -166,7 +166,7 @@ def test_unexpected_database_failure_has_safe_diagnostic_and_terminal_error_log(
             raise RuntimeError('synthetic-password SECRET_KEY financial-response-body 123456789')
     event.listen(engine,'before_cursor_execute',fail_financial_write)
     try:
-        with caplog.at_level(logging.INFO,logger='organization.tencent.cost_worker'):
+        with caplog.at_level(logging.INFO,logger='evolution.tencent.cost_worker'):
             assert TencentCostWorker(sessions,app.dependency_overrides[get_settings](),daily_transport).run_once()
     finally:event.remove(engine,'before_cursor_execute',fail_financial_write)
     detail=client.get(accepted.headers['location']).json()['data']
@@ -189,12 +189,12 @@ def test_terminal_upstream_failure_is_error_and_real_commit_is_info(cost_http,ca
     monthly(client,account,frequency='manual',run_policy={**config['run_policy'],'max_attempts':1})
     job=client.post(base+'/cost-jobs',json={'month':'2026-10','idempotency_key':'terminal-log'})
     def timeout(c,a,p):raise TimeoutError('synthetic-private-response')
-    with caplog.at_level(logging.INFO,logger='organization.tencent.cost_worker'):
+    with caplog.at_level(logging.INFO,logger='evolution.tencent.cost_worker'):
         assert TencentCostWorker(sessions,app.dependency_overrides[get_settings](),timeout).run_once()
     assert client.get(job.headers['location']).json()['data']['status']=='failed'
     assert any(r.levelno==logging.ERROR and 'tencent.cost_failed' in r.getMessage() for r in caplog.records)
     assert client.post(base+'/cost-jobs',json={'month':'2026-10','idempotency_key':'successful-log'}).status_code==202
-    with caplog.at_level(logging.INFO,logger='organization.tencent.cost_worker'):
+    with caplog.at_level(logging.INFO,logger='evolution.tencent.cost_worker'):
         assert TencentCostWorker(sessions,app.dependency_overrides[get_settings](),daily_transport).run_once()
     assert any(r.levelno==logging.INFO and 'tencent.cost_started' in r.getMessage() for r in caplog.records)
     assert any(r.levelno==logging.INFO and 'tencent.cost_committed' in r.getMessage() for r in caplog.records)
