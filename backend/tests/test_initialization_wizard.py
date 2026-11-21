@@ -550,8 +550,8 @@ def test_http_auth_gate_keeps_only_initialization_available_and_enforces_csrf(se
     try:
         client = TestClient(app)
         assert client.get('/admin/api/initialization').status_code == 401
-        client.cookies.set('org_session', issued.token)
-        client.cookies.set('org_csrf', 'csrf')
+        client.cookies.set('session', issued.token)
+        client.cookies.set('csrf', 'csrf')
         assert client.get('/admin/auth/session').json()['data']['initialization_complete'] is False
         for path in ('/admin/api/settings/custom-attrs', '/admin/api/sync/jobs', '/admin/api/admin-allowlist', '/admin/api/change-logs', '/admin/api/system/version'):
             response = client.get(path)

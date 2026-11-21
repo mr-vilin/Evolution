@@ -40,17 +40,17 @@ describe('后端请求契约', () => {
     await expect(request('/admin/api/stores')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
   });
   it('业务请求鉴权失效时清除 CSRF 并通知门禁', async () => {
-    const listener = vi.fn(); window.addEventListener('org-admin-auth-failure', listener);
+    const listener = vi.fn(); window.addEventListener('evolution-admin-auth-failure', listener);
     vi.stubGlobal('fetch', async () => Response.json({ error: { code: 'ADMIN_SESSION_REQUIRED', message: 'expired' } }, { status: 401 }));
     await expect(request('/admin/api/stores')).rejects.toMatchObject({ status: 401 });
-    expect(listener).toHaveBeenCalledOnce(); window.removeEventListener('org-admin-auth-failure', listener);
+    expect(listener).toHaveBeenCalledOnce(); window.removeEventListener('evolution-admin-auth-failure', listener);
   });
 });
 
 
 it('初始化资格失效时通知门禁重取会话并清理业务展示', async () => {
-  const listener = vi.fn(); window.addEventListener('org-admin-auth-failure', listener);
+  const listener = vi.fn(); window.addEventListener('evolution-admin-auth-failure', listener);
   vi.stubGlobal('fetch', async () => Response.json({ error: { code: 'INITIALIZATION_INCOMPLETE', message: '请完成初始化' } }, { status: 409 }));
   await expect(request('/admin/api/tencent/accounts')).rejects.toMatchObject({ code: 'INITIALIZATION_INCOMPLETE' });
-  expect(listener).toHaveBeenCalledOnce(); window.removeEventListener('org-admin-auth-failure', listener);
+  expect(listener).toHaveBeenCalledOnce(); window.removeEventListener('evolution-admin-auth-failure', listener);
 });

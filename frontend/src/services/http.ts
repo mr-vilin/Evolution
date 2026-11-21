@@ -19,7 +19,7 @@ export class ApiError extends Error {
 
 let csrfToken: string | null = null;
 export function setCsrfToken(value: string | null) { csrfToken = value; }
-export const AUTH_FAILURE_EVENT = 'org-admin-auth-failure';
+export const AUTH_FAILURE_EVENT = 'evolution-admin-auth-failure';
 
 export async function request<T>(path: string, options: { method?: string; body?: unknown; signal?: AbortSignal } = {}): Promise<Envelope<T>> {
   const method = options.method ?? 'GET';

@@ -116,7 +116,7 @@ class CapabilityServer(MCPServer):
         # bounds human wait between HTTP rounds. Legacy waits are bounded above.
         security = RequestStateSecurity.ephemeral(ttl=confirmation_timeout)
         security.bind_principal = lambda _ctx: principal.model_dump_json()
-        super().__init__(name="organization-capabilities", version="0.1.0", tools=tools,
+        super().__init__(name="evolution-capabilities", version="0.1.0", tools=tools,
                          instructions="使用版本与幂等键执行能力；写入超时后先调用 get_operation 观察。",
                          lifespan=lifespan, middleware=[bound_call], request_state_security=security)
 

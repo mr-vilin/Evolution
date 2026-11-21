@@ -7,7 +7,7 @@ export const defaultColors = {
 };
 export type ColorRole = keyof typeof defaultColors;
 export type ThemeColors = typeof defaultColors;
-export const themeStorageKey = 'organization.design-colors.v1';
+export const themeStorageKey = 'evolution.design-colors.v1';
 export const isHexColor = (value: unknown): value is string => typeof value === 'string' && /^#[\da-f]{6}$/i.test(value);
 
 export function readColors(value: unknown): ThemeColors {

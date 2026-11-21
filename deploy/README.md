@@ -4,7 +4,7 @@
 
 开发完成并通过验证后，通知用户手动启动，不自动重新部署 Docker。用户明确要求部署时执行；未指定环境的“部署”指**本地 Docker**，线上测试与正式环境必须由用户当次明确指定。环境台账、固定命令、制品、验证、回退及授权边界统一见 [环境与标准发布流程](ENVIRONMENTS.md)，配置源为 `environments.json`，脚本入口为 `release.py`。
 
-本地项目名为 `evolution`，原数据库卷 `organization-directory_mysql-data` 作为 external 卷固定复用；不要改成空的新卷。改名及验收见[本地 Docker 切换记录](../docs/architecture/local-docker-rename-2026-11-16.md)。MCP 客户端注册名 `organization-directory` 是独立的工具入口标识，不是 Docker 项目名。
+本地 Compose 项目名为 `evolution`。数据卷以各环境的配置和现有容器挂载为准，回退卷见[环境登记](ENVIRONMENTS.md)。MCP 客户端接入使用 `evolution` 和 `evolution-cloud` 两个注册名。
 
 普通更新使用 `backend/.venv/Scripts/python.exe deploy/release.py deploy`，默认仅更新本地 app/MCP。数据库版本不匹配时必须停止，另行执行已授权的迁移流程。以下历史首次搭建和迁移命令不替代标准发布入口；使用新脚本后启动必须带其镜像覆盖配置，不能直接 `docker compose up --build` 覆盖已验收版本。
 
@@ -237,7 +237,7 @@ stdio 与 HTTP 使用同一工具、身份、版本、幂等和人工确认策�
 ```json
 {
   "mcpServers": {
-    "organization-directory": {
+    "evolution": {
       "command": "powershell.exe",
       "args": ["-NoProfile", "-File", "D:\\WorkBench\\AI Projects\\Evolution\\deploy\\mcp-stdio.ps1"]
     }
@@ -254,10 +254,10 @@ stdio 与 HTTP 使用同一工具、身份、版本、幂等和人工确认策�
 `deploy/mcp-stdio-ssh.ps1` 通过本机 SSH 别名 `tencent_test_col` 连接 `/srv/organization-directory` 的 `compose.json`，在远端 MCP 容器中启动 stdio；它与上面的本机入口是两个独立环境。SSH 要求现有可信主机记录、非交互密钥认证及远端受控的 Docker 执行权限，不自动接受陌生主机密钥、不输出服务令牌，也不公开 MCP 端口。
 
 ```powershell
-codex mcp add organization-directory-cloud -- powershell.exe -NoProfile -File "D:\WorkBench\AI Projects\Evolution\deploy\mcp-stdio-ssh.ps1"
+codex mcp add evolution-cloud -- powershell.exe -NoProfile -File "D:\WorkBench\AI Projects\Evolution\deploy\mcp-stdio-ssh.ps1"
 ```
 
-该注册只添加云端入口，不替换本机 `organization-directory`。新增后需在客户端重新加载并确认工具目录；注册成功不等于当前对话已经加载工具，也不等于已经批准业务写入。云端部署与验收状态见 [接入与业务验收记录](../docs/mcp-client-and-live-acceptance-2026-10-24.md)。
+本地和云端客户端注册名分别为 `evolution` 和 `evolution-cloud`。已有客户端更新注册名后需重新加载并确认工具目录。云端部署与验收状态见 [接入与业务验收记录](../docs/mcp-client-and-live-acceptance-2026-10-24.md)。
 
 ## Pro / Umi 管理端构建
 

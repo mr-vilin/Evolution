@@ -53,7 +53,7 @@ if ($LASTEXITCODE -ne 0) { throw '结构验收失败，保持应用停写' }
 
 ## 独立 MySQL 演练
 
-在仓库根目录运行以下命令。`compose.mysql-test.yaml` 使用独立 Compose 项目、13308 端口、公开测试密码和 tmpfs；不挂载业务数据库卷。以下仅针对该可丢弃实例。迁移测试另用随机 `tmp_org_*_test` 库，退出时只删除本次创建的库。
+在仓库根目录运行以下命令。`compose.mysql-test.yaml` 使用独立项目 `evolution-remediation-test`、13308 端口和 tmpfs。已有旧测试容器占用该端口时，须先停止该测试容器。迁移测试另用随机 `tmp_evolution_*_test` 库，退出时只删除本次创建的库。
 
 预检失败表示当前进程无法访问 Docker，不足以判断引擎未启动；若 Docker Desktop 正常，检查沙箱及 Windows 命名管道权限，并在具有 Docker 访问权限的终端复核。
 
@@ -62,21 +62,21 @@ if ($LASTEXITCODE -ne 0) { throw '结构验收失败，保持应用停写' }
 if ($LASTEXITCODE -ne 0) { throw '数据库集成环境未就绪' }
 docker compose -f compose.mysql-test.yaml up -d --wait
 if ($LASTEXITCODE -ne 0) { throw '隔离 MySQL 未就绪' }
-$env:ORG_MIGRATION_TEST_DATABASE_URL = 'mysql+pymysql://root:isolated-test-only@127.0.0.1:13308/organization_remediation_test'
+$env:MIGRATION_TEST_DATABASE_URL = 'mysql+pymysql://root:isolated-test-only@127.0.0.1:13308/evolution_remediation_test'
 Push-Location backend
 try {
     ./.venv/Scripts/python.exe -m pytest tests/integration/test_mysql_remediation_migrations.py -q -p no:cacheprovider --require-mysql
     if ($LASTEXITCODE -ne 0) { throw '迁移演练失败' }
     # 给既有事务/恢复用例准备专用库；只写上面创建的测试实例
-    $env:ORG_DATABASE_URL = $env:ORG_MIGRATION_TEST_DATABASE_URL
+    $env:DATABASE_URL = $env:MIGRATION_TEST_DATABASE_URL
     ./.venv/Scripts/python.exe -m alembic upgrade head
     if ($LASTEXITCODE -ne 0) { throw '测试库迁移失败' }
-    $env:ORG_TEST_DATABASE_URL = $env:ORG_MIGRATION_TEST_DATABASE_URL
+    $env:TEST_DATABASE_URL = $env:MIGRATION_TEST_DATABASE_URL
     ./.venv/Scripts/python.exe -m pytest tests/integration -q -p no:cacheprovider --require-mysql
     if ($LASTEXITCODE -ne 0) { throw 'MySQL 集成验收失败' }
 } finally {
     Pop-Location
-    Remove-Item Env:ORG_DATABASE_URL, Env:ORG_TEST_DATABASE_URL, Env:ORG_MIGRATION_TEST_DATABASE_URL -ErrorAction SilentlyContinue
+    Remove-Item Env:DATABASE_URL, Env:TEST_DATABASE_URL, Env:MIGRATION_TEST_DATABASE_URL -ErrorAction SilentlyContinue
     docker compose -f compose.mysql-test.yaml down
 }
 ```

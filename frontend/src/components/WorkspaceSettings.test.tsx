@@ -16,5 +16,15 @@ it('浏览器布局保存后重新挂载生效，恢复默认也持久化', () =
   fireEvent.click(screen.getByText('打开布局'));
   fireEvent.click(screen.getByText('恢复默认布局'));
   expect(screen.getByText('Fluid')).toBeTruthy();
-  expect(JSON.parse(localStorage.getItem('organization.workspace-layout.v1')!).contentWidth).toBe('Fluid');
+  expect(JSON.parse(localStorage.getItem('evolution.workspace-layout.v1')!).contentWidth).toBe('Fluid');
+});
+
+it('迁移已保存的旧布局', () => {
+  const legacyKey = 'organization.workspace-layout.v1';
+  const saved = JSON.stringify({ contentWidth: 'Fixed', fixedHeader: false, fixSiderbar: true });
+  localStorage.setItem(legacyKey, saved);
+  render(<App><WorkspaceSettings><Probe /></WorkspaceSettings></App>);
+  expect(screen.getByText('Fixed')).toBeTruthy();
+  expect(localStorage.getItem('evolution.workspace-layout.v1')).toBe(saved);
+  expect(localStorage.getItem(legacyKey)).toBeNull();
 });

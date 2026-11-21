@@ -1,4 +1,4 @@
-name: organization-remediation-test
+name: evolution-remediation-test
 services:
   mysql-test:
     image: mysql:8.4
@@ -7,7 +7,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: isolated-test-only
       MYSQL_ROOT_HOST: "%"
-      MYSQL_DATABASE: organization_remediation_test
+      MYSQL_DATABASE: evolution_remediation_test
     command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_as_cs"]
     tmpfs:
       - /var/lib/mysql

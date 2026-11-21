@@ -139,7 +139,7 @@ def validate_artifact(path):
 
 
 def remote_write(target, action, artifact, manifest, release_id, authorization):
-    token = 'org-release-' + uuid.uuid4().hex
+    token = 'evolution-release-' + uuid.uuid4().hex
     remote = '/tmp/' + token
     ssh(target, 'umask 077 && mkdir ' + remote)
     staging = ROOT / '.cache' / token

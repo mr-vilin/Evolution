@@ -9,7 +9,15 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
 from .config import Settings, get_settings
-from .dependencies import Runtime, get_admin_identity, get_public_identity, get_read_service, get_runtime, require_admin_write
+from .dependencies import (
+    SESSION_COOKIE_NAME,
+    Runtime,
+    get_admin_identity,
+    get_public_identity,
+    get_read_service,
+    get_runtime,
+    require_admin_write,
+)
 from .persistence.database import DatabaseReadinessError, database_ready
 from .services import ReadService
 from .admin.router import router as admin_router
@@ -34,7 +42,9 @@ app.add_middleware(TencentAuditMiddleware)
 app.include_router(admin_router)
 app.include_router(capability_router)
 app.include_router(initialization_router)
-log = logging.getLogger("organization.api")
+log = logging.getLogger("evolution.api")
+CSRF_COOKIE_NAME = "csrf"
+OAUTH_STATE_COOKIE_NAME = "oauth_state"
 
 
 @app.exception_handler(InitializationFailure)
@@ -126,47 +136,58 @@ def login(settings: Settings = Depends(get_settings), runtime=Depends(get_runtim
     runtime.identities.initialize_allowlist_once(settings.admin_open_ids, datetime.utcnow())
     state=OAuthService(runtime.sessions,settings,None).begin()
     response=RedirectResponse('https://open.feishu.cn/open-apis/authen/v1/index?'+urlencode({'app_id':settings.feishu_app_id,'redirect_uri':settings.feishu_redirect_uri,'state':state}),status_code=302)
-    response.set_cookie('org_oauth_state',state,max_age=600,httponly=True,secure=True,samesite='lax',path='/admin/auth')
+    response.set_cookie(OAUTH_STATE_COOKIE_NAME,state,max_age=600,httponly=True,secure=True,samesite='lax',path='/admin/auth')
     response.headers['Cache-Control']='no-store'
     return response
 
 
 @app.get('/admin/auth/callback')
-def oauth_callback(code: str | None = None, state: str | None = None, org_oauth_state: str | None = Cookie(default=None), settings=Depends(get_settings), runtime=Depends(get_runtime)):
+def oauth_callback(
+    code: str | None = None,
+    state: str | None = None,
+    oauth_state: str | None = Cookie(default=None, alias=OAUTH_STATE_COOKIE_NAME),
+    settings=Depends(get_settings),
+    runtime=Depends(get_runtime),
+):
     from .feishu.oauth import OAuthService
     from .feishu.client import FeishuClient
     if not settings.identity_ready or runtime is None:
         return error('IDENTITY_NOT_CONFIGURED','飞书登录尚未配置',503)
     try:
         if not code: raise ValueError('OAUTH_CODE_MISSING')
-        session,csrf,session_token=OAuthService(runtime.sessions,settings,FeishuClient(settings.feishu_app_id,settings.feishu_app_secret.get_secret_value())).complete(state,org_oauth_state,code)
+        session,csrf,session_token=OAuthService(runtime.sessions,settings,FeishuClient(settings.feishu_app_id,settings.feishu_app_secret.get_secret_value())).complete(state,oauth_state,code)
         from .persistence.models import DatasetState
         with runtime.sessions() as db:
             initialized = db.get(DatasetState, 1).initialization_status == 'complete'
         response=RedirectResponse('/organization' if initialized else '/initialize',status_code=302)
-        response.set_cookie('org_session',session_token,max_age=43200,httponly=True,secure=True,samesite='lax')
-        response.set_cookie('org_csrf',csrf,max_age=43200,httponly=True,secure=True,samesite='strict',path='/admin/auth')
+        response.set_cookie(SESSION_COOKIE_NAME,session_token,max_age=43200,httponly=True,secure=True,samesite='lax')
+        response.set_cookie(CSRF_COOKIE_NAME,csrf,max_age=43200,httponly=True,secure=True,samesite='strict',path='/admin/auth')
     except ValueError as exc:
         response=error(str(exc) if str(exc) in {'OAUTH_CODE_MISSING','OAUTH_STATE_INVALID','OAUTH_IDENTITY_MISMATCH','ADMIN_NOT_ALLOWED','LOGIN_IDENTITY_MISMATCH','EMPLOYEE_INACTIVE'} else 'OAUTH_FAILED','登录校验失败，请重新发起登录',403)
     except RuntimeError as exc:
         response=error('CONFIG_BINDING_MISMATCH','当前应用或租户与数据库绑定不一致',503) if str(exc)=='CONFIG_BINDING_MISMATCH' else error('OAUTH_UPSTREAM_UNAVAILABLE','飞书登录暂时不可用',502)
-    response.delete_cookie('org_oauth_state',path='/admin/auth',secure=True,httponly=True,samesite='lax')
+    response.delete_cookie(OAUTH_STATE_COOKIE_NAME,path='/admin/auth',secure=True,httponly=True,samesite='lax')
     response.headers['Cache-Control']='no-store'
     return response
 
 
 @app.get('/admin/auth/session')
-def auth_session(org_csrf: str | None = Cookie(default=None), identity=Depends(get_admin_identity), settings=Depends(get_settings), runtime=Depends(get_runtime)):
+def auth_session(
+    csrf: str | None = Cookie(default=None, alias=CSRF_COOKIE_NAME),
+    identity=Depends(get_admin_identity),
+    settings=Depends(get_settings),
+    runtime=Depends(get_runtime),
+):
     import hashlib, hmac
     secret=settings.session_secret.get_secret_value() if settings.session_secret else ''
-    digest=hmac.new(secret.encode(),(org_csrf or '').encode(),hashlib.sha256).hexdigest()
-    if not org_csrf or not hmac.compare_digest(digest,identity.csrf_hash):
+    digest=hmac.new(secret.encode(),(csrf or '').encode(),hashlib.sha256).hexdigest()
+    if not csrf or not hmac.compare_digest(digest,identity.csrf_hash):
         raise HTTPException(403,{'code':'CSRF_REQUIRED','message':'登录会话缺少有效 CSRF，请重新登录'})
     from .persistence.models import DatasetState
     with runtime.sessions() as db:
         state = db.get(DatasetState, 1)
         initialized = state is not None and state.initialization_status == 'complete'
-    return JSONResponse({'data':{'open_id':identity.open_id,'csrf_token':org_csrf,'initialization_complete':initialized},'meta':{}},headers={'Cache-Control':'no-store'})
+    return JSONResponse({'data':{'open_id':identity.open_id,'csrf_token':csrf,'initialization_complete':initialized},'meta':{}},headers={'Cache-Control':'no-store'})
 
 
 @app.post("/admin/auth/logout")
@@ -174,9 +195,9 @@ def logout(authorization=Depends(require_admin_write), runtime: Runtime | None =
     identity, _ = authorization
     runtime.identities.revoke_session(identity.id, datetime.utcnow())
     response = JSONResponse({"data": {"revoked": True}, "meta": {}})
-    response.delete_cookie("org_session", httponly=True, secure=True, samesite="lax")
-    response.delete_cookie('org_csrf',path='/admin/auth',httponly=True,secure=True,samesite='strict')
-    response.delete_cookie('org_oauth_state',path='/admin/auth',httponly=True,secure=True,samesite='lax')
+    response.delete_cookie(SESSION_COOKIE_NAME, httponly=True, secure=True, samesite="lax")
+    response.delete_cookie(CSRF_COOKIE_NAME,path='/admin/auth',httponly=True,secure=True,samesite='strict')
+    response.delete_cookie(OAUTH_STATE_COOKIE_NAME,path='/admin/auth',httponly=True,secure=True,samesite='lax')
     return response
 
 

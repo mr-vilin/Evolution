@@ -20,7 +20,7 @@ from .cost_policy import effective_policy
 from .cost_scheduler import refresh_batch, TencentCostScheduler
 from .worker_logging import configure_logging, log_exception, safe_exception
 
-log = logging.getLogger('organization.tencent.cost_worker')
+log = logging.getLogger('evolution.tencent.cost_worker')
 
 
 @dataclass(frozen=True)

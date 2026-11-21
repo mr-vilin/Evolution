@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { parseVersion, compareVersions, releaseRecords, checkRepository, buildInfo } from './versioning.mjs';
 
 function fixture(t, version = '0.1.0', entries = '') {
-  const root = mkdtempSync(join(tmpdir(), 'organization-version-test-'));
+  const root = mkdtempSync(join(tmpdir(), 'evolution-version-test-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   writeFileSync(join(root, 'version.json'), JSON.stringify({ version }));
   writeFileSync(join(root, 'CHANGELOG.md'), `# 产品版本\n\n## [Unreleased]\n\n开发改动\n\n${entries}`);
