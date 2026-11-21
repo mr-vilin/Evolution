@@ -53,7 +53,7 @@ _ROW_FIELDS = {
     'operation_receipt': {'operation_id', 'capability', 'actor_type', 'actor_id', 'environment', 'run_id',
                           'case_id', 'status', 'job_id', 'before_epoch', 'before_version',
                           'committed_epoch', 'committed_version', 'error_code'},
-    'feishu_connection': {'id', 'status', 'coverage_status'},
+    'feishu_connection': {'id', 'status'},
     'event_inbox': {'event_id', 'event_type', 'object_id', 'status', 'attempts'},
 }
 _PK = {'operation_receipt': ('operation_id',), 'sync_job': ('id',), 'change_log': ('id',)}

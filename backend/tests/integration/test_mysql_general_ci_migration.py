@@ -3,10 +3,10 @@ import pytest
 from sqlalchemy import text
 
 from app.persistence.database import schema_snapshot
-from app.persistence.schema_check import check_schema
 
 
 PREVIOUS = '0021_tencent_db_conventions'
+TARGET = '0022_mysql_general_ci'
 
 
 def test_collation_upgrade_preserves_constraints_indexes_and_values(migration_database):
@@ -23,8 +23,7 @@ def test_collation_upgrade_preserves_constraints_indexes_and_values(migration_da
         """))
     before = schema_snapshot(engine)
 
-    command.upgrade(config, 'head')
-    assert check_schema(engine)['errors'] == []
+    command.upgrade(config, TARGET)
     after = schema_snapshot(engine)
     changed = [
         (column, current)
@@ -58,5 +57,5 @@ def test_collation_upgrade_rejects_unique_collision_before_schema_change(migrati
     before = schema_snapshot(engine)
 
     with pytest.raises(RuntimeError, match=r'COLLATION_UNIQUE_CONFLICT: department\.PRIMARY'):
-        command.upgrade(config, 'head')
+        command.upgrade(config, TARGET)
     assert schema_snapshot(engine) == before

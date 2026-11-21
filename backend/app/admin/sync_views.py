@@ -3,10 +3,25 @@ import json
 from collections import defaultdict
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, literal, select, union
 
-from app.persistence.models import ChangeLog, Department, Employee, LoginIdentity, SyncJob, SyncJobDetail, SystemSetting
+from app.persistence.models import ChangeLog, Department, Employee, LoginIdentity, PendingFact, SyncJob, SyncJobDetail, SystemSetting
 from app.web import utc_datetime
+
+
+def sync_summary(db):
+    latest_job = db.execute(
+        select(SyncJob.id, SyncJob.status).order_by(SyncJob.created_at.desc(), SyncJob.id.desc()).limit(1)
+    ).one_or_none()
+    pending_objects = union(
+        select(PendingFact.object_type, PendingFact.source_id),
+        select(literal('department'), Department.id).where(Department.sync_quality == 'pending_verification'),
+        select(literal('employee'), Employee.id).where(Employee.sync_quality == 'pending_verification'),
+    ).subquery()
+    return {
+        'latest_job': {'job_id': latest_job.id, 'status': latest_job.status} if latest_job else None,
+        'pending_object_count': db.scalar(select(func.count()).select_from(pending_objects)),
+    }
 
 
 def progress_records(db, jobs):

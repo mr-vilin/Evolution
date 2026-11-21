@@ -9,7 +9,7 @@ def bind_connection(sessions,app_id,tenant_key):
         if lock is None: raise RuntimeError('DATABASE_SCHEMA_INCOMPLETE')
         row=db.scalar(select(FeishuConnection).where(FeishuConnection.id==1).with_for_update())
         if row is None:
-            db.add(FeishuConnection(id=1,app_id=app_id,tenant_key=tenant_key,status='degraded',coverage_status='unknown'))
+            db.add(FeishuConnection(id=1,app_id=app_id,tenant_key=tenant_key,status='degraded'))
         elif row.app_id!=app_id or row.tenant_key!=tenant_key:
             raise RuntimeError('CONFIG_BINDING_MISMATCH')
 

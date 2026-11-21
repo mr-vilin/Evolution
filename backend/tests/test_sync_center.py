@@ -56,6 +56,41 @@ def test_batches_survive_later_collection_failure(sessions):
     assert_batches_survive_later_collection_failure(sessions)
 
 
+def assert_sync_summary_reports_actual_pending_objects_and_latest_task(sessions):
+    from app.admin.sync_views import sync_summary
+    from app.persistence.models import PendingFact
+
+    now = datetime.now()
+    with sessions.begin() as db:
+        db.add(Department(id='shared', feishu_department_id='shared', name='待核实部门', sync_quality='pending_verification'))
+        db.add(Employee(id='shared', feishu_user_id='shared', name='待核实人员', sync_quality='pending_verification'))
+        db.add(Employee(id='valid', feishu_user_id='valid', name='正常人员'))
+        for identifier in ('shared', 'new'):
+            db.add(PendingFact(object_type='employee', source_id=identifier, normalized_data={}, error_code='PENDING_VERIFICATION', updated_at=now))
+        db.add(SyncJob(id='older', type='full', requested_by='test', status='failed', created_at=now - timedelta(seconds=1), updated_at=now))
+        db.add(SyncJob(id='latest', type='full', requested_by='test', status='succeeded', created_at=now, updated_at=now))
+    with sessions() as db:
+        assert sync_summary(db) == {'latest_job': {'job_id': 'latest', 'status': 'succeeded'}, 'pending_object_count': 3}
+
+
+def test_sync_summary_reports_actual_pending_objects_and_latest_task(sessions):
+    assert_sync_summary_reports_actual_pending_objects_and_latest_task(sessions)
+
+
+def test_sync_preflight_keeps_legacy_field_out_of_readiness(sessions):
+    from app.admin.router import sync_preflight
+    from app.feishu.binding import bind_connection
+
+    bind_connection(sessions, 'app', 'tenant')
+    with sessions.begin() as db:
+        state = db.get(DatasetState, 1)
+        state.initialization_status = 'complete'
+        state.coverage_status = 'unknown'
+    result = sync_preflight(identity=None, runtime=SimpleNamespace(sessions=sessions))['data']
+    assert result['ready'] is True
+    assert result['checks']['coverage_accepted'] is False
+
+
 def test_query_filters_before_limit_and_includes_live_progress_and_executor(sessions):
     from app.admin.router import list_sync_jobs
     now = datetime.now()

@@ -18,7 +18,7 @@
 
 | 方法 | 路径 | 参数与返回 |
 | --- | --- | --- |
-| GET | `/api/v1/status` | 初始化状态、覆盖状态；`meta` 含世代、版本及最近全量成功时间 |
+| GET | `/api/v1/status` | 初始化状态和兼容期覆盖字段，`meta` 含世代、版本及最近全量完成时间 |
 | GET | `/api/v1/departments` | `parent_id`、`root_id`、`include_descendants`、`include_inactive`、`limit`、`cursor`、`dataset_epoch`、`data_version` |
 | GET | `/api/v1/departments/{id}` | 已知失效部门仍返回；未知 ID 返回 404 |
 | GET | `/api/v1/employees` | `department_id`、`include_descendants`、`store_id`、`primary_store_id`、`include_inactive` 及分页版本参数 |
@@ -41,6 +41,8 @@
 
 跨端点或跨页拉取应把首页的 `dataset_epoch` 与 `data_version` 传给后续请求。版本变化返回 `409 DATASET_CHANGED`；尚无成功版本返回 `503 INITIALIZATION_INCOMPLETE`。
 
+`data.coverage_status` 和 `meta.coverage_status` 已弃用，兼容期维持现有取值。`complete` 表示系统按原有条件通过校验。读取全员的判断需要来自飞书返回范围之外的独立名单。下游以 `initialization_status` 判断初始化状态，用 `last_full_sync_at` 读取最近全量完成时间，并结合返回对象自身的 `sync_quality` 判断所用资料。
+
 员工的 `primary_store_status`：`resolved`、`not_in_store`、`unknown`、`inconsistent`、`inactive`。数组顺序不表达主归属。
 
 ## 管理端
@@ -60,8 +62,10 @@ worker 通过 `SqlSyncJobRepository.claim_next()` 认领任务；全局租约、
 ### 连接与每日核对
 
 - `GET /admin/api/status` 即使初始化未完成也提供管理诊断。`data.connection={status:'connected|degraded|unconfigured',checked_at,app_id_masked,tenant_key_masked,scopes:string[]}`；`last_event_processed_at` 为最近成功处理事务的 UTC 时间，`failed_event_count` 为失败事件数。
+- `data.sync_summary.latest_job` 返回最近创建的同步任务的 `job_id` 和 `status`，暂无任务时为 `null`。`pending_object_count` 统计当前已发现且待核实的部门或人员。已存在的记录和待核实事实按对象类型及 ID 去重，分批发布结束后仍可能有待核实对象。
+- `GET /admin/api/sync/preflight` 的 `ready` 根据数据库结构、飞书绑定和初始化状态计算。`checks.coverage_accepted` 是弃用兼容字段，供现有调用方迁移。
 - 首连无公开确认通知，因此初始状态 degraded；合法事件入箱或 SDK 公开重连成功 hook 提供最近连接证据。90 秒无新证据时退回 degraded，不能把进程存活当 connected。`scopes` 是部署者声明的已授权 scope 名称，不能当作接口验证过的权限清单。
-- `data.coverage_acceptance={reference,all_members_verified,departmentless_verified}` 表示部署验收配置；默认未核验。有持久重新验收记录时优先返回该记录，另含 `accepted_by/updated_at`。只有两项验收及非空依据、根与全部分页/详情成功且无用户组未解析范围才允许 complete。scope 变化事件立即把覆盖降为 unknown，并持久设置 `coverage_invalidated`。重新验收通过下述 CLI 完成；不手工删除数据库标记，不进行缺席失效推断。
+- `data.coverage_acceptance` 是弃用兼容字段，返回 `reference`、`all_members_verified`、`departmentless_verified`。存在持久验收记录时附带 `accepted_by` 和 `updated_at`。授权范围变更继续触发重新核对，并使旧验收依据失效。兼容期内可用下述 CLI 记录新依据。
 - `GET /admin/api/settings/reconcile-schedule` 返回 `{data:{enabled,local_time,timezone,updated_at},meta:{}}`。默认 `true/03:00/Asia/Shanghai/null`。
 - `PUT` 同路径接受 `{enabled:boolean,local_time:'HH:mm',timezone:'Asia/Shanghai'}`，须 CSRF；无效参数返回 `422 VALIDATION_ERROR`，设置与审计同事务。worker 实际读取此配置，日任务与北京时间日期去重标记在同一事务持久化。启动与长连接恢复均安排幂等全量核对。
 
