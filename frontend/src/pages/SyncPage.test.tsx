@@ -39,7 +39,7 @@ it('列表显示业务信息及筛选，不再展示内部任务 ID 和事件面
   const paths: string[] = [];
   vi.stubGlobal('fetch', async (url: string) => {
     paths.push(url);
-    if (url === '/admin/api/status') return Response.json({ data: { initialized_at: '2026-11-01T00:00:00Z', coverage_status: 'unknown', connection: { status: 'degraded' } }, meta });
+    if (url === '/admin/api/status') return Response.json({ data: { initialized_at: '2026-11-01T00:00:00Z', coverage_status: 'complete', sync_summary: { latest_job: { job_id: 'recent', status: 'succeeded' }, pending_object_count: 3 }, connection: { status: 'degraded' } }, meta });
     return Response.json({ data: [{ job_id: 'random-internal-id', type: 'full', status: 'running', phase: 'employees', trigger_label: '手动', executor_name: '测试人员', processed_count: 15, progress_total: 30, success_count: 10 }], meta });
   });
   setup();
@@ -49,6 +49,10 @@ it('列表显示业务信息及筛选，不再展示内部任务 ID 和事件面
   expect(screen.queryByText('同步事件')).toBeNull();
   expect(screen.queryByText('连接摘要')).toBeNull();
   expect(screen.getByText('初始化日期')).toBeTruthy();
+  expect(screen.getByRole('link', { name: '成功' }).getAttribute('href')).toBe('/sync/jobs/recent');
+  expect(screen.getByText('待核实对象')).toBeTruthy();
+  expect(screen.getByText('3')).toBeTruthy();
+  expect(screen.queryByText('通讯录覆盖')).toBeNull();
   const user = userEvent.setup();
   await user.click(screen.getByRole('combobox', { name: '类型' }));
   await user.click(screen.getByText('局部同步任务', { selector: '.ant-select-item-option-content' }));

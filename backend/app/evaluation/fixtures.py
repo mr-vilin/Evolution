@@ -101,7 +101,7 @@ def _reset(connection):
                                                 {'key': 'reconcile_schedule', 'value': _DISABLED_SCHEDULE}])
     connection.execute(insert(m.WorkerLease), [{'id': 1, 'generation': 0}])
     connection.execute(insert(m.FeishuConnection), [{'id': 1, 'app_id': FAKE_APP_ID, 'tenant_key': FAKE_TENANT_KEY,
-                                                    'status': 'degraded', 'coverage_status': 'unknown', 'custom_attrs': {}}])
+                                                    'status': 'degraded', 'custom_attrs': {}}])
 
 
 def reset_test_database(database_url: str) -> None:

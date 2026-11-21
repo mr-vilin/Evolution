@@ -169,7 +169,6 @@ class FeishuConnection(Base):
     tenant_key: Mapped[str | None] = mapped_column(SOURCE_ID, unique=True, comment="飞书租户标识")
     app_id: Mapped[str] = mapped_column(SOURCE_ID, comment="飞书应用标识")
     status: Mapped[str] = mapped_column(String(32), comment="连接状态")
-    coverage_status: Mapped[str] = mapped_column(String(32), default="unknown", comment="连接覆盖状态")
     custom_attrs: Mapped[dict] = mapped_column(JSON, default=dict, server_default=sql_text("('{}')"), comment="自定义字段映射与选项定义")
     __table_args__ = _table_args("飞书连接配置")
 

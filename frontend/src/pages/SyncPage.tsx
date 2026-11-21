@@ -11,7 +11,11 @@ import { ResourceState } from '../components/ResourceState';
 import { ResourceTable } from '../components/ResourceTable';
 import { label, SyncProgress, SyncStatus, syncPhases, syncStatuses, syncTypes } from '../components/SyncPresentation';
 
-interface Status { initialized_at: string | null; coverage_status: string; connection: { status: string; checked_at: string | null } }
+interface Status {
+  initialized_at: string | null;
+  sync_summary?: { latest_job: { job_id: string; status: string } | null; pending_object_count: number };
+  connection: { status: string; checked_at: string | null };
+}
 export function SyncPage() {
   const { message } = App.useApp();
   const navigate = useNavigate();
@@ -32,13 +36,15 @@ export function SyncPage() {
     finally { setBusy(false); }
   }
   const current = status.data;
+  const latestJob = current?.sync_summary?.latest_job;
   const options = (values: Record<string, string>) => Object.entries(values).map(([value, text]) => ({ value, label: text }));
   const help = (text: string) => <Tooltip title={text}><QuestionCircleOutlined tabIndex={0} aria-label={text} /></Tooltip>;
   return <PageHeader area="系统管理" title="同步中心" description="查看同步进度与结果；同步按批次入库，可在任务完成前查看已更新的数据。" extra={<Button type="primary" icon={<ReloadOutlined />} loading={busy} onClick={create}>一键全量更新</Button>}>
     <Card><ResourceState {...status} loading={status.loading && !status.data}>{current && <Descriptions column={{ xs: 1, md: 2, xl: 4 }} items={[
       { key: 'initialized', label: '初始化日期', children: current.initialized_at ? formatTime(current.initialized_at) : '暂无历史日期' },
       { key: 'full', label: '最近全量完成', children: formatTime(status.meta.last_full_sync_at as string | null) },
-      { key: 'coverage', label: <Space>通讯录覆盖{help('确认应用能读取全部成员及无部门成员后，才可认定覆盖完整。待核验表示缺少有效覆盖证明或授权范围发生变化，不代表同步失败。')}</Space>, children: label({ complete: '覆盖完整', incomplete: '覆盖不完整', unknown: '待核验' }, current.coverage_status) },
+      { key: 'latest', label: '最近同步任务', children: latestJob ? <Link to={`/sync/jobs/${encodeURIComponent(latestJob.job_id)}`}>{label(syncStatuses, latestJob.status)}</Link> : '—' },
+      { key: 'pending', label: <Space>待核实对象{help('统计当前已发现且待核实的部门和人员。任务完成后仍可能有对象待核实。')}</Space>, children: current.sync_summary?.pending_object_count ?? '—' },
       { key: 'connection', label: <Space>飞书事件连接{help('根据最近重连或收到事件的时间判断。90 秒内有证据显示近期连接正常，超时仅表示暂无近期证据。可检查监听进程和飞书应用事件订阅，并通过一次真实通讯录变更确认事件收到及处理；同步成功只能证明读取接口可用。')}</Space>, children: <Tooltip title={`最近连接证据：${formatTime(current.connection.checked_at)}`}><span>{label({ connected: '近期连接正常', degraded: '暂无近期连接证据', unconfigured: '未配置' }, current.connection.status)}</span></Tooltip> },
     ]} />}</ResourceState></Card>
     <Card className="block-gap" title="同步任务" extra={<Button icon={<ReloadOutlined />} onClick={() => { jobs.reload(); status.reload(); }}>刷新</Button>}>

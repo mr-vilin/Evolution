@@ -36,7 +36,7 @@ def create_sync_job(body: SyncJobCreate, authorization=Depends(require_admin_wri
 
 @router.get('/sync/preflight')
 def sync_preflight(identity=Depends(get_admin_identity), runtime=Depends(get_runtime)):
-    """返回人工初始化前必须确认的本地门槛，不会触发远程同步。"""
+    """返回同步操作的本地前置条件。"""
     from app.persistence.models import DatasetState, FeishuConnection, SystemSetting
     with runtime.sessions() as db:
         state = db.get(DatasetState, 1)
@@ -45,9 +45,16 @@ def sync_preflight(identity=Depends(get_admin_identity), runtime=Depends(get_run
             'database_schema': db.get(SystemSetting, 'task_queue_lock') is not None,
             'feishu_binding': connection is not None and connection.status != 'unconfigured',
             'initialization_complete': state is not None and state.initialization_status == 'complete',
-            'coverage_accepted': state is not None and state.coverage_status == 'complete',
         }
-        return {'data': {'ready': all(checks.values()), 'checks': checks, 'next_action': '可人工触发初始化任务' if not checks['initialization_complete'] else '可执行增量或全量核对'}, 'meta': {}}
+        ready = all(checks.values())
+        if not checks['database_schema'] or not checks['feishu_binding']:
+            next_action = '检查数据库结构及飞书应用绑定'
+        elif not checks['initialization_complete']:
+            next_action = '完成初始化向导'
+        else:
+            next_action = '可执行增量或全量核对'
+        checks['coverage_accepted'] = state is not None and state.coverage_status == 'complete'
+        return {'data': {'ready': ready, 'checks': checks, 'next_action': next_action}, 'meta': {}}
 
 
 @router.get('/sync/jobs')
@@ -119,8 +126,9 @@ def admin_status(identity=Depends(get_admin_identity), runtime: Runtime = Depend
             data={'initialization_status':'pending','coverage_status':'unknown'}
             meta={'dataset_epoch':state.dataset_epoch if state else 'pending','data_version':state.data_version if state else 0}
     with runtime.sessions() as db:
-        from app.admin.sync_views import initialization_date
+        from app.admin.sync_views import initialization_date, sync_summary
         data['initialized_at'] = initialization_date(db)
+        data['sync_summary'] = sync_summary(db)
         observation=db.get(SystemSetting,'feishu_connection_observation')
         processed=db.get(SystemSetting,'last_event_processed_at')
         data['connection']=connection_summary(settings,json.loads(observation.value) if observation else None)
