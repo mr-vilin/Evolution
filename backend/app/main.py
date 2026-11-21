@@ -25,7 +25,7 @@ from .tencent.balance import router as tencent_balance_router
 from .tencent.cost_dashboard import router as tencent_dashboard_router
 
 
-app = FastAPI(title="组织架构维护系统", version="1.0.0")
+app = FastAPI(title="Evolution", version="1.0.0")
 app.include_router(tencent_router)
 app.include_router(tencent_cost_router)
 app.include_router(tencent_balance_router)

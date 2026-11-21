@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import routes from './routes';
 import settings from './defaultSettings';
+import { productName } from '../src/branding/product';
 
 // scripts/run.mjs 在每次开发或构建时生成一次，并传给所有子进程。
 const info = JSON.parse(readFileSync(process.env.BUILD_INFO_FILE!, 'utf8'));
@@ -11,7 +12,7 @@ if (info.version !== manifest.version) throw new Error('构建元信息与 versi
 
 export default defineConfig({
   routes,
-  title: '组织服务 · 管理工作台',
+  title: `${productName} · 管理工作台`,
   favicons: ['/branding/logo.svg'],
   hash: true,
   publicPath: '/',

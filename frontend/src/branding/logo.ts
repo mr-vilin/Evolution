@@ -1,10 +1,4 @@
-// 保留三立方体轮廓，白底固定，图形颜色由当前主题传入。
-export function themeLogoUrl(primary: string) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 1254 1254" fill="none" role="img" aria-labelledby="organization-logo-title organization-logo-desc">
-  <title id="organization-logo-title">EVOLUTION 三立方体 Logo</title>
-  <desc id="organization-logo-desc">居中的白色圆角正方形背景，主题色线条与实心面构成三个交错立方体；图形外轮廓和九个镂空面的拐角均使用半径 12 的圆弧，背景圆角之外透明。</desc>
-  <rect x="42" y="42" width="1170" height="1170" rx="174" fill="#FFFFFF"/>
-  <path fill="${primary}" fill-rule="evenodd" d="
+export const logoMarkPath = `
     M 617.938 203.577 A 12 12 0 0 1 630.081 203.546 L 1006.045 422.775 A 12 12 0 0 1 1012 433.142 L 1012 846.42 A 12 12 0 0 1 1006.124 856.739 L 633.661 1077.793 A 12 12 0 0 1 621.565 1077.882 L 242.062 860.163 A 12 12 0 0 1 236.034 849.696 L 238.054 434.544 A 12 12 0 0 1 243.955 424.267 Z
     M 620.013 237.396 A 12 12 0 0 1 631.954 237.453 L 777.315 321.745 A 12 12 0 0 1 777.424 342.442 L 631.16 429.34 A 12 12 0 0 1 618.856 429.314 L 472.635 341.581 A 12 12 0 0 1 472.888 320.853 Z
     M 400.051 364.51 A 12 12 0 0 1 418.114 374.799 L 418.962 529.037 A 12 12 0 0 1 412.974 539.489 L 284.898 613.638 A 12 12 0 0 1 266.886 603.319 L 266.038 449.923 A 12 12 0 0 1 271.975 439.502 Z
@@ -15,7 +9,15 @@ export function themeLogoUrl(primary: string) {
     M 595.346 673.21 A 12 12 0 0 1 613.352 683.391 L 615.877 829.862 A 12 12 0 0 1 609.785 840.514 L 465.788 921.941 A 12 12 0 0 1 447.882 911.565 L 447.04 765.969 A 12 12 0 0 1 453.033 755.511 Z
     M 966.136 682.285 A 12 12 0 0 1 984.123 692.613 L 984.959 832.194 A 12 12 0 0 1 979.179 842.528 L 838.096 928.032 A 12 12 0 0 1 819.877 917.84 L 819.041 773.984 A 12 12 0 0 1 825.053 763.515 Z
     M 622.937 864.449 A 12 12 0 0 1 634.997 864.561 L 771.551 945.64 A 12 12 0 0 1 771.515 966.298 L 632.071 1048.424 A 12 12 0 0 1 619.919 1048.441 L 479.946 966.505 A 12 12 0 0 1 480.074 945.718 Z
-  "/>
+  `
+
+// 保留三立方体轮廓，白底固定，图形颜色由当前主题传入。
+export function themeLogoUrl(primary: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 1254 1254" fill="none" role="img" aria-labelledby="organization-logo-title organization-logo-desc">
+  <title id="organization-logo-title">Evolution 三立方体 Logo</title>
+  <desc id="organization-logo-desc">居中的白色圆角正方形背景，主题色线条与实心面构成三个交错立方体；图形外轮廓和九个镂空面的拐角均使用半径 12 的圆弧，背景圆角之外透明。</desc>
+  <rect x="42" y="42" width="1170" height="1170" rx="174" fill="#FFFFFF"/>
+  <path fill="${primary}" fill-rule="evenodd" d="${logoMarkPath}"/>
 </svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }

@@ -39,7 +39,7 @@ function CardExample() {
   const { token } = theme.useToken();
   const [expanded, setExpanded] = useState(false);
   return <Card hoverable className="shadow-action-card" style={{ '--effect-card-shadow': resolvedEffectToken(token, 'boxShadowCard') } as CSSProperties}>
-    <div className="effect-demo-stack"><h4><TeamOutlined aria-hidden />研发部</h4><p>12 位成员 · 部门入口</p><Button type="link" onClick={() => setExpanded(!expanded)}>{expanded ? '收起部门概况' : '查看部门概况'}</Button>{expanded && <p role="status">负责组织服务研发与技术支持。</p>}</div>
+    <div className="effect-demo-stack"><h4><TeamOutlined aria-hidden />研发部</h4><p>12 位成员 · 部门入口</p><Button type="link" onClick={() => setExpanded(!expanded)}>{expanded ? '收起部门概况' : '查看部门概况'}</Button>{expanded && <p role="status">负责 Evolution 研发与技术支持。</p>}</div>
   </Card>;
 }
 
@@ -76,7 +76,7 @@ function ShadowExamples() {
     <EffectEntry id={shadowExamples.card} title="卡片按需抬升" tokens="boxShadowCard" usage="用于需要与容器区分的卡片，例如可点击的部门入口。悬停或键盘聚焦其操作时，突出当前对象。" rule="普通信息卡片保持扁平；只对确实可操作、需要强调的卡片启用抬升。" code={`${shadowCode(token, '.department-entry:hover, .department-entry:focus-within', ['boxShadowCard'])}\n\n/* Card hoverable 提供悬停效果；聚焦内部操作时显示相同阴影。 */`}><CardExample /></EffectEntry>
     <EffectEntry id={shadowExamples.drawer} title="抽屉方向阴影" tokens="boxShadowDrawerRight / Left / Up / Down" usage="用于贴着屏幕边缘展开的成员详情、筛选面板与补充信息。根据展开方向，在与内容接壤的一侧形成阴影。" rule="方向由 Drawer 的 placement 决定，避免给四个方向套用同一投影。" code={`${shadowCode(token, '.drawer-wrapper', ['boxShadowDrawerRight', 'boxShadowDrawerLeft', 'boxShadowDrawerUp', 'boxShadowDrawerDown'])}\n\n/* Drawer placement="right" | "left" | "top" | "bottom"，由组件选择方向。 */`}><DirectionalDrawer /></EffectEntry>
     <EffectEntry id={shadowExamples.overflow} title="可滚动内容的边缘阴影" tokens="boxShadowTabsOverflow*" usage="用于页签超出容器的情况，提示左侧、右侧或其他边缘之外还有内容。" rule="只在对应边缘确实有隐藏内容时出现，滚动到尽头后由组件更新。" code={`${shadowCode(token, '.tabs-overflow-edge', ['boxShadowTabsOverflowLeft', 'boxShadowTabsOverflowRight', 'boxShadowTabsOverflowTop', 'boxShadowTabsOverflowBottom'])}\n\n/* 使用真实 Tabs，由组件测量溢出范围并更新阴影。 */`}><OverflowTabs /></EffectEntry>
-    <EffectEntry id={shadowExamples.arrow} title="浮层箭头的局部阴影" tokens="boxShadowPopoverArrow" usage="原文用它说明 Tooltip / Popover 三角指针上的局部阴影。箭头指向触发对象，帮助理解补充信息的来源。" rule="箭头的具体绘制跟随当前组件版本，不把箭头阴影直接套到整个浮层上。" code={`${shadowCode(token, '.popover-arrow', ['boxShadowPopoverArrow'])}\n\n/* Popover arrow；箭头及浮层本体均由框架绘制与定位。 */`}><div className="effect-demo-stack"><Popover title="研发部说明" content="负责组织服务研发与技术支持。" arrow placement="top" trigger={['click']}><Button>查看部门说明</Button></Popover><p className="effect-caption">打开气泡卡片，观察本体与指向按钮的三角箭头。</p></div></EffectEntry>
+    <EffectEntry id={shadowExamples.arrow} title="浮层箭头的局部阴影" tokens="boxShadowPopoverArrow" usage="原文用它说明 Tooltip / Popover 三角指针上的局部阴影。箭头指向触发对象，帮助理解补充信息的来源。" rule="箭头的具体绘制跟随当前组件版本，不把箭头阴影直接套到整个浮层上。" code={`${shadowCode(token, '.popover-arrow', ['boxShadowPopoverArrow'])}\n\n/* Popover arrow；箭头及浮层本体均由框架绘制与定位。 */`}><div className="effect-demo-stack"><Popover title="研发部说明" content="负责 Evolution 研发与技术支持。" arrow placement="top" trigger={['click']}><Button>查看部门说明</Button></Popover><p className="effect-caption">打开气泡卡片，观察本体与指向按钮的三角箭头。</p></div></EffectEntry>
     <ShadowComposition />
   </>;
 }

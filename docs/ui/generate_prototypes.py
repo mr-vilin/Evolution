@@ -32,8 +32,8 @@ def base(title, desc, active=0):
     parts.clear()
     parts.append('<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900"><g font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif">')
     rect(0,0,1440,900,'#f5f7fa','#f5f7fa',0);rect(0,0,208,900,'#fff','#e7eaf0',0)
-    rect(20,22,32,32,'#1677ff','#1677ff',8);text(27,44,'组',19,'#fff',600)
-    text(64,36,'组织服务',18, '#172b4d',600);text(64,54,'ORGANIZATION',9,'#98a2b3')
+    rect(20,22,32,32,'#1677ff','#1677ff',8);text(30,44,'E',19,'#fff',600)
+    text(64,45,'Evolution',18, '#172b4d',600)
     for i,label in enumerate(['组织架构','门店管理','同步中心','变更日志','管理设置']):
         yy=105+i*52
         if i==active:rect(12,yy-25,184,42,'#eaf3ff','#eaf3ff',7)
@@ -145,7 +145,7 @@ text(260,806,'凭据轮换和撤销需要确认；密钥不会进入日志或已
 save('06-settings.svg')
 
 names=[('01-organization.svg','01 / 组织架构'),('02-employee.svg','02 / 人员详情'),('03-stores.svg','03 / 门店管理'),('04-sync.svg','04 / 同步中心'),('05-audit.svg','05 / 变更日志'),('06-settings.svg','06 / 管理设置')]
-html='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>组织服务 · UI 原型</title><style>*{box-sizing:border-box}body{margin:0;background:#eef1f6;font:14px "Microsoft YaHei",sans-serif;color:#172b4d}header{padding:24px 4%;background:#fff;border-bottom:1px solid #dde3eb}h1{font-size:24px;margin:0 0 8px}p{color:#7b8798}nav{display:flex;gap:18px;flex-wrap:wrap}a{color:#1677ff;text-decoration:none}main{padding:20px 3%}section{scroll-margin:20px;margin-bottom:40px}img{display:block;width:100%;height:auto;border:1px solid #dde3eb;border-radius:8px}h2{font-size:17px}</style><header><h1>组织服务 / UI 原型评审</h1><p>Python + React / Ant Design 设计方向 · 六张静态原型 · 数据均为示例，图中按钮不执行操作</p><nav>'''
+html='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Evolution · UI 原型</title><style>*{box-sizing:border-box}body{margin:0;background:#eef1f6;font:14px "Microsoft YaHei",sans-serif;color:#172b4d}header{padding:24px 4%;background:#fff;border-bottom:1px solid #dde3eb}h1{font-size:24px;margin:0 0 8px}p{color:#7b8798}nav{display:flex;gap:18px;flex-wrap:wrap}a{color:#1677ff;text-decoration:none}main{padding:20px 3%}section{scroll-margin:20px;margin-bottom:40px}img{display:block;width:100%;height:auto;border:1px solid #dde3eb;border-radius:8px}h2{font-size:17px}</style><header><h1>Evolution / UI 原型评审</h1><p>Python + React / Ant Design 设计方向 · 六张静态原型 · 数据均为示例，图中按钮不执行操作</p><nav>'''
 html+=''.join(f'<a href="#page{i}">{label}</a>' for i,(_,label) in enumerate(names))+'</nav></header><main>'
 html+=''.join(f'<section id="page{i}"><h2>{label}</h2><a href="{name}" target="_blank"><img src="{name}" alt="{label}原型图"></a></section>' for i,(name,label) in enumerate(names))+'</main></html>'
 (OUT/'index.html').write_text(html,encoding='utf-8')

@@ -1,7 +1,8 @@
 import type { ProLayoutProps } from '@ant-design/pro-components';
+import { productName } from '../src/branding/product';
 
 const settings: ProLayoutProps = {
-  title: 'EVOLUTION',
+  title: productName,
   // 侧栏统一展示一级分区和二级页面，顶栏保留工作台操作。
   layout: 'mix',
   splitMenus: false,
