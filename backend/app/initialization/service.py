@@ -77,6 +77,12 @@ def check_item(key, title, passed, message=''):
     return {'key': key, 'title': title, 'status': 'passed' if passed else 'failed', 'message': message}
 
 
+def mask_identifier(value):
+    if not value:
+        return None
+    return f'{value[:4]}****{value[-4:]}' if len(value) > 8 else '****'
+
+
 class InitializationService:
     def __init__(self, sessions, settings, api=None):
         self.sessions, self.settings, self.api = sessions, settings, api
@@ -94,6 +100,26 @@ class InitializationService:
             raise InitializationFailure('INITIALIZATION_ALREADY_COMPLETE', '初始化已经完成')
         if flow['phase'] in ('running', 'failed', 'cleanup_required'):
             raise InitializationFailure('INITIALIZATION_RESTART_REQUIRED', '请查看任务进度，或先清理后重新开始')
+
+    def _configuration_checks(self, db):
+        connection = db.get(FeishuConnection, 1)
+        bound = (connection is not None
+                 and connection.app_id == self.settings.feishu_app_id
+                 and connection.tenant_key == self.settings.feishu_tenant_key)
+        return {
+            'storage': {
+                'queue_lock_ready': db.get(SystemSetting, 'task_queue_lock') is not None,
+                'worker_lease_ready': db.get(WorkerLease, 1) is not None,
+            },
+            'feishu': {
+                'app_id_masked': mask_identifier(self.settings.feishu_app_id),
+                'tenant_key_masked': mask_identifier(self.settings.feishu_tenant_key),
+                'app_secret_configured': bool(self.settings.feishu_app_secret),
+                'redirect_uri_configured': bool(self.settings.feishu_redirect_uri),
+                'session_secret_configured': bool(self.settings.session_secret),
+                'binding_matches': bound,
+            },
+        }
 
     def status(self):
         with self.sessions.begin() as db:
@@ -131,6 +157,7 @@ class InitializationService:
             result['complete'] = state.initialization_status == 'complete'
             result['phase'] = 'complete' if result['complete'] else flow['phase']
             result['settings'] = custom_attrs_in_session(db)
+            result['configuration'] = self._configuration_checks(db)
             result['required_fields'] = field_requirements()
             result['job'] = None if not job else {
                 'job_id': job.id, 'status': job.status, 'phase': job.phase,
@@ -224,12 +251,12 @@ class InitializationService:
     def _perform(self, step, flow, mappings):
         if step == 1:
             with self.sessions() as db:
-                connection = db.get(FeishuConnection, 1)
-                bound = connection is not None and connection.app_id == self.settings.feishu_app_id and connection.tenant_key == self.settings.feishu_tenant_key
-                storage = db.get(SystemSetting, 'task_queue_lock') is not None and db.get(WorkerLease, 1) is not None
+                configuration = self._configuration_checks(db)
+            storage = all(configuration['storage'].values())
+            identity_ready = self.settings.identity_ready and configuration['feishu']['binding_matches']
             configured = all(isinstance(mappings.get(k), str) and mappings[k].strip() for k in ('permission_role', 'store_attribute')) and isinstance(mappings.get('employee_type_options'), dict)
             return [check_item('storage', '存储与任务单例', storage, '' if storage else '请执行当前版本数据库迁移'),
-                    check_item('identity', '飞书应用、租户及登录配置', self.settings.identity_ready and bound, '' if self.settings.identity_ready and bound else '请在部署配置中核对应用、密钥和企业绑定'),
+                    check_item('identity', '飞书应用、租户及登录配置', identity_ready, '' if identity_ready else '请在部署配置中核对应用、密钥和企业绑定'),
                     check_item('mappings', '自定义字段与员工类型映射', configured, '' if configured else '请在本页配置非敏感字段映射')], {}
         if step == 2:
             next(self.api.pages('users', department_id='0'))

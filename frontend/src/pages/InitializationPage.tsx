@@ -1,17 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, App, Button, Card, Form, Input, Progress, Result, Space, Spin, Steps, Table } from 'antd';
-import { CheckCircleFilled, CloseCircleFilled, LoadingOutlined } from '@ant-design/icons';
+import { Alert, App, Button, Card, Dropdown, Form, Input, Progress, Result, Space, Spin, Steps, Table, Tag } from 'antd';
+import { CheckOutlined, LogoutOutlined } from '@ant-design/icons';
+import { themeLogoUrl } from '../branding/logo';
+import { buildInfo } from '../buildInfo';
+import { useAdminSession } from '../components/AdminSessionContext';
+import { EmployeeIdentity } from '../components/EmployeeIdentity';
 import { request } from '../services/http';
+import { useThemeColors } from '../theme/ThemeProvider';
+import { ConfigurationChecks, type InitializationConfiguration, type Mappings } from './InitializationConfiguration';
+import './InitializationPage.css';
 
 interface CheckItem { key: string; title: string; status: string; message: string; field?: string; object_id?: string; object_type?: string; readability?: string }
 interface FieldRequirement { key: string; object_type: string; field: string; title: string; requirement: string; rule: string }
 interface Check { step: number; title: string; status: string; items: CheckItem[] }
-interface Mappings { permission_role?: string; store_attribute?: string; employee_type_options?: Record<string, string> }
-interface EmployeeTypeRow { id: string; name: string }
-interface MappingFormValues { permission_role: string; store_attribute: string; employee_type_options: EmployeeTypeRow[] }
 interface ProgressData { departments_processed?: number; employees_processed?: number; departments_total?: number | null; employees_total?: number | null }
 export interface InitializationStatus {
   flow_id: string | null; phase: string; complete: boolean; checks: Check[]; checking_step?: number;
+  configuration?: InitializationConfiguration;
   settings: Mappings; counts?: { departments: number; employees: number };
   field_sample?: { mode: 'manual' | 'automatic'; user_ids: string[] };
   required_fields?: FieldRequirement[];
@@ -35,133 +40,350 @@ function FieldCheckResults({ items, requirements }: { items: CheckItem[]; requir
     groups.set(key, group);
   }
   const rows = [...groups.values()];
-  return <Table rowKey="key" size="small" pagination={false} dataSource={rows} scroll={{ x: 1040 }} columns={[
-    { title: '所需字段', key: 'field', width: 280, render: (_, row) => <><strong>{row.title}</strong>{row.field && <div className="initialization-muted">{row.field}</div>}</> },
-    { title: '填写要求', key: 'requirement', width: 280, render: (_, row) => <><strong>{row.requirement ?? '—'}</strong>{row.rule && <div className="initialization-muted">{row.rule}</div>}</> },
-    { title: '校验结果', key: 'status', width: 140, render: (_, row) => {
+  return <Table rowKey="key" size="small" pagination={false} dataSource={rows} scroll={{ x: 900 }} columns={[
+    { title: '所需字段', key: 'field', width: 200, render: (_, row) => <><strong>{row.title}</strong>{row.field && <div className="initialization-muted">{row.field}</div>}</> },
+    { title: '填写要求', key: 'requirement', width: 220, render: (_, row) => <><strong>{row.requirement ?? '-'}</strong>{row.rule && <div className="initialization-muted">{row.rule}</div>}</> },
+    { title: '校验结果', key: 'status', width: 164, render: (_, row) => {
       const passed = row.items.filter(item => item.status === 'passed').length;
       const failed = row.items.some(item => item.status === 'failed');
-      if (row.items.some(item => item.readability && item.readability !== 'readable')) return <span className="initialization-muted">含未知信息（可缺省）</span>;
-      if (row.items.length === 0) return <span className="initialization-muted">待校验</span>;
-      return <span className={failed ? 'check-failed' : passed === row.items.length ? 'check-passed' : 'initialization-muted'}>{failed ? '未通过' : passed === row.items.length ? '已通过' : '未校验'}{row.items.length > 1 && <div>通过 {passed} / {row.items.length}</div>}</span>;
+      if (row.items.some(item => item.readability && item.readability !== 'readable')) return <Tag variant="filled" color="warning">含未知信息（可缺省）</Tag>;
+      if (row.items.length === 0) return <Tag variant="filled">待校验</Tag>;
+      const allPassed = passed === row.items.length;
+      return <>
+        <Tag variant="filled" color={failed ? 'error' : allPassed ? 'success' : undefined}>
+          {failed ? '未通过' : allPassed ? '已通过' : '未校验'}
+        </Tag>
+        {row.items.length > 1 && <div className="initialization-muted">通过 {passed} / {row.items.length}</div>}
+      </>;
     } },
-    { title: '样本与原因', key: 'details', render: (_, row) => <ul className="initialization-field-details">{row.items.map(item => <li key={item.key}>{item.object_id && <strong>{item.object_id}：</strong>}{item.readability ? item.message : item.status === 'passed' ? '校验通过' : item.message}</li>)}</ul> },
+    { title: '样本与原因', key: 'details', render: (_, row) => row.items.length === 0 ? '-' : <ul className="initialization-field-details">{row.items.map(item => <li key={item.key}>{item.object_id && <strong>{item.object_id}：</strong>}{item.readability ? item.message : item.status === 'passed' ? '校验通过' : item.message}</li>)}</ul> },
   ]} />;
+}
+
+
+const mappingForm = 'initialization-settings';
+const sampleForm = 'initialization-sample';
+
+const checkDescriptions: Record<string, string> = {
+  connection: '请求飞书通讯录接口，读取应用的授权范围。',
+  whole_enterprise: '请求根部门的人员列表，验证应用可以从根部门开始读取。',
+  departments: '从根部门最多抽取 3 个子部门，读取部门详情。',
+  employees: '从授权范围及根部门、抽样部门中最多选取 3 位人员，读取人员详情。',
+};
+const checklists: Record<number, { key: string; title: string }[]> = {
+  2: [
+    { key: 'connection', title: '应用凭据与通讯录连通性' },
+    { key: 'whole_enterprise', title: '根部门人员列表读取权限' },
+  ],
+  3: [
+    { key: 'departments', title: '部门结构试读' },
+    { key: 'employees', title: '人员详情试读' },
+  ],
+};
+
+function availableStep(data: InitializationStatus | null) {
+  if (!data || data.phase === 'cleanup_required') return 1;
+  if (data.complete || ['ready', 'running', 'failed'].includes(data.phase)) return 5;
+  return [1, 2, 3, 4].find(step => !data.checks.some(check => check.step === step && check.status === 'passed')) ?? 5;
+}
+
+function checkStatus(status?: string) {
+  if (status === 'passed') return { text: '已通过', color: 'success' };
+  if (status === 'failed') return { text: '未通过', color: 'error' };
+  return { text: '待检查' };
+}
+
+function CheckList({ step, items }: { step: number; items: CheckItem[] }) {
+  const definitions = checklists[step];
+  return <>
+    <ul className="initialization-check-items">
+      {definitions.map(({ key, title }) => {
+        const item = items.find(result => result.key === key);
+        const status = checkStatus(item?.status);
+        return <li key={key}>
+          <div className="initialization-check-label"><strong>{title}</strong><Tag color={status.color}>{status.text}</Tag></div>
+          <p className="initialization-muted">{checkDescriptions[key]}</p>
+          {item?.message && <p>{item.message}</p>}
+        </li>;
+      })}
+    </ul>
+    {items.filter(item => !definitions.some(definition => definition.key === item.key)).map(item =>
+      <Alert key={item.key} type="error" showIcon title={item.message || item.title} />
+    )}
+  </>;
+}
+
+function SyncDetails({ data }: { data: InitializationStatus }) {
+  if (data.complete) return <Card><Result status="success" title="初始化完成"
+    subTitle={`已同步 ${data.counts?.departments ?? 0} 个部门、${data.counts?.employees ?? 0} 位人员，全部校验通过。`} /></Card>;
+
+  const job = data.job;
+  const progress = job?.progress ?? {};
+  const { departments_total, employees_total } = progress;
+  const processed = (progress.departments_processed ?? 0) + (progress.employees_processed ?? 0);
+  const total = typeof departments_total === 'number' && typeof employees_total === 'number' ? departments_total + employees_total : 0;
+  const elapsed = job?.started_at
+    ? Math.max(0, Math.floor(((job.finished_at ? Date.parse(job.finished_at) : Date.now()) - Date.parse(job.started_at)) / 1000))
+    : 0;
+
+  return <>
+    {data.phase === 'failed' && <RestartNotice data={data} />}
+    {data.last_error?.issues?.length ? <Card title="需要修正的数据">
+      <ul className="initialization-issues">{data.last_error.issues.map((issue, index) =>
+        <li key={index}><strong>{issue.object_id}</strong> {issue.field}：{issue.message}</li>)}</ul>
+    </Card> : null}
+    {data.phase === 'ready' && <Card title="所有前置检查已通过">
+      <p>开始后将读取全企业数据，逐条核验并提交。后台任务中断后需要重新开始。</p>
+    </Card>}
+    {job && <Card title={phases[job.phase] ?? '初始化同步进度'}>
+      <Space wrap size={16}>
+        <span>已采集部门：{progress.departments_processed ?? 0}{typeof departments_total === 'number' ? ` / ${departments_total}` : ''}</span>
+        <span>已采集人员：{progress.employees_processed ?? 0}{typeof employees_total === 'number' ? ` / ${employees_total}` : ''}</span>
+        <span>耗时 {elapsed} 秒</span>
+      </Space>
+      {total > 0 ? <div className="initialization-progress">
+        <p>采集进度</p>
+        <Progress percent={Math.round(processed / total * 100)} status={data.phase === 'failed' ? 'exception' : 'active'} />
+      </div> : data.phase === 'running' && <div className="initialization-progress"><Space><Spin size="small" />正在发现和读取数据</Space></div>}
+      {job.updated_at && <p className="initialization-muted initialization-progress">最近更新：{new Date(job.updated_at).toLocaleString()}</p>}
+    </Card>}
+  </>;
+}
+
+function RestartNotice({ data }: { data: InitializationStatus }) {
+  const failed = data.phase === 'failed';
+  return <Alert type={failed ? 'error' : 'warning'} showIcon
+    title={failed ? '本轮初始化未成功' : '需要按新流程重新初始化'}
+    description={<>
+      <p>{data.last_error?.message ?? '现有实例需要重新完成初始化。'}</p>
+      <p>重新开始会清除部门、人员、关系、门店资料（含编码、备注）及临时采集结果，保留飞书配置、管理员资格、登录能力和失败审计。</p>
+    </>} />;
 }
 
 export default function InitializationPage({ onComplete }: { onComplete?: () => void }) {
   const { message } = App.useApp();
+  const { colors } = useThemeColors();
+  const session = useAdminSession();
+  const [selectedStep, setSelectedStep] = useState<number | null>(null);
   const [data, setData] = useState<InitializationStatus | null>(null);
   const [networkError, setNetworkError] = useState('');
   const [working, setWorking] = useState(false);
-  const autoAttempt = useRef('');
+  const [localCheck, setLocalCheck] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
   const busy = useRef(false);
   const alive = useRef(true);
   const sequence = useRef(0);
+  const panel = useRef<HTMLElement>(null);
+
   const load = useCallback(async () => {
     const current = ++sequence.current;
     try {
       const result = await request<InitializationStatus>('/admin/api/initialization');
-      if (alive.current && current === sequence.current) { setData(result.data); setNetworkError(''); }
+      if (alive.current && current === sequence.current) {
+        setData(result.data);
+        setNetworkError('');
+      }
     } catch (error) {
-      if (alive.current && current === sequence.current) setNetworkError(error instanceof Error ? error.message : '连接暂时中断');
+      if (alive.current && current === sequence.current) {
+        setNetworkError(error instanceof Error ? error.message : '连接暂时中断');
+      }
     }
   }, []);
+
   useEffect(() => {
     alive.current = true;
     void load();
-    const timer = window.setInterval(() => { void load(); }, 2000);
+    const timer = window.setInterval(() => { if (!busy.current) void load(); }, 2000);
     return () => { alive.current = false; window.clearInterval(timer); };
   }, [load]);
-  const action = useCallback(async (path: string, method = 'POST', body?: unknown) => {
-    if (busy.current) return;
-    busy.current = true; setWorking(true);
+
+  const max = availableStep(data);
+  const step = Math.min(selectedStep ?? max, max);
+  const check = data?.checks.find(item => item.step === step);
+  const checking = data?.phase === 'checking';
+  const running = data?.phase === 'running';
+  const cleanupRequired = data?.phase === 'cleanup_required';
+  const mayEdit = !!data && !data.complete && !cleanupRequired && data.phase !== 'failed' && !running;
+  const disabled = working || checking || Boolean(networkError);
+  const locked = disabled || editing;
+  const name = session?.profile?.name || '当前管理员';
+  const enter = onComplete ?? (() => window.location.assign('/organization'));
+
+  useEffect(() => { if (panel.current) panel.current.scrollTop = 0; }, [step]);
+
+  useEffect(() => {
+    if (selectedStep !== null && selectedStep > max) {
+      setSelectedStep(max);
+      setEditing(false);
+    }
+  }, [selectedStep, max]);
+
+  function goTo(next: number) {
+    setEditing(false);
+    setSelectedStep(next);
+  }
+
+  async function action(path: string, method = 'POST', body?: unknown) {
+    if (busy.current) return false;
+    busy.current = true;
+    setWorking(true);
+    // Drop any poll started before this action. The action reloads authoritative state.
+    sequence.current += 1;
     try {
       await request('/admin/api/initialization' + path, { method, body });
       await load();
+      return true;
     } catch (error) {
       message.error(error instanceof Error ? error.message : '操作失败，请重试');
       await load();
-    } finally { busy.current = false; if (alive.current) setWorking(false); }
-  }, [load, message]);
-  useEffect(() => {
-    if (!data || data.complete || data.phase !== 'pending' || working) return;
-    const step = data.checks.length + 1;
-    const key = `${data.flow_id}:${step}`;
-    if (step <= 4 && data.checks.every(check => check.status === 'passed') && autoAttempt.current !== key) {
-      autoAttempt.current = key;
-      void action(`/checks/${step}`);
+      return false;
+    } finally {
+      busy.current = false;
+      if (alive.current) setWorking(false);
     }
-  }, [data, working, action]);
+  }
 
-  if (!data) return <main className="initialization-page"><div className="initialization-shell"><Spin size="large" /><h1>正在读取初始化状态</h1>{networkError && <Alert type="warning" title={networkError} action={<Button onClick={() => void load()}>重新连接</Button>} />}</div></main>;
-  const running = data.phase === 'running';
-  const needsCleanup = data.phase === 'failed' || data.phase === 'cleanup_required';
-  const editable = !running && !needsCleanup && !data.complete;
-  const failed = data.checks.find(check => check.status === 'failed');
-  const current = data.complete ? 4 : running || needsCleanup && data.phase === 'failed' ? 4 : failed ? failed.step - 1 : data.phase === 'checking' ? (data.checking_step ?? 1) - 1 : Math.min(data.checks.length, 4);
-  const progress = data.job?.progress ?? {};
-  const totalKnown = typeof progress.departments_total === 'number' && typeof progress.employees_total === 'number';
-  const total = (progress.departments_total ?? 0) + (progress.employees_total ?? 0);
-  const processed = (progress.departments_processed ?? 0) + (progress.employees_processed ?? 0);
-  const elapsed = data.job?.started_at ? Math.max(0, Math.floor(((data.job.finished_at ? new Date(data.job.finished_at).getTime() : Date.now()) - new Date(data.job.started_at).getTime()) / 1000)) : 0;
-  const enter = onComplete ?? (() => window.location.assign('/organization'));
-  return <main className="initialization-page"><div className="initialization-shell">
-    <header className="initialization-header"><div><span className="initialization-eyebrow">Evolution · 管理员初始化</span><h1>准备好企业组织数据</h1><p>逐项完成检查，再同步企业的全部部门与人员。</p></div><Button onClick={async () => { await request('/admin/auth/logout', { method: 'POST' }); window.location.reload(); }}>退出登录</Button></header>
-    <Steps current={current} items={titles.map((title, index) => ({ title, status: data.complete ? 'finish' : index === 4 ? data.phase === 'failed' ? 'error' : running ? 'process' : 'wait' : data.checks.find(check => check.step === index + 1)?.status === 'passed' ? 'finish' : failed?.step === index + 1 ? 'error' : current === index ? 'process' : 'wait' }))} />
-    {networkError && <Alert type="warning" showIcon title="连接暂时中断，正在重新连接" description={networkError} />}
-    {data.complete ? <Result status="success" title="初始化完成" subTitle={`已同步 ${data.counts?.departments ?? 0} 个部门、${data.counts?.employees ?? 0} 位人员，全部校验通过。`} extra={<Button type="primary" onClick={enter}>进入系统</Button>} /> : <>
-      {needsCleanup && <Alert type={data.phase === 'failed' ? 'error' : 'warning'} showIcon title={data.phase === 'failed' ? '本轮初始化未成功' : '需要按新流程重新初始化'} description={<><p>{data.last_error?.message ?? '现有实例需要重新完成初始化。'}</p><p>重新开始会清除部门、人员、关系、门店资料（含编码、备注）及临时采集结果，保留飞书配置、管理员资格、登录能力和失败审计。</p></>} action={<Button danger loading={working} onClick={() => { autoAttempt.current = ''; void action('/restart'); }}>{data.phase === 'failed' ? '重新开始' : '重新初始化'}</Button>} />}
-      {data.last_error?.issues?.length ? <Card title="需要修正的数据"><ul className="initialization-issues">{data.last_error.issues.map((issue, index) => <li key={index}><strong>{issue.object_id}</strong> {issue.field}：{issue.message}</li>)}</ul></Card> : null}
-      {data.phase === 'ready' && <Card className="initialization-ready" title="所有前置检查已通过"><p>开始后将读取全企业数据，逐条校验并提交。后台任务中断后需要从头重来。</p><Button type="primary" size="large" loading={working} onClick={() => void action('/start')}>立即同步</Button></Card>}
-      {data.job && <Card title={phases[data.job.phase] ?? '初始化同步进度'}><Space wrap><strong>已采集部门：{progress.departments_processed ?? 0}{typeof progress.departments_total === 'number' ? ` / ${progress.departments_total}` : ''}</strong><strong>已采集人员：{progress.employees_processed ?? 0}{typeof progress.employees_total === 'number' ? ` / ${progress.employees_total}` : ''}</strong><span>耗时 {elapsed} 秒</span></Space>{totalKnown && total > 0 ? <><p>采集进度</p><Progress percent={Math.round(processed / total * 100)} status={data.phase === 'failed' ? 'exception' : 'active'} /></> : running && <p><Spin size="small" /> 正在发现和读取数据…</p>}{data.job.updated_at && <p className="initialization-muted">最近更新：{new Date(data.job.updated_at).toLocaleString()}</p>}</Card>}
-      <section className="initialization-checks" aria-label="初始化检查清单">{titles.slice(0, 4).map((title, index) => {
-        const check = data.checks.find(item => item.step === index + 1);
-        const checking = data.phase === 'checking' && data.checking_step === index + 1;
-        return <Card key={title} className={index === 3 ? 'initialization-field-check' : undefined} title={<Space>{check?.status === 'passed' ? <CheckCircleFilled className="check-passed" /> : check?.status === 'failed' ? <CloseCircleFilled className="check-failed" /> : checking ? <LoadingOutlined spin /> : <span className="check-pending">{index + 1}</span>}{title}</Space>} extra={check?.status === 'passed' ? '已通过' : checking ? '检查中' : check?.status === 'failed' ? '未通过' : '待检查'}>
-          {index === 3 && <>
-            {data.field_sample && <p>校验方式：{data.field_sample.mode === 'manual' ? '手动指定人员' : '自动抽样'}；人员 user_id：{data.field_sample.user_ids.join('、') || '无'}</p>}
-            <p className="initialization-muted">填写要求已逐项列出：非必填字段允许未填写；其中标注“接口仍须返回”的字段需要飞书返回合法空值，以确认可读。直属上级和部门负责人允许接口省略。样本通过后，全量同步仍逐条校验全部部门与人员。</p>
-          </>}
-          {index === 3 ? <FieldCheckResults items={check?.items ?? []} requirements={data.required_fields ?? []} /> : check?.items ? <ul className="check-items">{check.items.map(item => <li key={item.key}>{item.status === 'passed' ? <CheckCircleFilled className="check-passed" /> : <CloseCircleFilled className="check-failed" />}<div><strong>{item.title}</strong>{item.message && <p>{item.message}</p>}</div></li>)}</ul> : <p className="initialization-muted">{checking ? '正在验证，请稍候…' : '按顺序完成前置检查。'}</p>}
-          {editable && index === 3 && data.checks.find(item => item.step === 3)?.status === 'passed' && <Form<{ user_id: string }> key={`${data.flow_id}:field-user`} name="initialization-field-user" layout="vertical" className="initialization-user-check" disabled={working || data.phase === 'checking'} onFinish={values => { autoAttempt.current = ''; void action('/checks/4', 'POST', { user_id: values.user_id.trim() }); }}>
-            <p>自动抽样未通过时，可指定一位已配置相关字段且在应用通讯录可见范围内的人员重新校验。</p>
-            <Form.Item name="user_id" label="校验人员 user_id" rules={[{ required: true, whitespace: true, message: '请填写校验人员的 user_id' }, { max: 191, message: 'user_id 最多 191 字符' }]}><Input placeholder="请输入飞书 user_id" maxLength={191} /></Form.Item>
-            <Space wrap><Button type="primary" htmlType="submit" loading={working}>校验指定人员</Button><Button disabled={working || data.phase === 'checking'} onClick={() => { autoAttempt.current = ''; void action('/checks/4'); }}>使用自动样本重新检测</Button></Space>
-          </Form>}
-          {editable && index !== 3 && check?.status === 'failed' && <Button loading={working} onClick={() => { autoAttempt.current = ''; void action(`/checks/${index + 1}`); }}>重新检测</Button>}
-        </Card>;
-      })}</section>
-      {editable && <Card title="修正字段映射" extra="仅维护非敏感设置"><Form<MappingFormValues> key={`${data.flow_id}:settings`} name="initialization-settings" initialValues={{ ...data.settings, employee_type_options: Object.entries(data.settings.employee_type_options ?? {}).map(([id, name]) => ({ id, name })) }} layout="vertical" disabled={working || data.phase === 'checking'} onFinish={async values => {
-        const options = Object.fromEntries(values.employee_type_options.map(row => [row.id.trim(), row.name.trim()]));
-        autoAttempt.current = '';
-        await action('/settings', 'PUT', { permission_role: values.permission_role, store_attribute: values.store_attribute, employee_type_options: options });
-      }}>
-        <div className="initialization-form-grid"><Form.Item name="permission_role" label="权限角色字段 ID" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="store_attribute" label="门店属性字段 ID" rules={[{ required: true }]}><Input /></Form.Item></div>
-        <section className="initialization-options" aria-labelledby="employee-type-options-title">
-          <h3 id="employee-type-options-title">员工类型选项</h3>
-          <p className="initialization-muted">每行填写一个选项的 ID 和名称。</p>
-          <Form.List name="employee_type_options">
-            {(fields, { add, remove }) => <>
-              {fields.length === 0 && <p className="initialization-muted">暂未配置员工类型选项，点击“新增一行”开始填写。</p>}
-              {fields.map(field => <div className="initialization-option-row" key={field.key}>
-                <Form.Item name={[field.name, 'id']} label="选项 ID" dependencies={['employee_type_options']} rules={[
-                  { required: true, whitespace: true, message: '请填写选项 ID' },
-                  ({ getFieldValue }) => ({ validator: async (_, value?: string) => {
-                    const rows: EmployeeTypeRow[] = getFieldValue('employee_type_options') ?? [];
-                    if (value?.trim() && rows.filter(row => row?.id?.trim() === value.trim()).length > 1) throw new Error('选项 ID 不能重复');
-                  } }),
-                ]}><Input /></Form.Item>
-                <Form.Item name={[field.name, 'name']} label="选项名称" rules={[{ required: true, whitespace: true, message: '请填写选项名称' }]}><Input /></Form.Item>
-                <Button danger className="initialization-option-remove" aria-label={`删除第 ${field.name + 1} 行`} onClick={() => remove(field.name)}>删除</Button>
-              </div>)}
-              <Button type="dashed" onClick={() => add({ id: '', name: '' })}>新增一行</Button>
-            </>}
-          </Form.List>
-        </section>
-        <Button htmlType="submit" loading={working}>保存设置并重新检查</Button>
-      </Form></Card>}
+  async function logout() {
+    try {
+      await request('/admin/auth/logout', { method: 'POST' });
+      window.location.reload();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '退出失败，请重试');
+    }
+  }
 
-    </>}
-  </div></main>;
+  async function checkStep(userId?: string) {
+    setSelectedStep(step);
+    setLocalCheck(step);
+    try {
+      if (await action(`/checks/${step}`, 'POST', userId ? { user_id: userId } : undefined)) setEditing(false);
+    } finally {
+      setLocalCheck(null);
+    }
+  }
+
+  function footerActions() {
+    if (!data) return null;
+    if (cleanupRequired || (step === 5 && data.phase === 'failed')) {
+      return <Button danger type="primary" disabled={disabled} loading={working} onClick={async () => {
+        if (await action('/restart')) goTo(1);
+      }}>{cleanupRequired ? '重新初始化' : '重新开始'}</Button>;
+    }
+    if (step === 5) {
+      if (data.complete) return <Button type="primary" onClick={enter}>进入系统</Button>;
+      if (running) return <Button type="primary" disabled>同步中</Button>;
+      return <Button type="primary" loading={working} disabled={locked || data.phase !== 'ready'} onClick={() => void action('/start')}>立即同步</Button>;
+    }
+    if (editing) return <>
+      <Button disabled={working} onClick={() => setEditing(false)}>取消</Button>
+      {step === 4 && <Button disabled={disabled} onClick={() => void checkStep()}>使用自动样本重新检测</Button>}
+      <Button autoInsertSpace={false} type="primary" htmlType="submit" form={step === 1 ? mappingForm : sampleForm} loading={working} disabled={disabled}>
+        {step === 1 ? '保存' : '保存并检测'}
+      </Button>
+    </>;
+    const passed = data.complete || check?.status === 'passed';
+    return <>
+      {mayEdit && !passed && <Button type="primary" loading={localCheck === step || (checking && data.checking_step === step)}
+        disabled={locked} onClick={() => void checkStep()}>
+        {check?.status === 'failed' ? '重新检测' : '开始检测'}
+      </Button>}
+      <Button type={passed ? "primary" : "default"} disabled={locked || !passed} onClick={() => goTo(step + 1)}>下一步</Button>
+    </>;
+  }
+
+  return <main className="initialization-page">
+    <header className="initialization-header">
+      <div className="initialization-topbar">
+        <div className="initialization-brand">
+          <img src={themeLogoUrl(colors.primary)} alt="Evolution Logo" width={32} height={32} />
+          <span>Evolution</span>
+          <span className="initialization-version">V {buildInfo.version}</span>
+        </div>
+        <Dropdown trigger={['click']} menu={{ items: [
+          { key: 'logout', label: '退出登录', icon: <LogoutOutlined />, onClick: () => void logout() },
+        ] }}>
+          <Button type="text" className="initialization-account" aria-label={`${name}，管理员菜单`} aria-haspopup="menu">
+            <EmployeeIdentity name={name} avatar={session?.profile?.avatar_url} />
+          </Button>
+        </Dropdown>
+      </div>
+      <div className="initialization-step-header">
+        <div className="initialization-container initialization-heading">
+          <h1>企业组织数据初始化</h1>
+          <p>完成前置检查后，同步企业的全部部门与人员。</p>
+          <div aria-label="初始化步骤">
+            <Steps className="initialization-steps"
+              classNames={{ item: 'initialization-step', itemRail: 'initialization-step-rail' }}
+              size="small" titlePlacement="vertical" responsive={false} current={step - 1}
+              items={titles.map((title, index) => {
+                const item = data?.checks.find(result => result.step === index + 1);
+                const syncStep = index === 4;
+                const active = localCheck === index + 1 || (checking && (data.checking_step ?? 1) === index + 1) || (syncStep && running);
+                const passed = !active && (!!data?.complete || item?.status === 'passed');
+                const failed = !active && (item?.status === 'failed' || (syncStep && data?.phase === 'failed'));
+                return {
+                  title,
+                  content: passed ? '已通过' : failed ? '未通过' : active ? (syncStep ? '同步中' : '检测中') : syncStep ? '待同步' : '待检查',
+                  status: passed ? 'finish' : failed ? 'error' : active || index + 1 === step ? 'process' : 'wait',
+                  icon: passed ? <CheckOutlined className="initialization-passed" /> : undefined,
+                };
+              })} />
+          </div>
+        </div>
+      </div>
+    </header>
+    <section className="initialization-scroll" ref={panel} aria-label={titles[step - 1]} tabIndex={0}>
+      <div className="initialization-container initialization-panel-stack">
+        {networkError && <Alert type="warning" showIcon
+          title={data ? '连接暂时中断，正在重新连接' : '暂时无法读取初始化状态'}
+          description={networkError} action={<Button onClick={() => void load()}>重新连接</Button>} />}
+        {!data && !networkError && <Card><Space><Spin size="small" />正在读取初始化状态</Space></Card>}
+        {data && cleanupRequired && <RestartNotice data={data} />}
+        {data && !cleanupRequired && step === 1 && <ConfigurationChecks
+          configuration={data.configuration} items={check?.items ?? []} settings={data.settings}
+          editing={editing} mayEdit={mayEdit} disabled={disabled} formName={mappingForm}
+          onEdit={() => { setSelectedStep(1); setEditing(true); }}
+          onSave={async values => {
+            if (await action('/settings', 'PUT', values)) {
+              setEditing(false);
+              message.success('已保存，请重新检测配置');
+            }
+          }} />}
+        {data && (step === 2 || step === 3) && <Card title={titles[step - 1]}><CheckList step={step} items={check?.items ?? []} /></Card>}
+        {data && step === 4 && <>
+          <Card title="抽样设置" extra={mayEdit && !editing && <Button autoInsertSpace={false} disabled={disabled}
+            onClick={() => { setSelectedStep(4); setEditing(true); }}>编辑</Button>}>
+            {editing ? <Form<{ user_id: string }> name={sampleForm} id={sampleForm} layout="vertical" disabled={disabled}
+              className="initialization-user-check" initialValues={{ user_id: data.field_sample?.mode === 'manual' ? data.field_sample.user_ids[0] : '' }}
+              onFinish={values => void checkStep(values.user_id.trim())}>
+              <Form.Item name="user_id" label="校验人员 user_id" extra="指定人员需要在应用通讯录可见范围内。"
+                rules={[
+                  { required: true, whitespace: true, message: '请填写校验人员的 user_id' },
+                  { max: 191, message: 'user_id 最多 191 字符' },
+                ]}>
+                <Input placeholder="请输入飞书 user_id" maxLength={191} />
+              </Form.Item>
+            </Form> : <p>校验方式：{data.field_sample?.mode === 'manual' ? '手动指定人员' : '自动抽样'}
+              {data.field_sample && `；人员 user_id：${data.field_sample.user_ids.join('、') || '无'}`}
+            </p>}
+          </Card>
+          <Card title={titles[3]}>
+            {mayEdit && !editing && <Button type="link" className="initialization-mapping-link" disabled={disabled} onClick={() => goTo(1)}>检查字段映射</Button>}
+            <p className="initialization-muted">非必填字段允许留空。标注“接口仍须返回”的字段需要飞书返回合法空值，直属上级和部门负责人可由接口省略。全量同步时仍会逐条核验。</p>
+            <FieldCheckResults items={check?.items ?? []} requirements={data.required_fields ?? []} />
+          </Card>
+        </>}
+        {data && step === 5 && <SyncDetails data={data} />}
+      </div>
+    </section>
+    <footer className="initialization-footer">
+      <div className="initialization-container initialization-footer-inner">
+        <span className="initialization-muted">第 {step} 步，共 {titles.length} 步</span>
+        <Space wrap size={8}>
+          {step > 1 && <Button disabled={locked} onClick={() => goTo(step - 1)}>上一步</Button>}
+          {footerActions()}
+        </Space>
+      </div>
+    </footer>
+  </main>;
 }

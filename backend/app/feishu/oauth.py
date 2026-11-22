@@ -58,4 +58,4 @@ class OAuthService:
                 db.add(session)
         # 先提交安全事件，再拒绝；不要随业务异常回滚审计。
         if failure: raise ValueError(failure)
-        return session, csrf, session_token
+        return session, csrf, session_token, identity

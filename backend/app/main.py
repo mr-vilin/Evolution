@@ -26,6 +26,7 @@ from .capabilities.errors import CapabilityError
 from .version import product_build_info
 from .initialization.router import router as initialization_router
 from .initialization.validation import InitializationFailure
+from .feishu.admin_profile import decode_admin_profile, encode_admin_profile
 from .tencent.router import router as tencent_router
 from .tencent.cost_router import router as tencent_cost_router
 from .tencent.audit import TencentAuditMiddleware
@@ -45,6 +46,7 @@ app.include_router(initialization_router)
 log = logging.getLogger("evolution.api")
 CSRF_COOKIE_NAME = "csrf"
 OAUTH_STATE_COOKIE_NAME = "oauth_state"
+ADMIN_PROFILE_COOKIE_NAME = "admin_profile"
 
 
 @app.exception_handler(InitializationFailure)
@@ -155,13 +157,18 @@ def oauth_callback(
         return error('IDENTITY_NOT_CONFIGURED','飞书登录尚未配置',503)
     try:
         if not code: raise ValueError('OAUTH_CODE_MISSING')
-        session,csrf,session_token=OAuthService(runtime.sessions,settings,FeishuClient(settings.feishu_app_id,settings.feishu_app_secret.get_secret_value())).complete(state,oauth_state,code)
+        session,csrf,session_token,profile=OAuthService(runtime.sessions,settings,FeishuClient(settings.feishu_app_id,settings.feishu_app_secret.get_secret_value())).complete(state,oauth_state,code)
         from .persistence.models import DatasetState
         with runtime.sessions() as db:
             initialized = db.get(DatasetState, 1).initialization_status == 'complete'
         response=RedirectResponse('/organization' if initialized else '/initialize',status_code=302)
         response.set_cookie(SESSION_COOKIE_NAME,session_token,max_age=43200,httponly=True,secure=True,samesite='lax')
         response.set_cookie(CSRF_COOKIE_NAME,csrf,max_age=43200,httponly=True,secure=True,samesite='strict',path='/admin/auth')
+        response.set_cookie(
+            ADMIN_PROFILE_COOKIE_NAME,
+            encode_admin_profile(profile, settings.session_secret.get_secret_value(), session.id),
+            max_age=43200, httponly=True, secure=True, samesite='strict', path='/admin/auth',
+        )
     except ValueError as exc:
         response=error(str(exc) if str(exc) in {'OAUTH_CODE_MISSING','OAUTH_STATE_INVALID','OAUTH_IDENTITY_MISMATCH','ADMIN_NOT_ALLOWED','LOGIN_IDENTITY_MISMATCH','EMPLOYEE_INACTIVE'} else 'OAUTH_FAILED','登录校验失败，请重新发起登录',403)
     except RuntimeError as exc:
@@ -174,6 +181,7 @@ def oauth_callback(
 @app.get('/admin/auth/session')
 def auth_session(
     csrf: str | None = Cookie(default=None, alias=CSRF_COOKIE_NAME),
+    profile_cookie: str | None = Cookie(default=None, alias=ADMIN_PROFILE_COOKIE_NAME),
     identity=Depends(get_admin_identity),
     settings=Depends(get_settings),
     runtime=Depends(get_runtime),
@@ -187,7 +195,12 @@ def auth_session(
     with runtime.sessions() as db:
         state = db.get(DatasetState, 1)
         initialized = state is not None and state.initialization_status == 'complete'
-    return JSONResponse({'data':{'open_id':identity.open_id,'csrf_token':csrf,'initialization_complete':initialized},'meta':{}},headers={'Cache-Control':'no-store'})
+    data = {'open_id': identity.open_id, 'csrf_token': csrf, 'initialization_complete': initialized}
+    if profile_cookie:
+        profile = decode_admin_profile(profile_cookie, secret, identity.id)
+        if profile is not None:
+            data['profile'] = profile
+    return JSONResponse({'data': data, 'meta': {}}, headers={'Cache-Control': 'no-store'})
 
 
 @app.post("/admin/auth/logout")
@@ -197,6 +210,7 @@ def logout(authorization=Depends(require_admin_write), runtime: Runtime | None =
     response = JSONResponse({"data": {"revoked": True}, "meta": {}})
     response.delete_cookie(SESSION_COOKIE_NAME, httponly=True, secure=True, samesite="lax")
     response.delete_cookie(CSRF_COOKIE_NAME,path='/admin/auth',httponly=True,secure=True,samesite='strict')
+    response.delete_cookie(ADMIN_PROFILE_COOKIE_NAME,path='/admin/auth',httponly=True,secure=True,samesite='strict')
     response.delete_cookie(OAUTH_STATE_COOKIE_NAME,path='/admin/auth',httponly=True,secure=True,samesite='lax')
     return response
 

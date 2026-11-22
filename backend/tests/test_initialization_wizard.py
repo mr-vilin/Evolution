@@ -78,6 +78,28 @@ def ready(service):
     assert service.run_check(4, 'admin:ou')['phase'] == 'ready'
 
 
+def test_configuration_status_exposes_only_masked_deployment_settings(setup):
+    sessions, service, _, _ = setup
+    service.settings = Settings(
+        session_secret='private-session-key', feishu_app_id='cli_example_1234',
+        feishu_app_secret='private-app-key', feishu_tenant_key='tenant_example_5678',
+        feishu_redirect_uri='https://test.invalid/admin/auth/callback?private-param=secret',
+    )
+    with sessions.begin() as db:
+        db.delete(db.get(WorkerLease, 1))
+    config = service.status()['configuration']
+    assert config == {
+        'storage': {'queue_lock_ready': True, 'worker_lease_ready': False},
+        'feishu': {
+            'app_id_masked': 'cli_****1234', 'tenant_key_masked': 'tena****5678',
+            'app_secret_configured': True, 'session_secret_configured': True,
+            'redirect_uri_configured': True, 'binding_matches': False,
+        },
+    }
+    checks = {item['key']: item for item in service.run_check(1, 'admin:ou')['checks'][0]['items']}
+    assert checks['storage']['status'] == checks['identity']['status'] == 'failed'
+
+
 def test_field_report_keeps_passed_fields_and_all_independent_failures(setup):
     _, service, api, _ = setup
     api.users['u']['custom_attrs'] = {}
