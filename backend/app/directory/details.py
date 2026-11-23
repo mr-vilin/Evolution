@@ -13,7 +13,7 @@ def department_details(data, sessions, api):
         row = db.get(Department, data['id'])
         result['feishu_department_id'] = row.feishu_department_id
         parent = db.get(Department, row.parent_id) if row.parent_id else None
-        result['parent_name'] = ('本组织' if parent.is_virtual_root else parent.name) if parent else None
+        result['parent_name'] = ('本组织' if parent.is_root else parent.name) if parent else None
 
     def person(identifier):
         if identifier in people:
@@ -35,7 +35,7 @@ def department_details(data, sessions, api):
         if data.get('leader_user_id'):
             result['leaders'] = [{**person(data['leader_user_id']), 'leader_type': 1}]
 
-    if data.get('is_virtual_root'):
+    if data.get('is_root'):
         result['chat_status'] = 'not_applicable'
         return result
     try:

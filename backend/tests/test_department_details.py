@@ -16,7 +16,7 @@ from app.persistence.read_service import SqlReadService
 @pytest.fixture
 def directory(sqlite_sessions):
     with sqlite_sessions.begin() as db:
-        db.add(Department(id='0', feishu_department_id='0', name='组织', is_virtual_root=True))
+        db.add(Department(id='0', feishu_department_id='0', name='组织', is_root=True))
         db.flush()
         db.add(Department(id='d', feishu_department_id='od_real', name='测试部门', parent_id='0', leader_user_id='main'))
         db.add(Employee(id='internal', feishu_user_id='main', name='主负责人', avatar_url='https://example.test/main.png'))

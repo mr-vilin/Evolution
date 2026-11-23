@@ -305,7 +305,7 @@ class InitializationCollector(Collector):
 
     def _progress(self, phase, result):
         if self.progress:
-            departments = sum(not d.get('is_virtual_root') for d in result.departments.values())
+            departments = sum(not d.get('is_root') for d in result.departments.values())
             known = phase in ('validating', 'publishing')
             self.progress(phase=phase, departments_processed=departments, employees_processed=len(result.employees),
                           departments_total=departments if known else None,

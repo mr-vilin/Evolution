@@ -203,7 +203,7 @@ def test_pending_protection_preserves_facts_memberships_allows_projection_reasse
     next(r for r in obs.after._tables['department'] if r['id'] == 'people_service')['sync_quality'] = 'pending_verification'
     obs.after._tables['employee_store'] = []
     assert assert_forbidden_effects(c, obs) == []
-    obs.after._tables['employee_department'][0]['active'] = False
+    obs.after._tables['employee_department'][0]['is_active'] = False
     assert 'FORBIDDEN_EFFECT' in codes(assert_forbidden_effects(c, obs))
 
 

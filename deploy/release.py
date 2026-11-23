@@ -51,7 +51,7 @@ def environment(name, action, authorization):
     return target
 
 
-def build(release_tag=None, image_repository='evolution-runtime'):
+def build(release_tag=None, image_repository='evolution-runtime', *, preview_version=None):
     run(['node', 'scripts/versioning.mjs', 'check', *(['--release', '--tag', release_tag] if release_tag else [])], cwd=ROOT)
     commit = run(['git', 'rev-parse', 'HEAD'], cwd=ROOT).strip()
     dirty = bool(run(['git', 'status', '--porcelain'], cwd=ROOT).strip())
@@ -92,6 +92,8 @@ def build(release_tag=None, image_repository='evolution-runtime'):
                '--build-arg', 'SOURCE_DIRTY=' + str(dirty).lower(), '-t', image]
     if release_tag:
         command += ['--build-arg', 'RELEASE_TAG=' + release_tag]
+    if preview_version:
+        command += ['--build-arg', 'PREVIEW_VERSION=' + preview_version]
     print('正在构建 ' + image, flush=True)
     # 构建上下文没有凭据，保留构建进度和原始退出码。
     subprocess.run(command + [str(source)], cwd=ROOT, check=True)
@@ -169,9 +171,13 @@ def main():
     parser.add_argument('--environment', choices=['local', 'test', 'production'], default='local')
     parser.add_argument('--artifact', type=Path, help='已有构建制品目录，含 manifest.json 和 image.tar.gz')
     parser.add_argument('--authorization', default='', help='记录用户本次明确的远端部署指令，不是自动授权开关')
-    parser.add_argument('--release-tag')
+    version = parser.add_mutually_exclusive_group()
+    version.add_argument('--release-tag')
+    version.add_argument('--preview-version', help='已估算的开发预览版本号，例如 0.10.0')
     parser.add_argument('--release-id')
     args = parser.parse_args()
+    if args.preview_version and (args.environment != 'local' or args.action not in ('build', 'deploy') or args.artifact):
+        parser.error('--preview-version 仅用于本地构建新开发制品')
     if args.action == 'rename-local' and args.environment != 'local':
         raise RuntimeError('RENAME_LOCAL_ONLY: 只允许本地 Docker 改名')
     target = environment(args.environment, args.action, args.authorization)
@@ -181,7 +187,8 @@ def main():
     elif args.action == 'plan':
         result = {'target': target, 'migration': '禁止自动执行', 'remote_write': False}
     elif args.action == 'build':
-        result = {'artifact': str(build(args.release_tag, target.get('image_repository', 'evolution-runtime')))}
+        result = {'artifact': str(build(args.release_tag, target.get('image_repository', 'evolution-runtime'),
+                                       preview_version=args.preview_version))}
     elif args.action in ('inspect', 'verify'):
         if target['transport'] == 'ssh':
             result = remote_read(target, args.action)
@@ -193,7 +200,8 @@ def main():
     elif args.action == 'deploy':
         if args.environment != 'local' and not args.artifact:
             raise RuntimeError('REMOTE_REQUIRES_REVIEWED_ARTIFACT: 远端必须明确指定已验收制品')
-        artifact = args.artifact.resolve() if args.artifact else build(args.release_tag, target.get('image_repository', 'evolution-runtime'))
+        artifact = args.artifact.resolve() if args.artifact else build(
+            args.release_tag, target.get('image_repository', 'evolution-runtime'), preview_version=args.preview_version)
         manifest = validate_artifact(artifact)
         if args.environment == 'production':
             receipt = artifact / 'test-deployment.json'

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from .models import Base
 
 
-CURRENT_SCHEMA_HEAD = "0023_remove_connection_coverage"
+CURRENT_SCHEMA_HEAD = "0024_organization_schema"
 REQUIRED_COLUMNS = {table.name: set(table.columns.keys()) for table in Base.metadata.tables.values()}
 
 

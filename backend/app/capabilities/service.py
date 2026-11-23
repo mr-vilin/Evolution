@@ -125,7 +125,7 @@ class OrganizationCapabilities:
                 department = db.get(Department, args[0])
                 profile = db.get(StoreProfile, args[0]) if department else None
                 target_status = ("missing" if department is None else "not_store" if not profile or not profile.is_store
-                                 else "inactive" if department.status != "active" or department.is_virtual_root else None)
+                                 else "inactive" if department.status != "active" or department.is_root else None)
                 if target_status:
                     result = self._read_result(db, None, self.reads._meta(state))
                     return replace(result, observation=replace(result.observation, evidence={**result.observation.evidence, "target_status":target_status}))
@@ -245,7 +245,7 @@ class OrganizationCapabilities:
             raise InvalidCapabilityRequest()
         if job_type == "subtree":
             department = db.scalar(select(Department).where(Department.id == root).with_for_update().execution_options(populate_existing=True)) if root else None
-            if department is None or department.status != "active" or department.is_virtual_root:
+            if department is None or department.status != "active" or department.is_root:
                 raise InvalidCapabilityRequest()
         elif root is not None:
             raise InvalidCapabilityRequest()

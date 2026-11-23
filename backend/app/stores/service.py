@@ -86,7 +86,7 @@ class StoreAdminService:
 
     def _validate(self, db: Session, changes: list[StorePatch], *, current_read: bool = False) -> list[StorePatch]:
         ids = [change.department_id for change in changes]
-        departments = {row.id: {"status": row.status, "is_virtual_root": row.is_virtual_root} for row in db.scalars(self._read_statement(select(Department).where(Department.id.in_(ids)), current_read))}
+        departments = {row.id: {"status": row.status, "is_root": row.is_root} for row in db.scalars(self._read_statement(select(Department).where(Department.id.in_(ids)), current_read))}
         normalized = validate_store_changes(changes, departments=departments)
         errors = []
         for change in normalized:
@@ -125,7 +125,7 @@ class StoreAdminService:
         relations = list(db.scalars(StoreAdminService._read_statement(select(EmployeeDepartment), current_read)))
         by_employee: dict[str, list[Membership]] = {}
         for relation in relations:
-            by_employee.setdefault(relation.employee_id, []).append(Membership(relation.employee_id, relation.department_id, relation.active))
+            by_employee.setdefault(relation.employee_id, []).append(Membership(relation.employee_id, relation.department_id, relation.is_active))
         projection = {}
         for employee in db.scalars(StoreAdminService._read_statement(select(Employee), current_read)):
             memberships = by_employee.get(employee.id, [])

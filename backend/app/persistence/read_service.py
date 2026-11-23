@@ -84,7 +84,7 @@ class SqlReadService(ReadService):
         if not filters.get("include_inactive"):
             stmt = stmt.where(Employee.status == "active")
         if filters.get("department_id"):
-            department_ids = select(EmployeeDepartment.employee_id).where(EmployeeDepartment.active.is_(True))
+            department_ids = select(EmployeeDepartment.employee_id).where(EmployeeDepartment.is_active.is_(True))
             if filters.get("include_descendants"):
                 tree = select(Department.id).where(Department.id == filters["department_id"]).cte("employee_department_tree", recursive=True)
                 tree = tree.union_all(select(Department.id).join(tree, Department.parent_id == tree.c.id))
@@ -191,7 +191,7 @@ class SqlReadService(ReadService):
             names.append(current.name)
             current = db.get(Department, current.parent_id) if current.parent_id else None
         leader = db.get(Employee, row.leader_user_id) if row.leader_user_id else None
-        return {"id": row.id, "parent_id": row.parent_id, "name": row.name, "path": list(reversed(names)), "status": row.status, "sync_quality": row.sync_quality, "is_virtual_root": row.is_virtual_root, "leader_user_id": row.leader_user_id, "leader_name": leader.name if leader else None, "is_store": bool(profile and profile.is_store), "store_code": profile.store_code if profile else None, "notes": profile.notes if profile else None}
+        return {"id": row.id, "parent_id": row.parent_id, "name": row.name, "path": list(reversed(names)), "status": row.status, "sync_quality": row.sync_quality, "is_root": row.is_root, "leader_user_id": row.leader_user_id, "leader_name": leader.name if leader else None, "is_store": bool(profile and profile.is_store), "store_code": profile.store_code if profile else None, "notes": profile.notes if profile else None}
 
     @staticmethod
     def _store(db: Session, profile: StoreProfile, department: Department) -> dict:
@@ -206,7 +206,7 @@ class SqlReadService(ReadService):
 
     @staticmethod
     def _employee(db: Session, row: Employee) -> dict:
-        memberships = list(db.scalars(select(EmployeeDepartment.department_id).where(EmployeeDepartment.employee_id == row.id, EmployeeDepartment.active.is_(True))))
+        memberships = list(db.scalars(select(EmployeeDepartment.department_id).where(EmployeeDepartment.employee_id == row.id, EmployeeDepartment.is_active.is_(True))))
         stores = list(db.execute(select(EmployeeStore.store_id, EmployeeStore.is_primary).where(EmployeeStore.employee_id == row.id)))
         primary_store = next((store_id for store_id, primary in stores if primary), None)
         department_details = [SqlReadService._department(db, db.get(Department, identifier)) for identifier in memberships]

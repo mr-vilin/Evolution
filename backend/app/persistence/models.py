@@ -4,7 +4,7 @@ from sqlalchemy import JSON, BigInteger, Boolean, Date, DateTime, ForeignKey, In
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql.elements import TextClause
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.dialects.mysql import INTEGER, TINYINT
+from sqlalchemy.dialects.mysql import BIGINT as MYSQL_BIGINT, INTEGER, TINYINT
 
 
 TABLE_ARGS = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_general_ci"}
@@ -12,6 +12,15 @@ TABLE_ARGS = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4", "mysql_colla
 def _table_args(comment: str) -> dict:
     return {**TABLE_ARGS, "comment": comment}
 SOURCE_ID = String(191)
+
+
+class _UnsignedBoolean(Boolean):
+    """MySQL 使用无符号小整数，Python 与 JSON 保留布尔语义。"""
+
+
+@compiles(_UnsignedBoolean, 'mysql')
+def _mysql_unsigned_boolean(element, compiler, **kwargs):
+    return 'TINYINT UNSIGNED'
 
 
 class _UpdateTimestamp(TextClause):
@@ -83,35 +92,42 @@ class SystemSetting(Base):
 class Department(Base):
     __tablename__ = "department"
     id: Mapped[str] = mapped_column(SOURCE_ID, primary_key=True, comment="内部部门稳定标识")
-    feishu_department_id: Mapped[str] = mapped_column(SOURCE_ID, unique=True, comment="飞书部门标识")
+    feishu_department_id: Mapped[str] = mapped_column(SOURCE_ID, comment="飞书部门标识")
     parent_id: Mapped[str | None] = mapped_column(SOURCE_ID, ForeignKey("department.id"), comment="父部门标识")
     name: Mapped[str] = mapped_column(String(255), comment="部门名称")
     sort_order: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), 'mysql'), default=0, server_default='0', comment="同父级共享的本地展示顺序，非负整数，普通同步保留")
     leader_user_id: Mapped[str | None] = mapped_column(SOURCE_ID, comment="部门负责人用户标识")
     status: Mapped[str] = mapped_column(String(32), default="active", comment="部门状态")
-    sync_quality: Mapped[str] = mapped_column(String(32), default="unknown", comment="部门同步质量")
-    is_virtual_root: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否为虚拟根部门")
-    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), comment="最近一次从飞书看到的时间")
-    __table_args__ = (Index('idx_department_order', 'parent_id', 'sort_order', 'id'), _table_args("飞书部门目录"))
+    sync_quality: Mapped[str] = mapped_column(String(32), default="unknown", comment="部门资料核验状态，用于同步监控和员工门店归属计算")
+    is_root: Mapped[bool] = mapped_column(_UnsignedBoolean, default=False, comment="是否为组织树唯一根节点，部门ID为0")
+    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), comment="最近一次由同步流程写入或确认的UTC时间")
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text('CURRENT_TIMESTAMP'), comment="本地部门记录创建UTC时间，存量以迁移时刻为起点")
+    update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment="本地部门记录最后变更UTC时间")
+    __table_args__ = (
+        UniqueConstraint('feishu_department_id', name='uk_feishu_department_id'),
+        Index('idx_department_order', 'parent_id', 'sort_order', 'id'),
+        Index('idx_parent_id', 'parent_id'),
+        _table_args("飞书部门目录"),
+    )
 
 
 class Employee(Base):
     __tablename__ = "employee"
     id: Mapped[str] = mapped_column(SOURCE_ID, primary_key=True, comment="内部员工稳定标识")
-    feishu_user_id: Mapped[str] = mapped_column(SOURCE_ID, unique=True, comment="飞书用户标识")
-    open_id: Mapped[str | None] = mapped_column(SOURCE_ID, unique=True, comment="飞书用户开放标识")
+    feishu_user_id: Mapped[str] = mapped_column(SOURCE_ID, comment="飞书用户标识")
+    open_id: Mapped[str | None] = mapped_column(SOURCE_ID, comment="飞书用户开放标识")
     name: Mapped[str] = mapped_column(String(255), comment="员工姓名")
     employee_no: Mapped[str | None] = mapped_column(String(128), comment="员工工号")
     mobile: Mapped[str | None] = mapped_column(String(128), comment="飞书完整手机号，空值含义由字段可读性说明")
     email: Mapped[str | None] = mapped_column(String(254), comment="飞书人员邮箱，缺省或不可读时为空，可读性记录于 field_readability")
     avatar_url: Mapped[str | None] = mapped_column(String(2048), comment="飞书人员头像 HTTPS 地址，缺省或不可读时为空")
-    join_time: Mapped[int | None] = mapped_column(BigInteger, comment="飞书入职时间 Unix 秒时间戳，按北京时间展示日期，未填写或不可读时为空")
-    is_frozen: Mapped[bool | None] = mapped_column(Boolean, comment="飞书账号是否暂停，NULL 表示未知")
-    is_resigned: Mapped[bool | None] = mapped_column(Boolean, comment="飞书账号是否离职，NULL 表示未知")
-    is_activated: Mapped[bool | None] = mapped_column(Boolean, comment="飞书账号是否已激活，NULL 表示未知")
-    is_exited: Mapped[bool | None] = mapped_column(Boolean, comment="飞书账号是否主动退出，NULL 表示未知")
-    is_unjoin: Mapped[bool | None] = mapped_column(Boolean, comment="飞书账号是否未加入，NULL 表示未知")
-    field_readability: Mapped[dict | None] = mapped_column(JSON, comment="手机号和账号标志可读性：readable、not_collected、unreadable")
+    join_time: Mapped[int | None] = mapped_column(BigInteger().with_variant(MYSQL_BIGINT(unsigned=True), 'mysql'), comment="飞书入职时间 Unix 秒时间戳，按北京时间展示日期，未填写或不可读时为空")
+    is_frozen: Mapped[bool | None] = mapped_column(_UnsignedBoolean, comment="飞书账号是否暂停，NULL 表示未知")
+    is_resigned: Mapped[bool | None] = mapped_column(_UnsignedBoolean, comment="飞书账号是否离职，NULL 表示未知")
+    is_activated: Mapped[bool | None] = mapped_column(_UnsignedBoolean, comment="飞书账号是否已激活，NULL 表示未知")
+    is_exited: Mapped[bool | None] = mapped_column(_UnsignedBoolean, comment="飞书账号是否主动退出，NULL 表示未知")
+    is_unjoin: Mapped[bool | None] = mapped_column(_UnsignedBoolean, comment="飞书账号是否未加入，NULL 表示未知")
+    field_readability: Mapped[dict | None] = mapped_column(JSON, comment="手机号、邮箱、头像、入职时间及账号标志的可读性：readable、not_collected、unreadable")
     employee_type_id: Mapped[str | None] = mapped_column(SOURCE_ID, comment="员工类型枚举选项标识")
     employee_type_name: Mapped[str | None] = mapped_column(String(255), comment="员工类型展示名称")
     job_title: Mapped[str | None] = mapped_column(String(255), comment="员工职务")
@@ -124,17 +140,24 @@ class Employee(Base):
     sync_quality: Mapped[str] = mapped_column(String(32), default="unknown", comment="员工同步质量")
     primary_department_id: Mapped[str | None] = mapped_column(SOURCE_ID, ForeignKey("department.id"), comment="主部门标识")
     primary_store_status: Mapped[str] = mapped_column(String(32), default="unknown", comment="主门店解析状态")
-    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), comment="最近一次从飞书看到的时间")
-    __table_args__ = _table_args("飞书员工目录")
+    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), comment="最近一次由同步流程写入或确认的UTC时间")
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text('CURRENT_TIMESTAMP'), comment="本地员工记录创建UTC时间，存量以迁移时刻为起点")
+    update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment="本地员工记录最后变更UTC时间")
+    __table_args__ = (
+        UniqueConstraint('feishu_user_id', name='uk_feishu_user_id'),
+        UniqueConstraint('open_id', name='uk_open_id'),
+        Index('idx_primary_department_id', 'primary_department_id'),
+        _table_args("飞书员工目录"),
+    )
 
 
 class EmployeeDepartment(Base):
     __tablename__ = "employee_department"
     employee_id: Mapped[str] = mapped_column(SOURCE_ID, ForeignKey("employee.id"), primary_key=True, comment="员工标识")
     department_id: Mapped[str] = mapped_column(SOURCE_ID, ForeignKey("department.id"), primary_key=True, comment="部门标识")
-    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否为主部门关系")
-    active: Mapped[bool] = mapped_column(Boolean, default=True, comment="关系是否有效")
-    __table_args__ = _table_args("员工部门关系")
+    is_primary: Mapped[bool] = mapped_column(_UnsignedBoolean, default=False, comment="是否为主部门关系")
+    is_active: Mapped[bool] = mapped_column(_UnsignedBoolean, default=True, comment="关系是否有效")
+    __table_args__ = (Index('idx_department_id', 'department_id'), _table_args("员工部门关系"))
 
 
 class StoreProfile(Base):

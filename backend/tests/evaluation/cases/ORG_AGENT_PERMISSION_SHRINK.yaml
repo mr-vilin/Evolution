@@ -16,21 +16,21 @@ fixture:
     name: 组织
     status: active
     sync_quality: complete
-    is_virtual_root: true
+    is_root: true
   - id: eval_store
     feishu_department_id: eval_store
     parent_id: '0'
     name: 旧测试门店
     status: active
     sync_quality: complete
-    is_virtual_root: false
+    is_root: false
   - id: eval_team
     feishu_department_id: eval_team
     parent_id: eval_store
     name: 旧测试小组
     status: active
     sync_quality: complete
-    is_virtual_root: false
+    is_root: false
   employees:
   - id: eval_user
     feishu_user_id: eval_user
@@ -43,7 +43,7 @@ fixture:
   - employee_id: eval_user
     department_id: eval_team
     is_primary: true
-    active: true
+    is_active: true
   store_profiles:
   - department_id: eval_store
     is_store: true

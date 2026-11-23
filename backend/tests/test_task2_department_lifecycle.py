@@ -33,8 +33,8 @@ def test_department_delete_ends_only_direct_relationship_and_does_not_revoke_emp
     Publisher(sessions).publish(Candidate(departments={'d':deleted(parent)}))
     with sessions() as db:
         assert db.get(Department,'d').status=='inactive'
-        assert db.get(EmployeeDepartment,('u','d')).active is False
-        assert db.get(EmployeeDepartment,('u','part')).active is True
+        assert db.get(EmployeeDepartment,('u','d')).is_active is False
+        assert db.get(EmployeeDepartment,('u','part')).is_active is True
         assert db.get(Employee,'u').status=='active'
         assert db.get(AdminSession,'session').revoked_at is None
         assert db.get(EmployeeStore,('u','s')) is None
@@ -52,12 +52,12 @@ def test_employee_recheck_does_not_reactivate_deleted_department_until_explicit_
     Publisher(sessions).publish(Candidate(departments={'d':deleted()}))
     user=normalize_user({'user_id':'u','name':'员工','department_ids':['d','part'],'orders':[{'department_id':'d','is_primary_dept':True}],'status':{'is_resigned':False}})
     Publisher(sessions).publish(Candidate(employees={'u':user}))
-    with sessions() as db:assert db.get(EmployeeDepartment,('u','d')).active is False
+    with sessions() as db:assert db.get(EmployeeDepartment,('u','d')).is_active is False
     restored=normalize_department({'open_department_id':'d','name':'d','parent_department_id':'s','status':{'is_deleted':False}})
     Publisher(sessions).publish(Candidate(departments={'d':restored}))
-    with sessions() as db:assert db.get(EmployeeDepartment,('u','d')).active is False
+    with sessions() as db:assert db.get(EmployeeDepartment,('u','d')).is_active is False
     Publisher(sessions).publish(Candidate(employees={'u':user}))
-    with sessions() as db:assert db.get(EmployeeDepartment,('u','d')).active is True
+    with sessions() as db:assert db.get(EmployeeDepartment,('u','d')).is_active is True
 
 
 @pytest.mark.parametrize('raw',[
@@ -72,7 +72,7 @@ def test_missing_fields_or_wrong_source_never_guess_department_deletion(sessions
     Publisher(sessions).publish(Collector(API()).event('contact.department.deleted_v3','d'))
     with sessions() as db:
         assert db.get(Department,'d').status=='active'
-        assert db.get(EmployeeDepartment,('u','d')).active is True
+        assert db.get(EmployeeDepartment,('u','d')).is_active is True
         assert db.get(AdminSession,'session').revoked_at is None
 
 
@@ -86,7 +86,7 @@ def test_department_delete_relation_audit_failure_rolls_back_all(sessions):
     finally:event.remove(ChangeLog,'before_insert',reject)
     with sessions() as db:
         assert db.get(Department,'d').status=='active'
-        assert db.get(EmployeeDepartment,('u','d')).active is True
+        assert db.get(EmployeeDepartment,('u','d')).is_active is True
         assert db.get(EmployeeStore,('u','s')) is not None
         assert db.get(DatasetState,1).data_version==1
 

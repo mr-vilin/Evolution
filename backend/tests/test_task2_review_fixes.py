@@ -169,7 +169,7 @@ def test_pending_employee_publishes_after_authoritative_ancestor_resolution(sess
     from app.persistence.models import PendingFact
     employee=normalize_user({'user_id':'u','name':'员工','department_ids':['a'],'status':{'is_resigned':False}})
     Publisher(sessions).publish(Candidate(employees={'u':employee},pending=[('department','a')]))
-    department={'id':'a','feishu_department_id':'a','parent_id':None,'name':'已确认部门','status':'active','sync_quality':'complete','is_virtual_root':False}
+    department={'id':'a','feishu_department_id':'a','parent_id':None,'name':'已确认部门','status':'active','sync_quality':'complete','is_root':False}
     Publisher(sessions).publish(Candidate(departments={'a':department},employees={'u':employee}))
     with sessions() as db:
         assert db.get(Department,'a').name=='已确认部门'
@@ -207,7 +207,7 @@ def test_existing_department_with_unknown_new_parent_retains_fact_and_projects_u
         db.add(Department(id='a',feishu_department_id='a',name='真实部门',sync_quality='complete'));db.flush()
         db.add(Employee(id='u',feishu_user_id='u',name='员工',primary_department_id='a',sync_quality='complete'));db.flush()
         db.add(EmployeeDepartment(employee_id='u',department_id='a'))
-    department={'id':'a','feishu_department_id':'a','parent_id':'missing','name':'改名部门','status':'active','sync_quality':'complete','is_virtual_root':False}
+    department={'id':'a','feishu_department_id':'a','parent_id':'missing','name':'改名部门','status':'active','sync_quality':'complete','is_root':False}
     Publisher(sessions).publish(Candidate(departments={'a':department},pending=[('department','missing')]))
     with sessions() as db:
         assert db.get(Department,'a').name=='真实部门'

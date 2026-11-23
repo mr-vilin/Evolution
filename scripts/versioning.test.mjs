@@ -66,6 +66,16 @@ test('发行产物要求 tag、版本记录、提交和干净源码状态一致'
   assert.throws(() => buildInfo(root, { ...env, COMMIT_SHA: 'unknown' }), /真实提交/);
 });
 
+test('开发预览保留仓库基准并生成带提交与脏标识的版本', t => {
+  const root = fixture(t, '0.9.0', '## [0.9.0] — 2026-11-23\n已有发布');
+  const env = { PREVIEW_VERSION: '0.10.0', COMMIT_SHA: 'a'.repeat(40), SOURCE_DIRTY: 'true' };
+  assert.equal(buildInfo(root, env).version, '0.10.0-dev.gaaaaaaa.dirty');
+  assert.equal(buildInfo(root, env).baseVersion, '0.9.0');
+  assert.equal(buildInfo(root, { ...env, SOURCE_DIRTY: 'false' }).version, '0.10.0-dev.gaaaaaaa');
+  assert.throws(() => buildInfo(root, { ...env, PREVIEW_VERSION: '0.8.0' }), /开发预览/);
+  assert.throws(() => buildInfo(root, { ...env, RELEASE_TAG: 'v0.9.0', SOURCE_DIRTY: 'false' }), /开发预览/);
+});
+
 test('PR 基准检查允许补正既有说明和日期，保留版本历史与发行制品检查', t => {
   const root = fixture(t, '0.1.0', '## [0.1.0] — 2026-10-24\n原始说明\n');
   const run = args => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();

@@ -8,7 +8,11 @@ import { productName } from '../src/branding/product';
 // scripts/run.mjs 在每次开发或构建时生成一次，并传给所有子进程。
 const info = JSON.parse(readFileSync(process.env.BUILD_INFO_FILE!, 'utf8'));
 const manifest = JSON.parse(readFileSync(resolve(__dirname, '../../version.json'), 'utf8'));
-if (info.version !== manifest.version) throw new Error('构建元信息与 version.json 不一致');
+const previewSuffix = `-dev.g${String(info.commit).slice(0, 7)}${info.dirty ? '.dirty' : ''}`;
+const isPreview = info.stage === 'development' && info.baseVersion === manifest.version
+  && /^[0-9a-f]{40}$/.test(info.commit) && typeof info.dirty === 'boolean'
+  && info.version.endsWith(previewSuffix) && /^\d+\.\d+\.\d+$/.test(info.version.slice(0, -previewSuffix.length));
+if (info.version !== manifest.version && !isPreview) throw new Error('构建元信息与 version.json 不一致');
 
 export default defineConfig({
   routes,

@@ -59,7 +59,7 @@ def independent_capability_mysql():
                 db.add(Employee(id=ids[key], feishu_user_id=ids[key], name=key, primary_department_id=ids['leaf'], status='active', sync_quality='complete'))
             db.flush()
             for key in ['u', 'w']:
-                db.add(EmployeeDepartment(employee_id=ids[key], department_id=ids['leaf'], active=True, is_primary=True))
+                db.add(EmployeeDepartment(employee_id=ids[key], department_id=ids['leaf'], is_active=True, is_primary=True))
         yield sessions, ids, prefix
     finally:
         if original is not None:
@@ -98,10 +98,10 @@ def test_borrowed_rr_uses_current_notes_and_all_projection_dependencies(independ
             writer.get(StoreProfile, ids['other']).is_store = True
             writer.get(Department, ids['leaf']).parent_id = ids['other']
             writer.get(Employee, ids['u']).status = 'inactive'
-            writer.get(EmployeeDepartment, (ids['w'], ids['leaf'])).active = False
+            writer.get(EmployeeDepartment, (ids['w'], ids['leaf'])).is_active = False
             writer.add(Employee(id=ids['new'], feishu_user_id=ids['new'], name='new', primary_department_id=ids['leaf'], status='active', sync_quality='complete'))
             writer.flush()
-            writer.add(EmployeeDepartment(employee_id=ids['new'], department_id=ids['leaf'], active=True, is_primary=True))
+            writer.add(EmployeeDepartment(employee_id=ids['new'], department_id=ids['leaf'], is_active=True, is_primary=True))
             state.data_version = 8
         assert reader.scalar(select(DatasetState.data_version)) == 7
         assert cached  # 缓存对象在借用事务调用期间保持存活。
@@ -256,7 +256,7 @@ def test_mysql_job_receipt_follows_real_sync_job_finalization(independent_capabi
     if outcome == 'succeeded':
         Publisher(sessions).publish(Candidate(departments={ids['shop']: {
             'id': ids['shop'], 'feishu_department_id': ids['shop'], 'parent_id': None,
-            'name': '真实发布后的门店', 'status': 'active', 'sync_quality': 'complete', 'is_virtual_root': False,
+            'name': '真实发布后的门店', 'status': 'active', 'sync_quality': 'complete', 'is_root': False,
         }}), job_id, running.lease_generation)
     else:
         jobs.mark_failed(job_id, running.lease_generation, 'REMOTE_ERROR', 'injected failure', datetime.now())

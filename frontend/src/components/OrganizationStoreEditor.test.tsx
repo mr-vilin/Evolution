@@ -10,7 +10,7 @@ it('批量保存阻止重复请求，并将服务端编码错误显示在对应�
   let finish: ((response: Response) => void) | undefined;
   const fetch = vi.fn(() => new Promise<Response>(resolve => { finish = resolve; }));
   vi.stubGlobal('fetch', fetch);
-  const departments = ['a', 'b'].map(id => ({ id, parent_id: '0', name: id, path: ['组织', id], status: 'active' as const, is_virtual_root: false, is_store: true, store_code: id, notes: null }));
+  const departments = ['a', 'b'].map(id => ({ id, parent_id: '0', name: id, path: ['组织', id], status: 'active' as const, is_root: false, is_store: true, store_code: id, notes: null }));
   render(<App><OrganizationStoreEditor open ready initial={{ departments, meta: { dataset_epoch: 'e', data_version: 1 } }}
     onClose={vi.fn()} onConflict={vi.fn()} onRecheck={vi.fn()} onSaved={vi.fn()} /></App>);
   const save = await screen.findByRole('button', { name: '保存' });

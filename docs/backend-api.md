@@ -102,7 +102,9 @@ worker 通过 `SqlSyncJobRepository.claim_next()` 认领任务；全局租约、
 - `GET /admin/api/admin-allowlist`；`POST /admin/api/admin-allowlist` body `{"open_id":"ou_..."}`；`DELETE /admin/api/admin-allowlist/{open_id}`。删除会在同一事务撤销该身份的活动会话，删除最后一名也立即生效。添加、删除与脱敏日志同事务提交。
 - `GET /admin/api/api-clients`；`POST /admin/api/api-clients` body `{"name":"薪资系统"}`；`POST /admin/api/api-clients/{client_id}/rotate`；`POST /admin/api/api-clients/{client_id}/revoke`。创建与轮换响应包含一次性的 `secret`；列表、后续查询和日志不返回 secret 或哈希。轮换在一个事务中锁定并撤销旧凭据、创建新凭据和写审计，任一步失败整笔回滚。
 
-管理页面读取使用 `/admin/api/status`、`/admin/api/departments[/{id}]`、`/admin/api/employees[/{id}]`、`/admin/api/stores[/{id}]`、`/admin/api/stores/{id}/employees`，参数和响应字段与同名公共接口一致。部门含 `path/is_store/store_code`；员工含部门关系和主门店解析状态；门店含 `path/employee_count/primary_employee_count`。同步任务列表为 `GET /admin/api/sync/jobs?status=&limit=&cursor=`，按 `(created_at,id)` 倒序稳定分页；读取任务无需 CSRF。
+管理页面读取使用 `/admin/api/status`、`/admin/api/departments[/{id}]`、`/admin/api/employees[/{id}]`、`/admin/api/stores[/{id}]`、`/admin/api/stores/{id}/employees`，参数和响应字段与同名公共接口一致。部门含 `path/is_store/store_code`。员工含部门关系和主门店解析状态。门店含 `path/employee_count/primary_employee_count`。同步任务列表为 `GET /admin/api/sync/jobs?status=&limit=&cursor=`，按 `(created_at,id)` 倒序稳定分页，读取任务无需 CSRF。
+
+部门对象统一返回 JSON 布尔字段 `is_root`。ID 为 `0` 的「本组织」取 `true`，顶层业务部门及其下级部门均取 `false`。这适用于公共及管理部门接口、组织工作台、员工响应中的 `departments`，以及 MCP 的 `find_departments`、`get_department` 和含部门对象的员工工具。升级时将客户端读取的 `is_virtual_root` 改为 `is_root`。
 
 部门另含 `notes`，供编辑保留原备注。员工保留 `department_ids/store_ids/primary_department_id/primary_store_id`，并增加 `departments`（完整部门展示字段，path 为根到部门的名称数组）和 `stores=[{id,name,is_primary,path,path_names}]`。门店 `path` 为员工所属部门向上至最近门店的 ID 数组，`path_names` 为对应名称；主门店优先展示主部门的派生路径。所有这些依据在同一数据版本事务内读取。
 

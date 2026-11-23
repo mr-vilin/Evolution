@@ -24,7 +24,7 @@ class OrganizationService:
         if department_id == '0' and include_descendants:
             return stmt
         relations = select(EmployeeDepartment.employee_id).join(Department, Department.id == EmployeeDepartment.department_id).where(
-            EmployeeDepartment.active.is_(True), Department.status == 'active')
+            EmployeeDepartment.is_active.is_(True), Department.status == 'active')
         relations = relations.where(EmployeeDepartment.department_id.in_(select(cls._scope(department_id).c.id))
                                     if include_descendants else EmployeeDepartment.department_id == department_id)
         return stmt.where(Employee.id.in_(relations))
@@ -62,7 +62,7 @@ class OrganizationService:
             self.reads._check_version(state, dict(dataset_epoch=dataset_epoch, data_version=data_version))
             scope = self._scope(department_id)
             departments = select(func.count()).select_from(Department).where(
-                Department.is_virtual_root.is_(False), Department.status == 'active')
+                Department.is_root.is_(False), Department.status == 'active')
             people = self._summary_people(department_id)
             if department_id != '0':
                 departments = departments.where(Department.id.in_(select(scope.c.id)))
@@ -83,7 +83,7 @@ class OrganizationService:
         with self.sessions() as db, db.begin():
             state = self.reads._state(db)
             self.reads._check_version(state, filters)
-            stmt = select(Department).where(Department.is_virtual_root.is_(False))
+            stmt = select(Department).where(Department.is_root.is_(False))
             stmt = stmt.where(or_(Department.parent_id == '0', Department.parent_id.is_(None)) if parent_id == '0' else Department.parent_id == parent_id)
             if not include_inactive:
                 stmt = stmt.where(Department.status == 'active')
@@ -166,7 +166,7 @@ class OrganizationService:
             self.reads._check_version(state, dict(dataset_epoch=dataset_epoch, data_version=data_version))
             rows = list(db.scalars(select(Department).where(
                 or_(Department.parent_id == '0', Department.parent_id.is_(None)) if parent_id == '0' else Department.parent_id == parent_id,
-                Department.is_virtual_root.is_(False)
+                Department.is_root.is_(False)
             ).order_by(Department.sort_order, Department.id).with_for_update()))
             ids = [row.id for row in rows]
             if department_id not in ids or anchor_id not in ids or department_id == anchor_id:
@@ -198,7 +198,7 @@ class OrganizationService:
             for offset in range(0, len(ids), 500):
                 valid.update(db.scalars(select(Department.id).where(
                     Department.id.in_(ids[offset:offset + 500]), Department.status == 'active',
-                    Department.is_virtual_root.is_(False)).with_for_update()))
+                    Department.is_root.is_(False)).with_for_update()))
             if valid != set(ids):
                 raise InvalidStoreChanges([StoreValidationError(identifier, 'DEPARTMENT_NOT_SELECTABLE', '批量目标必须为有效的实际部门') for identifier in set(ids) - valid])
             result = service.apply_in_session(db, changes, data_version, actor, datetime.now(timezone.utc).replace(tzinfo=None))
@@ -209,9 +209,9 @@ class OrganizationService:
         with self.sessions() as db, db.begin():
             state = self.reads._state(db)
             self.reads._check_version(state, dict(dataset_epoch=dataset_epoch, data_version=data_version))
-            rows = list(db.execute(select(Department.id, Department.parent_id, Department.status, Department.is_virtual_root)))
+            rows = list(db.execute(select(Department.id, Department.parent_id, Department.status, Department.is_root)))
             parents = {row.id: row.parent_id for row in rows}
-            valid = {row.id for row in rows if row.status == 'active' and not row.is_virtual_root}
+            valid = {row.id for row in rows if row.status == 'active' and not row.is_root}
             selected = set(selected_ids) & valid
             totals = {}
             for identifier in valid:

@@ -142,7 +142,7 @@ def seed_store(sessions):
         db.flush()
         db.add(Employee(id='u', feishu_user_id='u', name='员工', primary_department_id='a', sync_quality='complete'))
         db.flush()
-        db.add(EmployeeDepartment(employee_id='u', department_id='a', active=True))
+        db.add(EmployeeDepartment(employee_id='u', department_id='a', is_active=True))
 
 
 def new_receipt(db, key='key'):
@@ -235,7 +235,7 @@ def running_receipt(sessions, key='key'):
 
 
 def changed_candidate():
-    return Candidate(departments={'a': {'id':'a', 'feishu_department_id':'a', 'parent_id':None, 'name':'新门店', 'status':'active', 'sync_quality':'complete', 'is_virtual_root':False}}, employees={'u': {'id':'u', 'feishu_user_id':'u', 'name':'新员工', 'status':'active', 'primary_department_id':'a', 'sync_quality':'complete', 'department_ids':['a']}})
+    return Candidate(departments={'a': {'id':'a', 'feishu_department_id':'a', 'parent_id':None, 'name':'新门店', 'status':'active', 'sync_quality':'complete', 'is_root':False}}, employees={'u': {'id':'u', 'feishu_user_id':'u', 'name':'新员工', 'status':'active', 'primary_department_id':'a', 'sync_quality':'complete', 'department_ids':['a']}})
 
 
 @pytest.mark.parametrize('terminal', ['succeeded', 'failed'])
@@ -661,11 +661,15 @@ def test_facade_read_pagination_ambiguity_and_target_quality():
         for result in [service.status(agent()), service.get_department(agent(), "a"), service.list_employees(agent(), limit=1), service.get_employee(agent(), "u"), service.list_stores(agent()), service.get_store(agent(), "a"), service.list_store_employees(agent(), "a")]:
             assert result.observation.data_version == result.data["meta"]["data_version"] == 7
             assert result.operation_id is None and result.observation.execution != "verified"
-        assert service.get_department(agent(), "a").observation.fact_quality == "unknown"
+        department = service.get_department(agent(), "a")
+        assert department.observation.fact_quality == "unknown"
+        assert department.data["data"]["is_root"] is False
+        assert "is_virtual_root" not in department.data["data"]
         with pytest.raises(Exception) as caught: service.find_departments(agent(), name="重名")
         assert caught.value.code == "AMBIGUOUS_TARGET" and len(caught.value.candidates) == 505
         by_id = service.find_departments(agent(), department_id="x504")
         assert by_id.data["data"][0]["id"] == "x504"
+        assert by_id.data["data"][0]["is_root"] is False
         first = service.find_departments(agent(), limit=1)
         assert first.data["meta"]["next_cursor"]
         with pytest.raises(Exception) as caught: service.find_departments(agent(), path=["重名"])

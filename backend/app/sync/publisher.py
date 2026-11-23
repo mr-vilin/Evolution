@@ -86,12 +86,12 @@ class Publisher:
                 changes += self._upsert(db, Employee, fields, 'employee', job_id, now)
                 db.flush()
                 if value['status']=='inactive': self._revoke_employee_sessions(db,value['feishu_user_id'],job_id,now)
-                before = {(r.department_id, r.is_primary, r.active) for r in db.scalars(select(EmployeeDepartment).where(EmployeeDepartment.employee_id == key))}
+                before = {(r.department_id, r.is_primary, r.is_active) for r in db.scalars(select(EmployeeDepartment).where(EmployeeDepartment.employee_id == key))}
                 after = {(d, d == value['primary_department_id'], value['status'] == 'active' and db.get(Department,d).status=='active') for d in value['department_ids']}
                 if before != after:
                     db.execute(delete(EmployeeDepartment).where(EmployeeDepartment.employee_id == key))
                     for department, primary, active in after:
-                        db.add(EmployeeDepartment(employee_id=key, department_id=department, is_primary=primary, active=active))
+                        db.add(EmployeeDepartment(employee_id=key, department_id=department, is_primary=primary, is_active=active))
                     self._log(db, 'membership', key, {'relations': sorted(before)}, {'relations': sorted(after)}, job_id, now)
                     changes += 1
             if candidate.full:
@@ -115,7 +115,7 @@ class Publisher:
                 if initializing:
                     from app.initialization.service import save_flow
                     flow.update(phase='complete', completed_at=now.isoformat(),
-                                counts={'departments': sum(not d.get('is_virtual_root') for d in candidate.departments.values()), 'employees': len(candidate.employees)})
+                                counts={'departments': sum(not d.get('is_root') for d in candidate.departments.values()), 'employees': len(candidate.employees)})
                     flow.pop('samples', None)
                     save_flow(db, flow)
                     db.add(ChangeLog(object_type='initialization', object_id=flow['flow_id'], source='worker', actor=owner,
@@ -186,9 +186,9 @@ class Publisher:
         return replace(candidate,departments=departments,employees=employees,pending=sorted(pending))
 
     def _end_department_memberships(self,db,department_id,job_id,now):
-        relations=list(db.scalars(select(EmployeeDepartment).where(EmployeeDepartment.department_id==department_id,EmployeeDepartment.active.is_(True))))
+        relations=list(db.scalars(select(EmployeeDepartment).where(EmployeeDepartment.department_id==department_id,EmployeeDepartment.is_active.is_(True))))
         for relation in relations:
-            relation.active=False
+            relation.is_active=False
             self._log(db,'membership',relation.employee_id,{'department_id':department_id,'active':True},{'department_id':department_id,'active':False},job_id,now)
         return len(relations)
 
@@ -208,9 +208,9 @@ class Publisher:
         changes=self._upsert(db,Employee,fields,'employee',job_id,now)
         db.flush()
         relations=list(db.scalars(select(EmployeeDepartment).where(EmployeeDepartment.employee_id==value['id'])))
-        before=sorted((r.department_id,r.is_primary,r.active) for r in relations)
-        changed=any(r.active for r in relations)
-        for relation in relations: relation.active=False
+        before=sorted((r.department_id,r.is_primary,r.is_active) for r in relations)
+        changed=any(r.is_active for r in relations)
+        for relation in relations: relation.is_active=False
         if changed:
             after=sorted((r.department_id,r.is_primary,False) for r in relations)
             self._log(db,'membership',value['id'],{'relations':before},{'relations':after},job_id,now)
@@ -237,14 +237,14 @@ class Publisher:
                 value['sort_order'] = maximum + 1 if maximum is not None else 0
         before = {key: getattr(row, key) for key in value} if row else None
         if before == value:
-            row.last_seen_at = now
+            row.last_sync_at = now
             self._record_detail(db, job_id, kind, value['id'], value.get('name'), 'succeeded', now)
             return 0
         if row is None:
             row = model(**value); db.add(row)
         else:
             for key, item in value.items(): setattr(row, key, item)
-        row.last_seen_at = now
+        row.last_sync_at = now
         change = self._log(db, kind, value['id'], before, value, job_id, now)
         db.flush()
         self._record_detail(db, job_id, kind, value['id'], value.get('name'), 'succeeded', now, change_log_id=change.id)
