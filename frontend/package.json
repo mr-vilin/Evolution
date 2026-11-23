@@ -17,7 +17,8 @@
     "react-dom": "19.3.0",
     "@umijs/max": "4.7.23",
     "@ant-design/pro-components": "3.1.14-2",
-    "dayjs": "1.11.23"
+    "dayjs": "1.11.23",
+    "libphonenumber-js": "1.13.17"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "7.0.1",

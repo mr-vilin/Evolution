@@ -1,3 +1,4 @@
+import { parsePhoneNumberFromString } from 'libphonenumber-js/min';
 import type { Department, Employee } from '../domain';
 
 export function departmentName(department: Department) {
@@ -16,4 +17,20 @@ export function contactLabel(employee: Employee, field: 'mobile' | 'email' | 'jo
   const readability = employee.field_readability?.[field];
   const value = field === 'join_time' ? employee.join_date : employee[field];
   return readability === 'readable' ? value : undefined;
+}
+
+export function internationalMobileParts(value: string | null | undefined) {
+  if (!value || !/^\+[1-9]\d+$/.test(value)) return undefined;
+  const phone = parsePhoneNumberFromString(value);
+  if (!phone || phone.number !== value) return undefined;
+  const prefixEnd = 1 + phone.countryCallingCode.length;
+  return { callingCode: value.slice(0, prefixEnd), number: value.slice(prefixEnd) };
+}
+
+export function personInitial(name: string): string {
+  const firstWord = name.trim().split(/\s+/)[0] ?? '';
+  if (!firstWord) return '?';
+  return /^[A-Za-z]+$/.test(firstWord)
+    ? firstWord.length > 5 ? firstWord.slice(0, 3) : firstWord
+    : Array.from(firstWord)[0];
 }

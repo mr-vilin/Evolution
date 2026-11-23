@@ -1,19 +1,21 @@
-import { Avatar, Button, Tag, theme } from 'antd';
-import { UserOutlined } from '@ant-design/icons';
+import { Avatar, Button, Tag, Tooltip, theme } from 'antd';
 import type { Employee } from '../domain';
 import { EmployeeValue } from './EmployeeValue';
 import { CopyValue } from './CopyValue';
+import { personInitial } from './employeePresentation';
 
 export function EmployeeIdentity({ name, avatar, onClick }: { name?: string | null; avatar?: string | null; onClick?: () => void }) {
   if (!name?.trim()) return <EmployeeValue />;
-  const content = <><Avatar size={28} src={avatar || undefined} icon={<UserOutlined />} alt={`${name}的头像`} /><span className="employee-name" title={name}>{name}</span></>;
-  return onClick ? <Button type="link" className="employee-identity-button" style={{ border: 0 }} onClick={onClick}><span className="employee-identity">{content}</span></Button>
-    : <span className="employee-identity">{content}</span>;
+  const content = <><Avatar size={28} src={avatar || undefined} alt={`${name}的头像`}>{personInitial(name)}</Avatar><span className="employee-name">{name}</span></>;
+  return <Tooltip title={name} trigger={['hover', 'focus']}>
+    {onClick ? <Button type="link" className="employee-identity-button" style={{ border: 0 }} onClick={onClick}>
+      <span className="employee-identity">{content}</span>
+    </Button> : <span className="employee-identity" tabIndex={0}>{content}</span>}
+  </Tooltip>;
 }
 
 export function CopyUserId({ employee }: { employee: Employee }) {
-  return <CopyValue value={employee.user_id} label="用户ID" ariaLabel={`复制${employee.name}的用户ID`}
-    failureMessage="复制失败，请在详情中手动复制用户ID" />;
+  return <CopyValue value={employee.user_id} label="用户ID" ariaLabel={`复制${employee.name}的用户ID`} />;
 }
 
 export function EmployeeAccountStatus({ employee }: { employee: Employee }) {
@@ -28,5 +30,5 @@ export function EmployeeAccountStatus({ employee }: { employee: Employee }) {
   if (flags.is_exited === true) items.push(['已退出', token.colorTextSecondary]);
   const hasUnknown = ['is_activated', 'is_frozen', 'is_unjoin', 'is_resigned', 'is_exited'].some(key => flags[key as keyof typeof flags] == null);
   return <span className="employee-status-tags">{items.map(([label, color]) => <Tag key={label} variant="filled" color={color}>{label}</Tag>)}
-    {(hasUnknown || !items.length) && <EmployeeValue />}</span>;
+    {(hasUnknown || !items.length) && <Tag variant="filled">状态未知</Tag>}</span>;
 }

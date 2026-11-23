@@ -22,6 +22,7 @@
 }
 @media (max-width: 480px) {
   .ant-pro-layout .ant-pro-layout-content { padding: 12px; }
-  .ant-pro-layout .page-heading h1 { font-size: 22px; }
+  .ant-pro-layout .page-heading:not(.organization-page) h1 { font-size: 22px; }
+  .ant-pro-layout .ant-pro-layout-content:has(.organization-page) { padding-inline: 16px; }
   .workspace-actions .ant-btn { padding-inline: 6px; }
 }

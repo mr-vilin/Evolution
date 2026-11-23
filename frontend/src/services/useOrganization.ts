@@ -73,24 +73,38 @@ export function useOrganizationPeople(departmentId: string | undefined, descenda
       keyword: keyword.trim(), account_status: accountStatus, view_status: viewStatus, limit: 20, ...datasetQuery(meta) }) : null;
   const context = useRef({ path, meta });
   context.current = { path, meta };
-  const read = useCallback(async (next?: string | null) => {
+  const failedRead = useRef<{ cursor?: string | null; refreshCount?: number }>({});
+  const read = useCallback(async (next?: string | null, refreshCount?: number) => {
     const stamp = generation.current;
     const active = context.current;
     if (!active.path || pending.current) return;
     pending.current = true;
     setLoading(true); setError(null);
     try {
-      const result = await request<Employee[]>(active.path + (next ? `&cursor=${encodeURIComponent(next)}` : ''));
-      if (stamp !== generation.current) return;
-      if (!sameDataset(active.meta, result.meta)) throw new ApiError(409, 'DATASET_CHANGED', '数据版本已变化');
-      if (result.meta.next_cursor && seenCursors.current.has(result.meta.next_cursor)) throw new ApiError(200, 'INVALID_CURSOR', '分页标记重复，请重新读取');
-      if (result.meta.next_cursor) seenCursors.current.add(result.meta.next_cursor);
-      setData(previous => next ? [...new Map([...previous, ...result.data].map(row => [row.id, row])).values()] : result.data);
-      setTotal(Number(result.meta.total_count ?? 0));
-      setAccountCounts((result.meta.account_status_counts as Record<string, number>) ?? {});
-      setCursor(result.meta.next_cursor ?? null);
+      const known = refreshCount == null ? new Set(seenCursors.current) : new Set<string>();
+      const records = new Map<string, Employee>();
+      let nextCursor = next;
+      let resultMeta: Meta;
+      do {
+        const result = await request<Employee[]>(active.path + (nextCursor ? '&cursor=' + encodeURIComponent(nextCursor) : ''));
+        if (stamp !== generation.current) return;
+        if (!sameDataset(active.meta, result.meta)) throw new ApiError(409, 'DATASET_CHANGED', '数据版本已变化');
+        resultMeta = result.meta;
+        nextCursor = result.meta.next_cursor ?? null;
+        if (nextCursor && known.has(nextCursor)) throw new ApiError(200, 'INVALID_CURSOR', '分页标记重复，请重新读取');
+        if (nextCursor) known.add(nextCursor);
+        for (const row of result.data) records.set(row.id, row);
+      } while (nextCursor && refreshCount != null && records.size < refreshCount);
+      seenCursors.current = known;
+      setData(previous => next ? [...new Map([...previous.map(row => [row.id, row] as const), ...records]).values()] : [...records.values()]);
+      setTotal(Number(resultMeta.total_count ?? 0));
+      setAccountCounts((resultMeta.account_status_counts as Record<string, number>) ?? {});
+      setCursor(nextCursor);
     } catch (reason) {
-      if (stamp === generation.current) setError(asError(reason));
+      if (stamp === generation.current) {
+        failedRead.current = { cursor: next, refreshCount };
+        setError(asError(reason));
+      }
     } finally {
       if (stamp === generation.current) { pending.current = false; setLoading(false); }
     }
@@ -101,5 +115,8 @@ export function useOrganizationPeople(departmentId: string | undefined, descenda
     void read();
     return () => { generation.current += 1; };
   }, [path, revision, read]);
-  return { data, total, accountCounts, cursor, loading, error, path, more: () => read(cursor), reload: () => setRevision(value => value + 1) };
+  return { data, total, accountCounts, cursor, loading, error, path, more: () => read(cursor),
+    refresh: () => void read(null, data.length),
+    retry: () => void read(failedRead.current.cursor, failedRead.current.refreshCount),
+    reload: () => setRevision(value => value + 1) };
 }
