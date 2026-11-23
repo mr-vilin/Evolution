@@ -69,7 +69,7 @@ it('未完成初始化时只呈现初始化向导，不发起余额查询', asyn
     path === '/admin/auth/session' ? {open_id:'admin',csrf_token:'csrf',initialization_complete:false}
       : {flow_id:'test',phase:'ready',complete:false,checks:[],settings:{}},meta:{}}));
   render(<App><MemoryRouter><AuthGate><TencentBalancePage /></AuthGate></MemoryRouter></App>);
-  expect(await screen.findByText('准备好企业组织数据')).toBeInTheDocument();
+  expect(await screen.findByText('企业组织数据初始化')).toBeInTheDocument();
   expect(fetcher.mock.calls.every(([path]) => !String(path).includes('/balance'))).toBe(true);
 });
 
@@ -87,6 +87,6 @@ it('刷新发现初始化资格失效时移除资金并回到初始化向导', a
   expect(await screen.findByText('90071992547409.9112345678')).toBeInTheDocument();
   await waitFor(() => expect(screen.getByRole('button',{name:'刷新余额'})).not.toHaveClass('ant-btn-loading'));
   fireEvent.click(screen.getByRole('button',{name:'刷新余额'}));
-  expect(await screen.findByText('准备好企业组织数据')).toBeInTheDocument();
+  expect(await screen.findByText('企业组织数据初始化')).toBeInTheDocument();
   expect(screen.queryByText('90071992547409.9112345678')).not.toBeInTheDocument();
 });

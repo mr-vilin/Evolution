@@ -34,7 +34,7 @@ it('逐字段显示通过、失败和未校验，标明样本及失败原因', a
 });
 
 it('检查前即列出填写要求，区分非必填和条件必填', async () => {
-  const state: InitializationStatus = { ...base(), phase: 'precheck_failed', required_fields: [
+  const state: InitializationStatus = { ...base(), checks: [1, 2, 3].map(check), required_fields: [
     { key: 'user:leader_user_id', object_type: 'user', field: 'leader_user_id', title: '直属上级', requirement: '非必填', rule: '允许未配置、空值或接口省略。' },
     { key: 'department:leader_user_id', object_type: 'department', field: 'leader_user_id', title: '部门负责人', requirement: '非必填', rule: '允许未配置、空值或接口省略。' },
     { key: 'user:orders', object_type: 'user', field: 'orders', title: '部门顺序与唯一主部门', requirement: '条件必填', rule: '有部门时须指定唯一主部门。' },
@@ -49,7 +49,7 @@ it('检查前即列出填写要求，区分非必填和条件必填', async () =
   expect(within(table).getAllByText('待校验')).toHaveLength(3);
 });
 
-it('指定人员校验保留输入，成功后显示手动样本，仍等待手动开始同步', async () => {
+it('保存并检测指定人员后回到文本态，等待管理员前进和开始同步', async () => {
   let state = fieldState();
   const mutations = vi.fn();
   vi.stubGlobal('fetch', async (url: string, options: RequestInit) => {
@@ -60,12 +60,15 @@ it('指定人员校验保留输入，成功后显示手动样本，仍等待手�
     return Response.json({ data: state, meta: {} });
   });
   render(<App><InitializationPage /></App>);
+  fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
   fireEvent.change(await screen.findByLabelText('校验人员 user_id'), { target: { value: ' manual ' } });
-  fireEvent.click(screen.getByRole('button', { name: '校验指定人员' }));
-  await screen.findByRole('button', { name: '立即同步' });
+  fireEvent.click(screen.getByRole('button', { name: '保存并检测' }));
+  await screen.findByText('校验方式：手动指定人员；人员 user_id：manual');
   expect(mutations).toHaveBeenCalledExactlyOnceWith('/admin/api/initialization/checks/4', { user_id: 'manual' });
-  expect(screen.getByText('校验方式：手动指定人员；人员 user_id：manual')).not.toBeNull();
-  expect((screen.getByLabelText('校验人员 user_id') as HTMLInputElement).value).toBe(' manual ');
+  expect(screen.queryByLabelText('校验人员 user_id')).toBeNull();
+  expect(screen.queryByRole('button', { name: '立即同步' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '下一步' }));
+  await screen.findByRole('button', { name: '立即同步' });
 });
 
 it('空白 user_id 在字段旁提示且不请求；自动重检不携带手动 ID', async () => {
@@ -75,8 +78,9 @@ it('空白 user_id 在字段旁提示且不请求；自动重检不携带手动 
     return Response.json({ data: fieldState(), meta: {} });
   });
   render(<App><InitializationPage /></App>);
+  fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
   fireEvent.change(await screen.findByLabelText('校验人员 user_id'), { target: { value: '  ' } });
-  fireEvent.click(screen.getByRole('button', { name: '校验指定人员' }));
+  fireEvent.click(screen.getByRole('button', { name: '保存并检测' }));
   await screen.findByText('请填写校验人员的 user_id');
   expect(mutations).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: '使用自动样本重新检测' }));
@@ -85,15 +89,22 @@ it('空白 user_id 在字段旁提示且不请求；自动重检不携带手动 
 
 it('未初始化管理员只看到全屏向导，工作台内容不挂载', async () => {
   const state = { ...base(), phase: 'cleanup_required' };
-  vi.stubGlobal('fetch', async (url: string) => Response.json({ data: url === '/admin/auth/session' ? { open_id: 'ou', csrf_token: 'csrf', initialization_complete: false } : state, meta: {} }));
+  vi.stubGlobal('fetch', async (url: string) => Response.json({ data: url === '/admin/auth/session' ? { open_id: 'ou', csrf_token: 'csrf', initialization_complete: false, profile: { name: '林晓', avatar_url: 'https://example.test/avatar.png' } } : state, meta: {} }));
   render(<App><AuthGate><div>工作台业务资料</div></AuthGate></App>);
   await screen.findByText('需要按新流程重新初始化');
+  expect(screen.getByAltText('Evolution Logo')).not.toBeNull();
+  expect(screen.getByText('林晓')).not.toBeNull();
+  expect(screen.getByAltText('林晓的头像').getAttribute('src')).toBe('https://example.test/avatar.png');
+  expect(screen.queryByRole('menuitem', { name: /退出登录/ })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /林晓.*管理员菜单/ }));
+  await screen.findByRole('menuitem', { name: /退出登录/ });
+  expect(screen.getByRole('region', { name: '检查配置' })).not.toBeNull();
   expect(screen.queryByText('工作台业务资料')).toBeNull();
   expect(screen.getByRole('button', { name: '重新初始化' })).not.toBeNull();
   expect(screen.queryByRole('button', { name: '立即同步' })).toBeNull();
 });
 
-it('按顺序自动预检，全部通过后才出现立即同步且等待管理员点击', async () => {
+it('逐步检测通过才能前进，所有预检通过后仍要手动同步', async () => {
   let state = base();
   const calls: string[] = [];
   vi.stubGlobal('fetch', async (url: string, options: RequestInit) => {
@@ -111,7 +122,17 @@ it('按顺序自动预检，全部通过后才出现立即同步且等待管理�
   });
   render(<App><InitializationPage /></App>);
   expect(screen.queryByRole('button', { name: '立即同步' })).toBeNull();
-  const start = await screen.findByRole('button', { name: '立即同步' }, { timeout: 5000 });
+  const checks = ['检查配置', '测试飞书连接', '试读部门与人员', '核验所需字段'];
+  for (const [index, title] of checks.entries()) {
+    expect(await screen.findByRole('region', { name: title })).not.toBeNull();
+    expect(Boolean(screen.queryByRole('button', { name: '上一步' }))).toBe(index > 0);
+    const next = screen.getByRole<HTMLButtonElement>('button', { name: '下一步' });
+    expect(next.disabled).toBe(true);
+    fireEvent.click(await screen.findByRole('button', { name: '开始检测' }));
+    await waitFor(() => expect(next.disabled).toBe(false));
+    fireEvent.click(next);
+  }
+  const start = await screen.findByRole('button', { name: '立即同步' });
   expect(calls).toEqual([1, 2, 3, 4].map(step => `/admin/api/initialization/checks/${step}`));
   expect(screen.queryByText('全企业及无部门人员覆盖验收')).toBeNull();
   expect(screen.queryByRole('button', { name: '保存依据并确认覆盖验收' })).toBeNull();
@@ -136,6 +157,11 @@ it('失败后必须清理重来，不显示立即同步；历史通过项不会�
   const restart = await screen.findByRole('button', { name: '重新开始' });
   expect(screen.queryByRole('button', { name: '立即同步' })).toBeNull();
   fireEvent.click(restart);
+  await waitFor(() => expect(mutations).toEqual(['/admin/api/initialization/restart']));
+  await screen.findByText('存储与任务单例');
+  const detect = screen.getByRole<HTMLButtonElement>('button', { name: /开始检测/ });
+  await waitFor(() => expect(detect.disabled).toBe(false));
+  fireEvent.click(detect);
   await waitFor(() => expect(mutations).toEqual(['/admin/api/initialization/restart', '/admin/api/initialization/checks/1']));
   expect(screen.queryByRole('button', { name: '立即同步' })).toBeNull();
 });
@@ -155,34 +181,39 @@ const mappingState = (): InitializationStatus => ({
 });
 
 it('员工类型按行回显，编辑、增加和删除后保存映射并可重新读取', async () => {
-  let state = mappingState();
+  let state: InitializationStatus = { ...mappingState(), checks: [1].map(check) };
   const save = vi.fn();
-  vi.stubGlobal('fetch', async (_url: string, options: RequestInit) => {
+  vi.stubGlobal('fetch', async (url: string, options: RequestInit) => {
+    if (options.method === 'POST' && url.endsWith('/checks/1')) state = { ...state, checks: [check(1)] };
     if (options.method === 'PUT') {
       const settings = JSON.parse(options.body as string);
       save(settings);
-      state = { ...state, settings };
+      state = { ...state, checks: [], phase: 'pending', settings };
     }
     return Response.json({ data: state, meta: {} });
   });
-  const view = render(<App><InitializationPage /></App>);
-  await screen.findByDisplayValue('正式员工');
-  expect(document.querySelector('textarea')).toBeNull();
+  render(<App><InitializationPage /></App>);
+  fireEvent.click(await screen.findByRole('button', { name: '上一步' }));
+  expect(screen.getByText('正式员工')).not.toBeNull();
+  expect(screen.queryByRole('textbox')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '编辑' }));
   fireEvent.change(screen.getByDisplayValue('正式员工'), { target: { value: ' 全职员工 ' } });
   fireEvent.click(screen.getByRole('button', { name: '新增一行' }));
   fireEvent.change(screen.getAllByLabelText('选项 ID')[2], { target: { value: ' 03 ' } });
   fireEvent.change(screen.getAllByLabelText('选项名称')[2], { target: { value: '实习员工' } });
   // 数字键由接口对象枚举在前；删除对应的临时员工行后，其余行的值应保持。
   fireEvent.click(screen.getByRole('button', { name: '删除第 1 行' }));
-  fireEvent.click(screen.getByRole('button', { name: '保存设置并重新检查' }));
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
   await waitFor(() => expect(save).toHaveBeenCalledExactlyOnceWith({
     permission_role: 'role', store_attribute: 'store', employee_type_options: { '01': '全职员工', '03': '实习员工' },
   }));
-  view.unmount();
-  render(<App><InitializationPage /></App>);
-  await screen.findByDisplayValue('全职员工');
-  expect(screen.getByDisplayValue('03')).not.toBeNull();
-  expect(screen.queryByDisplayValue('临时员工')).toBeNull();
+  await screen.findByText('全职员工');
+  expect(screen.getByText('选项 ID 03')).not.toBeNull();
+  expect(screen.queryByText('临时员工')).toBeNull();
+  expect(screen.queryByRole('textbox')).toBeNull();
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: '下一步' }).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: '开始检测' }));
+  await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: '下一步' }).disabled).toBe(false));
 });
 
 it('空白字段及去除首尾空格后的重复 ID 阻止保存，修正后可提交', async () => {
@@ -192,20 +223,21 @@ it('空白字段及去除首尾空格后的重复 ID 阻止保存，修正后可
     return Response.json({ data: mappingState(), meta: {} });
   });
   render(<App><InitializationPage /></App>);
-  fireEvent.click(await screen.findByRole('button', { name: '新增一行' }));
+  fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
+  fireEvent.click(screen.getByRole('button', { name: '新增一行' }));
   fireEvent.change(screen.getAllByLabelText('选项 ID')[2], { target: { value: '   ' } });
   fireEvent.change(screen.getAllByLabelText('选项名称')[2], { target: { value: '   ' } });
-  fireEvent.click(screen.getByRole('button', { name: '保存设置并重新检查' }));
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
   await screen.findByText('请填写选项 ID');
   await screen.findByText('请填写选项名称');
   expect(save).not.toHaveBeenCalled();
   fireEvent.change(screen.getAllByLabelText('选项 ID')[2], { target: { value: ' 01 ' } });
   fireEvent.change(screen.getAllByLabelText('选项名称')[2], { target: { value: '实习员工' } });
-  fireEvent.click(screen.getByRole('button', { name: '保存设置并重新检查' }));
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
   await screen.findAllByText('选项 ID 不能重复');
   expect(save).not.toHaveBeenCalled();
   fireEvent.change(screen.getAllByLabelText('选项 ID')[2], { target: { value: '3' } });
-  fireEvent.click(screen.getByRole('button', { name: '保存设置并重新检查' }));
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
   await waitFor(() => expect(save).toHaveBeenCalledOnce());
 });
 
@@ -219,23 +251,24 @@ it('保存失败及状态重新读取后保留编辑内容，删除全部行可�
     return Response.json({ data: mappingState(), meta: {} });
   });
   render(<App><InitializationPage /></App>);
+  fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
   fireEvent.change(await screen.findByDisplayValue('正式员工'), { target: { value: '待保存名称' } });
-  fireEvent.click(screen.getByRole('button', { name: '保存设置并重新检查' }));
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
   await screen.findByText('设置暂时无法保存');
   await waitFor(() => expect((screen.getByRole('button', { name: '新增一行' }) as HTMLButtonElement).disabled).toBe(false));
   expect(screen.getByDisplayValue('待保存名称')).not.toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '删除第 1 行' }));
   fireEvent.click(screen.getByRole('button', { name: '删除第 1 行' }));
-  expect(screen.getByText('暂未配置员工类型选项，点击“新增一行”开始填写。')).not.toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: '保存设置并重新检查' }));
+  expect(screen.getByText('暂未配置员工类型选项')).not.toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
   await waitFor(() => expect(save).toHaveBeenLastCalledWith({ permission_role: 'role', store_attribute: 'store', employee_type_options: {} }));
 });
 
-it('检查期间员工类型输入和增删按钮均禁用', async () => {
+it('检查期间保持配置只读且禁用编辑和下一步', async () => {
   vi.stubGlobal('fetch', async () => Response.json({ data: { ...mappingState(), phase: 'checking', checking_step: 1 }, meta: {} }));
   render(<App><InitializationPage /></App>);
-  await screen.findByDisplayValue('正式员工');
-  for (const input of [...screen.getAllByLabelText('选项 ID'), ...screen.getAllByLabelText('选项名称')]) expect((input as HTMLInputElement).disabled).toBe(true);
-  expect((screen.getByRole('button', { name: '新增一行' }) as HTMLButtonElement).disabled).toBe(true);
-  expect((screen.getByRole('button', { name: '删除第 1 行' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(await screen.findByText('正式员工')).not.toBeNull();
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: '编辑' }).disabled).toBe(true);
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: '下一步' }).disabled).toBe(true);
+  expect(screen.queryByRole('textbox')).toBeNull();
 });

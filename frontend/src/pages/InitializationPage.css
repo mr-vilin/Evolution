@@ -1,0 +1,272 @@
+.initialization-page {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--app-canvas);
+}
+
+.initialization-container {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+
+.initialization-header,
+.initialization-footer {
+  flex: none;
+}
+
+.initialization-topbar {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-inline: 24px;
+  border-bottom: 1px solid var(--app-line);
+  background: var(--app-surface);
+}
+
+.initialization-brand {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.initialization-version {
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.initialization-account.ant-btn {
+  min-width: 0;
+  max-width: 55%;
+}
+
+.initialization-account .employee-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.initialization-step-header,
+.initialization-scroll {
+  scrollbar-gutter: stable both-edges;
+}
+
+.initialization-step-header {
+  overflow: hidden;
+}
+
+.initialization-heading {
+  padding-block-start: 24px;
+}
+
+.initialization-heading::after {
+  content: "";
+  display: block;
+  margin-block-start: 16px;
+  border-block-end: 1px solid var(--color-border);
+}
+
+.initialization-heading h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+}
+
+.initialization-heading p,
+.initialization-muted {
+  color: var(--app-muted);
+}
+
+.initialization-heading p {
+  margin: 0 0 24px;
+}
+
+.initialization-steps {
+  --initialization-step-width: 96px;
+  width: 100%;
+  container-type: inline-size;
+  justify-content: space-between;
+}
+
+.initialization-steps.ant-steps > .initialization-step {
+  flex: 0 0 min(20%, var(--initialization-step-width));
+}
+
+.initialization-steps.ant-steps .initialization-step .initialization-step-rail {
+  /* 将连接线延伸到下一项，包含两个步骤之间的空隙。 */
+  --initialization-step-gap: max(0px, (100cqi - 5 * var(--initialization-step-width)) / 4);
+  width: calc(100% + var(--initialization-step-gap) - var(--ant-cmp-steps-icon-size) - 2 * var(--ant-cmp-steps-title-horizontal-rail-gap));
+}
+
+.initialization-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.initialization-scroll:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: -2px;
+}
+
+.initialization-footer {
+  border-top: 1px solid var(--color-border);
+  background: var(--app-surface);
+}
+
+.initialization-footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  min-height: 64px;
+  padding-block: 12px;
+}
+
+.initialization-footer-inner > .ant-space {
+  justify-content: flex-end;
+}
+
+.initialization-details {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+}
+
+.initialization-details > div {
+  display: grid;
+  grid-template-columns: minmax(132px, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  margin-block: 10px;
+  padding-block: 8px;
+  border-bottom: 1px solid var(--app-line);
+}
+
+.initialization-details dt { color: var(--app-muted); }
+.initialization-details dd { margin: 0; overflow-wrap: anywhere; }
+.initialization-card-actions,
+.initialization-check-label { display: flex; align-items: center; gap: 8px; }
+.initialization-card-actions .ant-tag,
+.initialization-check-label .ant-tag { margin-inline-end: 0; }
+
+.initialization-panel-stack {
+  display: grid;
+  gap: 16px;
+  padding-block: 24px;
+}
+
+.initialization-panel-stack > * {
+  min-width: 0;
+}
+
+.initialization-panel-stack p {
+  margin: 0 0 16px;
+  overflow-wrap: anywhere;
+}
+
+.initialization-panel-stack p:last-child {
+  margin-bottom: 0;
+}
+
+.initialization-panel-stack strong {
+  font-weight: 600;
+}
+
+.initialization-passed { color: var(--color-success-text); }
+
+.initialization-check-items,
+.initialization-field-details {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+
+.initialization-check-items li {
+  padding-block: 16px;
+  border-bottom: 1px solid var(--app-line);
+}
+
+.initialization-check-items li:first-child { padding-top: 0; }
+.initialization-check-items li:last-child { padding-bottom: 0; border-bottom: 0; }
+.initialization-check-items p { margin: 4px 0 0; }
+.initialization-field-details li + li { margin-top: 4px; }
+
+.initialization-check-message,
+.initialization-progress {
+  margin-top: 16px;
+}
+
+.initialization-panel-stack p.initialization-check-message,
+.initialization-panel-stack p.initialization-progress {
+  margin-top: 16px;
+}
+
+.initialization-user-check .ant-form-item { max-width: 480px; }
+.initialization-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+}
+
+.initialization-form-grid > .ant-form-item {
+  margin-block-end: 16px;
+}
+
+.initialization-options {
+  border-block-start: 1px dashed var(--app-line);
+  margin-block-start: 16px;
+  padding-block-start: 32px;
+}
+
+.initialization-details + .initialization-options {
+  /* 加上详情行底部的 10px 外边距，分割线与上一项间隔 32px。 */
+  margin-block-start: 22px;
+}
+
+.initialization-options h3 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; }
+.initialization-panel-stack .initialization-options h3 + p { margin-block-start: 8px; }
+.initialization-option-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  column-gap: 16px;
+  align-items: start;
+}
+
+.initialization-option-remove { margin-top: 30px; }
+.initialization-issues { margin: 0; padding-inline-start: 24px; overflow-wrap: anywhere; }
+
+@media (max-width: 680px) {
+  .initialization-topbar,
+  .initialization-container { padding-inline: 16px; }
+  .initialization-heading { padding-block-start: 16px; }
+  .initialization-panel-stack { padding-block: 16px; }
+  .initialization-heading p { margin-bottom: 16px; }
+  .initialization-steps .ant-steps-item-title { font-size: 12px; line-height: 16px; }
+  .initialization-steps .ant-steps-item-content { font-size: 12px; line-height: 16px; }
+  .initialization-details,
+  .initialization-form-grid,
+  .initialization-option-row { grid-template-columns: 1fr; }
+  .initialization-option-row { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--app-line); }
+  .initialization-option-remove { margin-top: 0; justify-self: start; }
+}
+
+.initialization-mapping-link.ant-btn { padding-inline: 0; margin-bottom: 8px; }

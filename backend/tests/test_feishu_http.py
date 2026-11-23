@@ -28,7 +28,8 @@ def test_admin_session_cookie_lifecycle(sqlite_sessions, monkeypatch):
     monkeypatch.setitem(app.dependency_overrides, get_runtime, lambda: runtime)
     monkeypatch.setattr(
         FeishuClient, 'login',
-        lambda self, code: {'open_id': 'ou', 'user_id': 'user', 'tenant_key': 'tenant'},
+        lambda self, code: {'open_id': 'ou', 'user_id': 'user', 'tenant_key': 'tenant',
+                            'name': '林晓', 'avatar_url': 'https://example.test/avatar.png', 'mobile': 'private'},
     )
 
     with TestClient(app, base_url='https://test.invalid', follow_redirects=False) as client:
@@ -41,7 +42,7 @@ def test_admin_session_cookie_lifecycle(sqlite_sessions, monkeypatch):
         cookies = SimpleCookie()
         for header in callback.headers.get_list('set-cookie'):
             cookies.load(header)
-        assert set(cookies) == {'session', 'csrf', 'oauth_state'}
+        assert set(cookies) == {'session', 'csrf', 'oauth_state', 'admin_profile'}
         cookie = cookies['session']
         assert cookie['path'] == '/'
         assert cookie['max-age'] == '43200'
@@ -49,12 +50,20 @@ def test_admin_session_cookie_lifecycle(sqlite_sessions, monkeypatch):
         assert cookies['csrf']['path'] == '/admin/auth'
         assert cookies['csrf']['samesite'] == 'strict'
         assert cookies['csrf']['secure'] and cookies['csrf']['httponly']
+        profile_cookie = cookies['admin_profile']
+        assert profile_cookie['path'] == '/admin/auth' and profile_cookie['max-age'] == '43200'
+        assert profile_cookie['secure'] and profile_cookie['httponly'] and profile_cookie['samesite'] == 'strict'
         assert cookies['oauth_state']['path'] == '/admin/auth'
         assert cookies['oauth_state']['max-age'] == '0'
         assert 'oauth_state' not in client.cookies
 
         session = client.get('/admin/auth/session')
         assert session.status_code == 200
+        assert session.json()['data']['profile'] == {
+            'name': '林晓', 'avatar_url': 'https://example.test/avatar.png',
+        }
+        client.cookies.set('admin_profile', f'{profile_cookie.value}x', domain='test.invalid', path='/admin/auth')
+        assert 'profile' not in client.get('/admin/auth/session').json()['data']
         assert client.get('/admin/api/system/version').status_code == 200
         assert client.post('/admin/auth/logout').status_code == 403
         csrf = session.json()['data']['csrf_token']
@@ -66,7 +75,7 @@ def test_admin_session_cookie_lifecycle(sqlite_sessions, monkeypatch):
         assert deleted['session']['path'] == '/'
         assert deleted['csrf']['path'] == deleted['oauth_state']['path'] == '/admin/auth'
         assert {name: deleted[name]['max-age'] for name in deleted} == {
-            'session': '0', 'csrf': '0', 'oauth_state': '0',
+            'session': '0', 'csrf': '0', 'oauth_state': '0', 'admin_profile': '0',
         }
         assert not client.cookies
         client.cookies.set('session', cookie.value)

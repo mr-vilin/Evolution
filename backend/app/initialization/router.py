@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.config import get_settings
@@ -38,7 +38,8 @@ class CheckRequest(BaseModel):
 
 
 @router.get('')
-def status(identity=Depends(get_admin_identity), service=Depends(get_initialization_service)):
+def status(response: Response, identity=Depends(get_admin_identity), service=Depends(get_initialization_service)):
+    response.headers['Cache-Control'] = 'no-store'
     return {'data': service.status(), 'meta': {}}
 
 

@@ -1,12 +1,11 @@
-import { createContext, type ReactNode, useContext, useEffect } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { AUTH_FAILURE_EVENT, setCsrfToken } from '../services/http';
 import { useResource } from '../services/useResource';
 import InitializationPage from '../pages/InitializationPage';
 import { LoginScreen } from './LoginScreen';
+import { AdminSessionContext, type AdminSession } from './AdminSessionContext';
 
-interface AdminSession { open_id: string; csrf_token: string; initialization_complete: boolean }
-const SessionContext = createContext<AdminSession | null>(null);
-export const useAdminSession = () => useContext(SessionContext);
+export { useAdminSession } from './AdminSessionContext';
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const session = useResource<AdminSession>('/admin/auth/session');
@@ -21,9 +20,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [session.reload]);
 
   if (session.data) {
-    return <SessionContext.Provider value={session.data}>
+    return <AdminSessionContext.Provider value={session.data}>
       {session.data.initialization_complete === true ? children : <InitializationPage />}
-    </SessionContext.Provider>;
+    </AdminSessionContext.Provider>;
   }
 
   return <LoginScreen error={session.loading ? null : session.error} onRecheck={session.reload} />;

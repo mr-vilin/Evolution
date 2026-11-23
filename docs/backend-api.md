@@ -7,9 +7,9 @@
 - `/api/v1/**`：`Authorization: Bearer <client_id>.<secret>`。密钥创建或轮换时只返回一次，数据库仅保存哈希。
 - `/admin/api/**`：`session` HttpOnly 会话 Cookie。所有写请求还必须带 `X-CSRF-Token`。升级后，已有管理端登录需重新通过飞书登录获取 `session`。
 - `GET /admin/auth/login`：创建十分钟一次性持久 state，设置 `oauth_state` Cookie，并 302 跳转飞书 OIDC 授权入口；身份配置缺失时返回 `503 IDENTITY_NOT_CONFIGURED`。
-- `GET /admin/auth/callback?code=&state=`：校验 state 与浏览器 Cookie、兑换应用身份 OIDC token、读取用户身份并核对租户和管理员白名单。成功设置 Secure/HttpOnly 会话及 CSRF Cookie，302 跳转 `/organization`；CSRF 不进入 URL。
-- `GET /admin/auth/session`：返回 `{data:{open_id,csrf_token},meta:{}}`，必须携带有效会话与匹配服务端会话哈希的 `csrf` Cookie，响应 `Cache-Control: no-store`。Cookie 仅 `/admin/auth` 路径、SameSite=Strict、HttpOnly；前端读取此接口恢复内存中的令牌。
-- `POST /admin/auth/logout`：校验 CSRF 后撤销会话并清理 `session`、`csrf` 和 `oauth_state`。
+- `GET /admin/auth/callback?code=&state=` 校验 state 与浏览器 Cookie、兑换应用身份 OIDC token、读取用户身份并核对租户和管理员白名单。成功设置 Secure/HttpOnly 会话、CSRF 和管理员展示资料 Cookie。已初始化时跳转 `/organization`，否则跳转 `/initialize`。CSRF 不进入 URL。
+- `GET /admin/auth/session` 返回 `open_id`、`csrf_token`、`initialization_complete` 和可选的 `profile`，沿用 `data/meta` 外壳。资料来自当前会话的飞书登录，`profile.name` 和 `profile.avatar_url` 均可为 `null`。接口要求有效会话与匹配服务端会话哈希的 `csrf` Cookie，响应 `Cache-Control: no-store`。`admin_profile` 签名绑定当前会话，其路径和安全属性与 `csrf` 相同，即 `/admin/auth`、Secure、SameSite=Strict、HttpOnly。已有会话可继续使用，下次飞书登录时取得资料。
+- `POST /admin/auth/logout` 校验 CSRF，撤销会话并清理 `session`、`csrf`、`oauth_state` 和 `admin_profile`。
 - 数据库首次使用时绑定 `FeishuConnection(app_id,tenant_key)`；之后更换应用或租户复用该数据库将返回 `503 CONFIG_BINDING_MISMATCH`，worker/listener 同样拒绝启动，不覆盖原绑定。
 - `LoginIdentity(open_id,user_id,tenant_key)` 首次绑定后不可覆盖。后续映射不一致拒绝登录，返回 `LOGIN_IDENTITY_MISMATCH`，安全审计独立提交且只记录固定错误码。明确 inactive 员工拒绝新 OAuth 登录（`EMPLOYEE_INACTIVE`）；其已有会话在同步发布事务中全部撤销，会话鉴权也实时检查明确 inactive。pending/unreadable 不视为离职，白名单不因该流程被自动删除。
 - 管理员身份每次请求查询数据库白名单。删除白名单或撤销会话后立即失效；机器凭据不能调用管理接口。
@@ -46,6 +46,11 @@
 员工的 `primary_store_status`：`resolved`、`not_in_store`、`unknown`、`inconsistent`、`inactive`。数组顺序不表达主归属。
 
 ## 管理端
+
+### 初始化向导
+
+- `GET /admin/api/initialization` 返回流程阶段、步骤检查结果、非敏感字段映射及 `configuration`。`configuration.storage` 提供任务队列锁和同步 Worker 租约记录的存在状态。`configuration.feishu` 提供中间脱敏后的应用 ID 和租户标识、App Secret／登录回调／会话签名密钥是否配置、飞书应用与租户是否匹配当前数据库绑定。标识缺失时返回 `null`，密钥及登录回调原值始终留在服务端。该接口仅管理员可访问，响应 `Cache-Control: no-store`。
+- `PUT /admin/api/initialization/settings` 保存非敏感字段映射，并使已保存的预检结果失效。向导随后从第一步重新检测。`POST /admin/api/initialization/checks/{step}` 仍由服务端校验前置步骤及实际检测结果。
 
 ### 同步任务
 
