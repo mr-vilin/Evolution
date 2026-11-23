@@ -29,7 +29,9 @@ it('默认查看本组织并按总人数限制直属范围，展开继续按需�
   await userEvent.click(toggle);
   await waitFor(() => expect(urls.some(url => url.includes('include_inactive=true'))).toBe(true));
   expect(screen.getByRole('region', { name: '部门统计' })).toBeTruthy();
-  expect(screen.getByText('已选 0 个部门')).toBeTruthy();
+  expect(screen.queryByRole('checkbox')).toBeNull();
+  expect(screen.queryByRole('button', { name: '批量设置' })).toBeNull();
+  expect(urls.some(url => url.includes('/organization/selection'))).toBe(false);
   expect(screen.queryByText('下级')).toBeNull();
   await userEvent.click(screen.getByRole('img', { name: '展开总部' }));
   await screen.findByText('下级');
@@ -45,86 +47,27 @@ it('默认查看本组织并按总人数限制直属范围，展开继续按需�
   expect(screen.getByRole('region', { name: '部门统计' })).toBeTruthy();
 });
 
-it('完整范围四步切换覆盖未加载下级，搜索并清空后恢复展开与勾选', async () => {
-  const selectionBodies: any[] = [];
-  const expected = [[], ['a'], ['a', 'b', 'c'], ['b', 'c'], []];
-  let step = 0;
-  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
-    if (url.includes('/organization/summary')) return envelope({ department_id: new URL(url, 'http://local').searchParams.get('department_id'), department_count: 123, employee_count: 45, unactivated_count: 2, unjoin_count: 3, resigned_count: 4, member_count: 45, members_limited: true });
-    if (url.startsWith('/admin/api/organization/selection')) {
-      const body = JSON.parse(String(init?.body)); selectionBodies.push(body);
-      if (body.toggle_id) step++;
-      const ids = expected[step];
-      return envelope({ selected_ids: ids, count: ids.length, states: { a: { self_selected: ids.includes('a'), descendants: step === 2 || step === 3 ? 'all' : 'none', selected_count: ids.length } }, departments: [] });
-    }
-    if (url.includes('/organization/search')) return envelope([department, { ...department, id: 'b', parent_id: 'a', name: '区域' }, { ...department, id: 'c', parent_id: 'b', name: '人民路店', has_children: false }], { matched_ids: ['c'] });
+it('搜索展开匹配部门及其祖先，清空后恢复原展开状态', async () => {
+  vi.stubGlobal('fetch', async (url: string) => {
+    if (url.includes('/organization/summary')) return envelope({ department_id: '0', member_count: 0 });
+    if (url.includes('/organization/search')) return envelope([
+      department,
+      { ...department, id: 'b', parent_id: 'a', name: '区域' },
+      { ...department, id: 'c', parent_id: 'b', name: '人民路店', has_children: false },
+    ], { matched_ids: ['c'] });
     if (url.includes('/organization/departments')) return envelope([department]);
     if (url.includes('/organization/employees')) return envelope([], { total_count: 0 });
     throw new Error(url);
   });
   render(<App><MemoryRouter><OrganizationPage /></MemoryRouter></App>);
-  const check = await screen.findByRole('checkbox', { name: /总部/ });
-  await waitFor(() => expect(check.getAttribute('aria-disabled')).toBe('false'));
-  for (const count of [1, 3, 2, 0]) {
-    await userEvent.click(check);
-    await screen.findByText(`已选 ${count} 个部门`);
-    expect(check.getAttribute('aria-checked')).toBe(count === 2 ? 'mixed' : String(count > 0));
-    if (count) expect(screen.getByRole('img', { name: new RegExp(`^总部：.*已选 ${count} 个部门$`) }).textContent).toBe(String(count));
-    else expect(screen.queryByRole('img', { name: /^总部：/ })).toBeNull();
-  }
-  expect(selectionBodies.filter(body => body.toggle_id).map(body => body.selected_ids)).toEqual([[], ['a'], ['a', 'b', 'c'], ['b', 'c']]);
-  fireEvent.change(screen.getByPlaceholderText('搜索部门名称'), { target: { value: '民路' } });
+  await screen.findByText('总部');
+  const input = screen.getByPlaceholderText('搜索部门名称');
+  fireEvent.change(input, { target: { value: '民路' } });
   await screen.findByText('人民路店');
   expect(screen.getByText('区域')).toBeTruthy();
-  fireEvent.change(screen.getByPlaceholderText('搜索部门名称'), { target: { value: '' } });
+  fireEvent.change(input, { target: { value: '' } });
   await waitFor(() => expect(screen.queryByText('人民路店')).toBeNull());
   expect(screen.getByRole('img', { name: '展开总部' })).toBeTruthy();
-  expect(screen.getByText('已选 0 个部门')).toBeTruthy();
-}, 120000);
-
-it('批量直接保存冲突保留草稿，重核显式目标后再次保存且不加入新部门', async () => {
-  let version = 1; let saves = 0;
-  const writes: any[] = [];
-  const child = { ...department, id: 'b', name: '未加载分店', parent_id: 'a', path: ['组织', '总部', '未加载分店'], has_children: false };
-  const rows = [department, child].map(row => ({ ...row, is_store: true, notes: row.id === 'a' ? '旧备注' : '分店备注' }));
-  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
-    if (url.includes('/organization/summary')) return envelope({ department_id: new URL(url, 'http://local').searchParams.get('department_id'), department_count: 123, employee_count: 45, unactivated_count: 2, unjoin_count: 3, resigned_count: 4, member_count: 45, members_limited: true });
-    if (url.includes('/organization/departments')) return envelope([department], { data_version: version });
-    if (url.includes('/organization/selection')) {
-      const body = JSON.parse(String(init?.body));
-      const ids = body.toggle_id === '0' ? ['a', 'b'] : body.selected_ids;
-      return envelope({ selected_ids: ids, count: ids.length, states: {}, departments: body.include_details ? rows.filter(row => ids.includes(row.id)) : [] }, { data_version: version });
-    }
-    if (url === '/admin/api/organization/stores') {
-      writes.push(JSON.parse(String(init?.body))); saves++;
-      if (saves === 1) { version = 2; return Response.json({ error: { code: 'DATASET_CHANGED', message: 'changed' } }, { status: 409 }); }
-      return envelope({ saved_count: 2 }, { data_version: 3 });
-    }
-    if (url.includes('/organization/employees')) return envelope([], { total_count: 0 });
-    throw new Error(url);
-  });
-  render(<App><MemoryRouter><OrganizationPage /></MemoryRouter></App>);
-  const root = await screen.findByRole('checkbox', { name: /本组织/ });
-  await waitFor(() => expect(root.getAttribute('aria-disabled')).toBe('false'));
-  await userEvent.click(root);
-  await screen.findByText('已选 2 个部门');
-  await userEvent.click(screen.getByRole('button', { name: '批量设置' }));
-  fireEvent.change(await screen.findByDisplayValue('旧备注'), { target: { value: '必须保留的草稿' } });
-  expect(screen.queryByRole('button', { name: '预览影响' })).toBeNull();
-  await userEvent.click(await screen.findByRole('button', { name: /^保\s*存$/ }));
-  await screen.findByText('数据已变化，请重新核对目标与数量');
-  expect(screen.getByDisplayValue('必须保留的草稿')).toBeTruthy();
-  expect(writes).toHaveLength(1);
-  const recheck = screen.getByRole('button', { name: '重新核对目标' });
-  await waitFor(() => expect((recheck as HTMLButtonElement).disabled).toBe(false));
-  await userEvent.click(recheck);
-  await screen.findByText(/已重新核对：2 个有效部门/);
-  await userEvent.click(await screen.findByRole('button', { name: /^保\s*存$/ }));
-  await waitFor(() => expect(writes).toHaveLength(2));
-  expect(writes[1].dataset_epoch).toBe('e');
-  expect(writes[1].data_version).toBe(2);
-  expect(writes[1].changes.map((row: any) => row.department_id)).toEqual(['a', 'b']);
-  expect(writes[1].changes[0].notes).toBe('必须保留的草稿');
 }, 120000);
 
 it('人员跨三批滚动续载，切换条件忽略旧响应并重置列表', async () => {
@@ -132,7 +75,6 @@ it('人员跨三批滚动续载，切换条件忽略旧响应并重置列表', a
   let finishOld: ((response: Response) => void) | undefined;
   const employees = Array.from({ length: 45 }, (_, index) => ({ id: `u${index}`, user_id: `u${index}`, name: `成员${index}`, status: 'active', primary_store_status: 'unknown' }));
   vi.stubGlobal('fetch', async (url: string) => {
-    if (url.includes('/organization/selection')) return envelope({ selected_ids: [], count: 0, states: {}, departments: [] });
     if (url.includes('/organization/summary')) return envelope({ department_id: new URL(url, 'http://local').searchParams.get('department_id'), department_count: 123, employee_count: 45, unactivated_count: 2, unjoin_count: 3, resigned_count: 4, member_count: 45, members_limited: true });
     if (url.includes('/organization/departments')) return envelope([department]);
     if (url.includes('/organization/employees')) {
@@ -175,7 +117,6 @@ it('20人默认全部成员，切换直属与人员搜索不改变固定部门�
   vi.stubGlobal('fetch', async (url: string) => {
     urls.push(url);
     if (url.includes('/organization/departments')) return envelope([department]);
-    if (url.includes('/organization/selection')) return envelope({ selected_ids: [], count: 0, states: {} });
     if (url.includes('/organization/summary')) return envelope({ department_id: new URL(url, 'http://local').searchParams.get('department_id'), department_count: 5, employee_count: 20, unactivated_count: 2, unjoin_count: 1, resigned_count: 0, member_count: 20, members_limited: false });
     if (url.includes('/organization/employees')) return envelope([], { total_count: 0 });
     throw new Error(url);
@@ -202,7 +143,6 @@ it('超过20人禁用全部成员并在下拉框上方提示，列表包含全�
   vi.stubGlobal('fetch', async (url: string) => {
     urls.push(url);
     if (url.includes('/organization/departments')) return envelope([department]);
-    if (url.includes('/organization/selection')) return envelope({ selected_ids: [], count: 0, states: {} });
     if (url.includes('/organization/summary')) return envelope({ department_id: new URL(url, 'http://local').searchParams.get('department_id'), department_count: 5, employee_count: 21, unactivated_count: 2, unjoin_count: 1, resigned_count: 0, member_count: 21, members_limited: true });
     if (url.includes('/organization/employees')) return envelope([{ id: 'u', name: '测试员工', job_title: '工程师', email: 'person@example.test', mobile: '13800000000', field_readability: { email: 'readable', mobile: 'readable' }, employee_type_name: '正式员工', leader_name: '测试上级', departments: [] }], { total_count: 1 });
     throw new Error(url);
@@ -231,7 +171,6 @@ it('部门下拉数标按成员范围更新，面板始终显示全组织汇总'
   vi.stubGlobal('fetch', async (url: string) => {
     const params = new URL(url, 'http://local').searchParams;
     if (url.includes('/organization/departments')) return envelope([department]);
-    if (url.includes('/organization/selection')) return envelope({ selected_ids: [], count: 0, states: {} });
     if (url.includes('/organization/summary')) {
       summaryUrls.push(url);
       const root = params.get('department_id') === '0';
@@ -267,7 +206,6 @@ it('面板状态查看锁定筛选，20人滚动加载、状态内搜索，再�
     urls.push(url);
     const params = new URL(url, 'http://local').searchParams;
     if (url.includes('/organization/departments')) return envelope([department]);
-    if (url.includes('/organization/selection')) return envelope({ selected_ids: [], count: 0, states: {} });
     if (url.includes('/organization/summary')) return envelope({ department_id: params.get('department_id'), department_count: 5,
       employee_count: 45, unactivated_count: 45, unjoin_count: 1, resigned_count: 0, member_count: 45, members_limited: true });
     if (url.includes('/organization/employees')) {

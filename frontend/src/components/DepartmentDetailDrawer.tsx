@@ -1,5 +1,4 @@
 import { Alert, Avatar, Button, Descriptions, Divider, Space, Tag, Tooltip, Typography, theme } from 'antd';
-import { UserOutlined } from '@ant-design/icons';
 import type { DepartmentDetails } from '../domain';
 import { useResource } from '../services/useResource';
 import { ResourceState } from './ResourceState';
@@ -7,6 +6,7 @@ import { DetailDrawer } from './DetailDrawer';
 import { EmployeeIdentity } from './EmployeeIdentity';
 import { EmployeeValue } from './EmployeeValue';
 import { CopyValue } from './CopyValue';
+import { personInitial } from './employeePresentation';
 
 function DepartmentDetailResource({ departmentId }: { departmentId: string }) {
   const { token } = theme.useToken();
@@ -15,14 +15,14 @@ function DepartmentDetailResource({ departmentId }: { departmentId: string }) {
   const chatEmpty = department?.chat_status === 'not_set' ? '未设置' : department?.chat_status === 'not_applicable' ? '不适用' : '暂无法读取';
   return <ResourceState {...resource}>{department && <>
     <div className="employee-detail-heading">
-      <Typography.Title level={4} style={{ margin: 0 }}>{department.name}</Typography.Title>
+      <Typography.Title level={5} style={{ margin: 0 }}>{department.name}</Typography.Title>
       <Tag color={department.status === 'active' ? 'success' : 'default'}>{department.status === 'active' ? '活跃' : '禁用'}</Tag>
     </div>
     <div className="department-leaders-row">
       <Typography.Text type="secondary" style={{ flex: 'none' }}>部门负责人</Typography.Text>
       <div className="department-leaders">{department.leaders.map(leader => <span key={leader.user_id} className="department-person-chip"
         style={{ background: token.colorFillSecondary, borderRadius: 9999 }}>
-        <Avatar size={24} src={leader.avatar_url || undefined} icon={<UserOutlined />} alt={`${leader.name}的头像`} />
+        <Avatar size={24} src={leader.avatar_url || undefined} alt={`${leader.name}的头像`} style={{ fontSize: 14 }}>{personInitial(leader.name)}</Avatar>
         <span style={{ overflowWrap: 'anywhere' }}>{leader.name}</span>
         <Tag color={leader.leader_type === 1 ? 'processing' : 'default'}>{leader.leader_type === 1 ? '部门主负责人' : '部门副负责人'}</Tag>
       </span>)}{!department.leaders.length && <EmployeeValue />}</div>

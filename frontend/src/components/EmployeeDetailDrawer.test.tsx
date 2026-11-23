@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { Employee } from '../domain';
 import { EmployeeDetailDrawer } from './EmployeeDetailDrawer';
 import { CopyUserId } from './EmployeeIdentity';
-import { departmentPath } from './employeePresentation';
+import { contactLabel, departmentPath, internationalMobileParts } from './employeePresentation';
 
 const employee: Employee = {
   id: 'internal', user_id: 'feishu-user', name: '测试员工', avatar_url: 'https://example.test/avatar.png',
@@ -36,7 +36,7 @@ it('抽屉展示真实ID、上级头像和入职日期，部门超过5个可展�
   await userEvent.click(within(drawer).getByRole('button', { name: '收起' }));
   expect(within(drawer).queryByText('部门6')).toBeNull();
   expect(within(drawer).getByText('已暂停').closest('.ant-tag')?.className).toContain('filled');
-  expect(within(drawer).getByText('正式员工').closest('.ant-tag')?.className).toContain('solid');
+  expect(within(drawer).getByText('正式员工').closest('.ant-tag')).toBeNull();
 });
 
 it('切换人员不展示前一个人的资料，读取失败可重试，关闭不再请求', async () => {
@@ -65,7 +65,10 @@ it('仅复制飞书 user_id，缺失时禁用，复制失败提示而不报成�
   expect(write).toHaveBeenCalledWith('feishu-user');
   write.mockRejectedValue(new Error('denied'));
   await user.click(screen.getByRole('button', { name: '复制测试员工的用户ID' }));
-  await screen.findByText('复制失败，请在详情中手动复制用户ID');
+  const fallback = await screen.findByRole('dialog');
+  expect(within(fallback).getByText('复制失败，请手动复制用户ID')).toBeTruthy();
+  expect(within(fallback).getByText('feishu-user')).toBeTruthy();
+  await user.click(within(fallback).getByRole('button', { name: /关\s*闭/ }));
   view.rerender(<App><CopyUserId employee={{ ...employee, user_id: undefined }} /></App>);
   expect(screen.getByRole('button', { name: '复制测试员工的用户ID' })).toHaveProperty('disabled', true);
 });
@@ -73,4 +76,15 @@ it('仅复制飞书 user_id，缺失时禁用，复制失败提示而不报成�
 it('虚拟根展示本组织，普通路径只省略开头组织节点', () => {
   expect(departmentPath({ ...employee.departments[0], id: '0' })).toBe('本组织');
   expect(departmentPath({ ...employee.departments[0], path: ['组织', '区域', '组织', '门店'] })).toBe('区域 / 组织 / 门店');
+});
+
+it('识别国际手机号区号并保留复制时的原始号码', () => {
+  expect(internationalMobileParts('+8613812345678')).toEqual({ callingCode: '+86', number: '13812345678' });
+  expect(internationalMobileParts('+12025550101')).toEqual({ callingCode: '+1', number: '2025550101' });
+  expect(internationalMobileParts('+85291234567')).toEqual({ callingCode: '+852', number: '91234567' });
+  expect(internationalMobileParts('+86 13812345678')).toBeUndefined();
+  expect(internationalMobileParts('+99912345678')).toBeUndefined();
+  expect(contactLabel({ ...employee, mobile: '+8613812345678' }, 'mobile')).toBe('+8613812345678');
+  expect(contactLabel(employee, 'mobile')).toBe(employee.mobile);
+  expect(contactLabel({ ...employee, field_readability: undefined }, 'mobile')).toBeUndefined();
 });

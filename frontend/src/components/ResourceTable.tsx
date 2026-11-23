@@ -1,5 +1,5 @@
 import { ProTable } from '@ant-design/pro-components';
-import type { ProColumns } from '@ant-design/pro-components';
+import type { ProColumns, ProTableProps } from '@ant-design/pro-components';
 import type { TableProps } from 'antd';
 
 function adaptColumns<T extends object>(columns: NonNullable<TableProps<T>['columns']>): ProColumns<T>[] {
@@ -20,7 +20,9 @@ function adaptColumns<T extends object>(columns: NonNullable<TableProps<T>['colu
 }
 
 // 资源 hooks 是唯一读取来源；不向 ProTable 暴露自动 request 或后端页码。
-export function ResourceTable<T extends object>(props: TableProps<T>) {
+type ResourceTableProps<T extends object> = TableProps<T> & Pick<ProTableProps<T, object>, 'columnsState'>;
+
+export function ResourceTable<T extends object>(props: ResourceTableProps<T>) {
   return <ProTable<T>
     {...props}
     columns={adaptColumns(props.columns ?? [])}

@@ -31,14 +31,6 @@ export function displayValue(value: string | number | null | undefined): string 
   return value == null || (typeof value === 'string' && !value.trim()) ? '-' : value;
 }
 
-export function personInitial(name: string): string {
-  const firstWord = name.trim().split(/\s+/)[0] ?? '';
-  if (!firstWord) return '?';
-  return /^[A-Za-z]+$/.test(firstWord)
-    ? firstWord.length > 5 ? firstWord.slice(0, 3) : firstWord
-    : Array.from(firstWord)[0];
-}
-
 // Table 会在降序时反转比较值；空值及同值的基准顺序先补偿该反转。
 export function compareNumbers(a: number | null, b: number | null, order: SortOrder = 'ascend'): number {
   if (a == null && b == null) return 0;
@@ -62,21 +54,5 @@ export function selectDemoRecords(records: DemoRecord[], sampleSize?: number) {
   return records.filter(row => !originalIds.has(row.id) || sampleIds.has(row.id));
 }
 
-export type TableMeasurements = { chromeHeight: number; rowHeight: number };
-
-export function tableColumnLayout(width: number, narrow: boolean) {
-  const nameWidth = narrow ? 96 : 208;
-  const actionWidth = narrow ? 96 : 120;
-  return { nameWidth, actionWidth, fixActions: width >= nameWidth + actionWidth + 96 };
-}
-
-export function tableCapacity(viewport: number, top: number, gapTop: number, gapBottom: number, initialY: number, measurements: TableMeasurements = { chromeHeight: 0, rowHeight: 0 }) {
-  const full = Math.max(0, viewport - top - gapTop - gapBottom);
-  const available = Math.max(0, viewport - gapBottom - initialY);
-  const ratio = full ? available / full : 0;
-  const minimum = Math.ceil(measurements.chromeHeight + measurements.rowHeight * 3);
-  const reason = full < minimum ? 'viewport' : available + 0.01 < full * 0.6 ? 'ratio' : available < minimum ? 'body' : null;
-  const mode = reason === 'viewport' ? 'natural' : reason ? 'sticky' : 'default';
-  const exceptional = mode === 'sticky';
-  return { full, available, ratio, minimum, reason, mode, exceptional, maxHeight: mode === 'natural' ? minimum : exceptional ? full : available };
-}
+export { personInitial } from '../components/employeePresentation';
+export { tableCapacity, tableColumnLayout, type TableMeasurements } from '../components/tableLayout';
