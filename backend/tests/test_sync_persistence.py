@@ -58,6 +58,35 @@ def test_schedule_default_validation_and_daily_deduplication(sessions):
         schedule.put({'enabled': True, 'local_time':'25:00', 'timezone':'Asia/Shanghai'}, 'admin')
 
 
+@pytest.mark.parametrize('finished_at', [
+    datetime(2026, 11, 21, 17, 15),  # 上海时间 11 月 22 日 01:15
+    datetime(2026, 11, 22, 15, 17),  # 上海时间 11 月 22 日 23:17
+])
+def test_daily_schedule_skips_local_day_of_successful_initialization(sessions, finished_at):
+    from app.sync.settings import ScheduleService
+
+    with sessions.begin() as db:
+        db.add(SyncJob(
+            id='init', type='initialize', requested_by='admin', status='succeeded',
+            created_at=finished_at - timedelta(hours=2),
+            updated_at=finished_at, finished_at=finished_at,
+        ))
+
+    schedule = ScheduleService(sessions)
+    assert schedule.due(datetime(2026, 11, 22, 15, 17)) is False
+    assert schedule.due(datetime(2026, 11, 22, 15, 18)) is False
+    with sessions() as db:
+        assert db.scalar(select(SyncJob.id).where(SyncJob.trigger_source == 'schedule')) is None
+
+    assert schedule.due(datetime(2026, 11, 22, 18, 59)) is False
+    assert schedule.due(datetime(2026, 11, 22, 19)) is True
+    assert schedule.due(datetime(2026, 11, 22, 19, 1)) is False
+    with sessions() as db:
+        job = db.scalar(select(SyncJob).where(SyncJob.trigger_source == 'schedule'))
+        assert job.type == 'reconcile'
+        assert job.created_at == datetime(2026, 11, 22, 19)
+
+
 def test_oauth_state_single_use_bound_to_browser_and_identity(sessions):
     from app.feishu.oauth import OAuthService
     from app.config import Settings
