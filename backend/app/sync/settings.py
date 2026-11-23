@@ -1,8 +1,9 @@
 import json
 import re
+import secrets
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
-from app.persistence.models import SystemSetting, ChangeLog, DatasetState
+from app.persistence.models import SystemSetting, ChangeLog, DatasetState, SyncJob
 
 DEFAULT = {'enabled': True, 'local_time': '03:00', 'timezone': 'Asia/Shanghai', 'updated_at': None}
 
@@ -44,9 +45,22 @@ class ScheduleService:
             previous = db.get(SystemSetting, 'reconcile_last_day')
             if not schedule['enabled'] or local.strftime('%H:%M') < schedule['local_time'] or previous and previous.value == day:
                 return False
+            day_start = local.replace(hour=0, minute=0, second=0, microsecond=0)
+            day_start_utc = day_start.astimezone(timezone.utc).replace(tzinfo=None)
+            initialization = db.scalar(
+                select(SyncJob.id).where(
+                    SyncJob.type == 'initialize',
+                    SyncJob.status == 'succeeded',
+                    SyncJob.finished_at >= day_start_utc,
+                    SyncJob.finished_at < day_start_utc + timedelta(days=1),
+                ).limit(1)
+            )
+            if initialization is not None:
+                # 初始化已完成当天的全量采集，记录当天已处理。
+                db.merge(SystemSetting(key='reconcile_last_day', value=day))
+                return False
+
             # 调度标记与排队必须由同一事务完成，避免崩溃丢失日任务。
-            from app.persistence.models import SyncJob
-            import secrets
             active = db.scalar(select(SyncJob).where(SyncJob.type == 'reconcile', SyncJob.root_department_id.is_(None), SyncJob.status.in_(['queued', 'running'])))
             if active is None:
                 db.add(SyncJob(id=secrets.token_urlsafe(12), type='reconcile', name='定时组织同步', trigger_source='schedule', description='按管理端配置自动触发的全量核对', requested_by='schedule', status='queued', phase='queued', created_at=now, updated_at=now))
