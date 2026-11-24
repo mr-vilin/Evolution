@@ -151,7 +151,7 @@ def normalize_department(raw):
     parent_readable=isinstance(raw.get('parent_department_id'),str) and bool(raw['parent_department_id'])
     inactive=raw['status']['is_deleted']
     if not parent_readable and not inactive: raise RuntimeError('FEISHU_PARENT_UNREADABLE')
-    value={"id": identifier, "feishu_department_id": identifier, "parent_id": raw['parent_department_id'] if parent_readable else None, "name": raw["name"], "leader_user_id": raw.get('leader_user_id'), "status": "inactive" if inactive else "active", "sync_quality": "complete" if parent_readable else 'pending_verification', "is_virtual_root": False}
+    value={"id": identifier, "feishu_department_id": identifier, "parent_id": raw['parent_department_id'] if parent_readable else None, "name": raw["name"], "leader_user_id": raw.get('leader_user_id'), "status": "inactive" if inactive else "active", "sync_quality": "complete" if parent_readable else 'pending_verification', "is_root": False}
     if not parent_readable:value['parent_unreadable']=True
     return value
 
@@ -184,7 +184,7 @@ class Collector:
     def collect(self, root=None, previous_departments=(), previous_users=()):
         self.discovered_employees = None
         result = Candidate(full=root is None,collection_started_at=datetime.now(timezone.utc).isoformat())
-        result.departments["0"] = {"id": "0", "feishu_department_id": "0", "parent_id": None, "name": "组织", "status": "active", "sync_quality": "complete", "is_virtual_root": True}
+        result.departments["0"] = {"id": "0", "feishu_department_id": "0", "parent_id": None, "name": "组织", "status": "active", "sync_quality": "complete", "is_root": True}
         users, roots, groups = set(), [], []
         self._progress('scopes',result)
         for page in self.api.pages("scopes"):
@@ -242,7 +242,7 @@ class Collector:
                 continue
             visited.add(identifier)
             if identifier == '0':
-                result.departments['0'] = {'id':'0','feishu_department_id':'0','parent_id':None,'name':'组织','status':'active','sync_quality':'complete','is_virtual_root':True}
+                result.departments['0'] = {'id':'0','feishu_department_id':'0','parent_id':None,'name':'组织','status':'active','sync_quality':'complete','is_root':True}
                 continue
             try:
                 department = self._department(identifier)

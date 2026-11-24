@@ -39,9 +39,9 @@ _FORBIDDEN = {'business_tables_unchanged', 'data_version_unchanged', 'no_new_ope
 _LABELS = _EXPECTED | _FORBIDDEN | {'evidence', 'trace', 'privacy', 'identity', 'terminal', 'unsupported'}
 # 行级谓词只接受这些实际持久字段；不支持任意 SQL、JSON 路径或自然语言条件。
 _ROW_FIELDS = {
-    'department': {'id', 'parent_id', 'status', 'sync_quality', 'is_virtual_root'},
+    'department': {'id', 'parent_id', 'status', 'sync_quality', 'is_root'},
     'employee': {'id', 'status', 'sync_quality', 'primary_department_id', 'primary_store_status'},
-    'employee_department': {'employee_id', 'department_id', 'is_primary', 'active'},
+    'employee_department': {'employee_id', 'department_id', 'is_primary', 'is_active'},
     'employee_store': {'employee_id', 'store_id', 'is_primary', 'path'},
     'store_profile': {'department_id', 'is_store', 'store_code'},
     'pending_fact': {'object_type', 'source_id', 'error_code'},
@@ -137,7 +137,7 @@ def _read_condition(key, value, expected, obs):
         _need(_same(_field(employee, key), value), 'FACT_MISMATCH', key)
         if key == 'primary_department_id':
             relations = [r for r in _rows(obs.after, 'employee_department')
-                         if _field(r, 'employee_id') == employee_id and _field(r, 'active')
+                         if _field(r, 'employee_id') == employee_id and _field(r, 'is_active')
                          and _field(r, 'is_primary')]
             _need([_field(r, 'department_id') for r in relations] == ([] if value is None else [value]),
                   'FACT_MISMATCH', key)
@@ -262,7 +262,7 @@ def _employee_read_quality(employee_id, obs):
     qualities = [_SYNC_QUALITY.get(_field(employee, 'sync_quality'), 'unknown'),
                  _PRIMARY_QUALITY.get(_field(employee, 'primary_store_status'), 'unknown')]
     departments = {_field(row, 'department_id') for row in _rows(obs.after, 'employee_department')
-                   if _field(row, 'employee_id') == employee_id and _field(row, 'active')}
+                   if _field(row, 'employee_id') == employee_id and _field(row, 'is_active')}
     qualities += [_SYNC_QUALITY.get(_field(row, 'sync_quality'), 'unknown') for row in _rows(obs.after, 'department')
                   if _field(row, 'id') in departments]
     return _aggregate_read_quality(qualities, quality)
@@ -651,7 +651,7 @@ def _pending_protected(rule, obs):
             after = [r for r in _rows(obs.after, table) if _field(r, 'id') == identifier]
             _need(len(before) == len(after) == 1, 'FORBIDDEN_EFFECT', 'pending_protected')
             # 不可读不意味着离职/删除。只有质量与时间允许变化，其余原始事实保持。
-            ignored = {'sync_quality', 'last_seen_at'} | ({'primary_store_status'} if table == 'employee' else set())
+            ignored = {'sync_quality', 'last_sync_at', 'update_time'} | ({'primary_store_status'} if table == 'employee' else set())
             _need(_field(after[0], 'sync_quality') == 'pending_verification'
                   and _same({k:v for k,v in before[0].items() if k not in ignored},
                             {k:v for k,v in after[0].items() if k not in ignored}), 'FORBIDDEN_EFFECT', 'pending_protected')

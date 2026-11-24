@@ -16,13 +16,13 @@ from app.persistence.read_service import SqlReadService
 @pytest.fixture
 def organization_mysql(mysql_sessions):
     with mysql_sessions.begin() as db:
-        db.add(Department(id='0', feishu_department_id='0', name='组织', is_virtual_root=True))
+        db.add(Department(id='0', feishu_department_id='0', name='组织', is_root=True))
         db.flush()
         db.add_all([Department(id=f'd{i:03}', feishu_department_id=f'd{i:03}', parent_id='0', name=f'测试部门{i}', sort_order=i, sync_quality='complete') for i in range(501)])
         db.flush()
         db.add(Employee(id='user', feishu_user_id='user', name='测试成员', primary_department_id='d000', sync_quality='complete'))
         db.flush()
-        db.add(EmployeeDepartment(employee_id='user', department_id='d000', active=True, is_primary=True))
+        db.add(EmployeeDepartment(employee_id='user', department_id='d000', is_active=True, is_primary=True))
         epoch = db.get(DatasetState, 1).dataset_epoch
     identity = SimpleNamespace(open_id='mysql-admin')
     app.dependency_overrides[get_admin_identity] = lambda: identity

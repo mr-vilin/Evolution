@@ -33,7 +33,7 @@ def test_publication_is_atomic_preserves_missing_and_noop_version(sessions):
     from app.sync.collector import Candidate
     with sessions.begin() as db:
         db.add(SyncJob(id='job', type='full', requested_by='test', status='running', lease_generation=1, lease_expires_at=datetime.now()+timedelta(hours=1), created_at=datetime.now(), updated_at=datetime.now()))
-    candidate = Candidate(departments={'a': {'id':'a', 'feishu_department_id':'a', 'parent_id':None, 'name':'门店', 'status':'active', 'sync_quality':'complete', 'is_virtual_root':False}}, full=True)
+    candidate = Candidate(departments={'a': {'id':'a', 'feishu_department_id':'a', 'parent_id':None, 'name':'门店', 'status':'active', 'sync_quality':'complete', 'is_root':False}}, full=True)
     publisher = Publisher(sessions)
     publisher.publish(candidate, 'job', 1)
     with sessions() as db:
@@ -148,7 +148,7 @@ def test_failed_events_are_visible_and_retry_rejects_missing_identifier(sessions
 def test_publication_cycle_failure_rolls_back_all_facts_and_version(sessions):
     from app.sync.publisher import Publisher
     from app.sync.collector import Candidate
-    def department(identifier,parent): return {'id':identifier,'feishu_department_id':identifier,'parent_id':parent,'name':identifier,'status':'active','sync_quality':'complete','is_virtual_root':False}
+    def department(identifier,parent): return {'id':identifier,'feishu_department_id':identifier,'parent_id':parent,'name':identifier,'status':'active','sync_quality':'complete','is_root':False}
     candidate=Candidate(departments={'safe':department('safe',None),'a':department('a','b'),'b':department('b','a')})
     with pytest.raises(RuntimeError,match='DEPARTMENT_CYCLE'): Publisher(sessions).publish(candidate)
     with sessions() as db:
@@ -170,6 +170,6 @@ def test_partial_department_update_cannot_create_cycle_with_existing_parent(sess
     with sessions.begin() as db:
         db.add(Department(id='a',feishu_department_id='a',name='a',sync_quality='complete'));db.flush()
         db.add(Department(id='b',feishu_department_id='b',name='b',parent_id='a',sync_quality='complete'))
-    candidate=Candidate(departments={'a':{'id':'a','feishu_department_id':'a','parent_id':'b','name':'a','status':'active','sync_quality':'complete','is_virtual_root':False}})
+    candidate=Candidate(departments={'a':{'id':'a','feishu_department_id':'a','parent_id':'b','name':'a','status':'active','sync_quality':'complete','is_root':False}})
     with pytest.raises(RuntimeError,match='DEPARTMENT_CYCLE'): Publisher(sessions).publish(candidate)
     with sessions() as db: assert db.get(Department,'a').parent_id is None

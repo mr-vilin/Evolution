@@ -117,8 +117,17 @@ export function buildInfo(root = repositoryRoot, env = process.env) {
   if (configuredDirty && !['true', 'false'].includes(configuredDirty)) throw new Error('SOURCE_DIRTY 只允许 true/false');
   const dirty = status === null ? (configuredDirty ? configuredDirty === 'true' : null) : status !== '';
   if (tag && (commit === 'unknown' || dirty !== false)) throw new Error('发布构建必须提供真实提交及干净源代码状态');
+  const preview = env.PREVIEW_VERSION;
+  if (preview) {
+    if (tag || commit === 'unknown' || dirty === null || !/^\d+\.\d+\.\d+$/.test(preview)
+        || compareVersions(preview, version) < 0) {
+      throw new Error('开发预览需要有效版本、真实提交和确定的工作区状态，且不能同时指定发行标签');
+    }
+  }
   return {
-    version, commit, dirty, builtAt: new Date().toISOString(),
+    version: preview ? `${preview}-dev.g${commit.slice(0, 7)}${dirty ? '.dirty' : ''}` : version,
+    ...(preview ? { baseVersion: version } : {}),
+    commit, dirty, builtAt: new Date().toISOString(),
     stage: tag ? (parseVersion(version).pre.length ? 'prerelease' : 'release') : 'development',
     releaseDate: tag ? records[0].date : null,
   };

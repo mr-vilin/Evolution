@@ -16,7 +16,7 @@ const employee: Employee = {
   employee_type_name: '正式员工', primary_department_id: 'd0',
   status: 'active', department_ids: [], stores: [], store_ids: [], primary_store_id: null, primary_store_status: 'unknown',
   departments: Array.from({ length: 7 }, (_, i) => ({ id: `d${i}`, name: `部门${i}`, path: ['组织', '营运中心', `部门${i}`],
-    parent_id: '0', status: 'active', is_virtual_root: false, is_store: false, store_code: null, notes: null })),
+    parent_id: '0', status: 'active', is_root: false, is_store: false, store_code: null, notes: null })),
 };
 const envelope = (data: unknown) => Response.json({ data, meta: {} });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });

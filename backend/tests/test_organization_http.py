@@ -15,7 +15,7 @@ def organization_client(sqlite_sessions):
     with sqlite_sessions.begin() as db:
         for identifier, parent, name in [('0', None, '组织'), ('a', '0', '总部'), ('b', 'a', '区域'), ('c', 'b', '人民路店'), ('x', '0', '其他')]:
             db.add(Department(id=identifier, feishu_department_id=identifier, parent_id=parent,
-                              name=name, is_virtual_root=identifier == '0', sync_quality='complete'))
+                              name=name, is_root=identifier == '0', sync_quality='complete'))
             db.flush()
     identity = SimpleNamespace(open_id='admin')
     app.dependency_overrides[get_admin_identity] = lambda: identity
@@ -34,10 +34,12 @@ def test_initial_tree_only_reads_top_level_and_search_returns_ancestors(organiza
     assert response.status_code == 200
     body = response.json()
     assert [row['id'] for row in body['data']] == ['a', 'x']
+    assert all(row['is_root'] is False and 'is_virtual_root' not in row for row in body['data'])
     assert body['data'][0]['has_children'] is True
     assert body['data'][1]['has_children'] is False
     found = client.get('/admin/api/organization/search', params={'keyword': '民路', 'dataset_epoch': 'e', 'data_version': 1}).json()
     assert {row['id'] for row in found['data']} == {'0', 'a', 'b', 'c'}
+    assert [row['id'] for row in found['data'] if row['is_root'] is True] == ['0']
     assert found['meta']['matched_ids'] == ['c']
     assert client.get('/admin/api/organization/search', params={'keyword': 'c'}).json()['data'] == []
 
@@ -58,8 +60,8 @@ def test_company_summary_counts_all_records_once_and_only_explicit_status_facts(
             Employee(id='a4', feishu_user_id='a4', name='已激活', is_activated=True, is_unjoin=False, is_resigned=False),
         ])
         db.flush()
-        db.add_all([EmployeeDepartment(employee_id='a1', department_id='a', active=True),
-                    EmployeeDepartment(employee_id='a1', department_id='b', active=True)])
+        db.add_all([EmployeeDepartment(employee_id='a1', department_id='a', is_active=True),
+                    EmployeeDepartment(employee_id='a1', department_id='b', is_active=True)])
     response = client.get('/admin/api/organization/summary', params=params).json()
     assert response['data'] == dict(department_id='0', department_count=3, employee_count=4,
                                     unactivated_count=1, unjoin_count=1, resigned_count=1, member_count=3, members_limited=False)
@@ -118,11 +120,11 @@ def test_members_are_paged_deduplicated_and_filtered_by_raw_facts(organization_c
                             is_resigned=False if index == 0 else None,
                             is_exited=False if index == 0 else None))
             db.flush()
-            db.add(EmployeeDepartment(employee_id=identifier, department_id='a', active=True))
-            db.add(EmployeeDepartment(employee_id=identifier, department_id='c', active=True))
+            db.add(EmployeeDepartment(employee_id=identifier, department_id='a', is_active=True))
+            db.add(EmployeeDepartment(employee_id=identifier, department_id='c', is_active=True))
         db.add(Employee(id='old', feishu_user_id='old', name='历史成员', is_activated=True))
         db.flush()
-        db.add(EmployeeDepartment(employee_id='old', department_id='a', active=False))
+        db.add(EmployeeDepartment(employee_id='old', department_id='a', is_active=False))
     params = {'department_id': 'a', 'include_descendants': True, 'dataset_epoch': 'e', 'data_version': 1, 'limit': 20}
     first = client.get('/admin/api/organization/employees', params=params).json()
     assert len(first['data']) == 20 and first['meta']['total_count'] == 45
@@ -171,10 +173,10 @@ def test_account_badges_follow_member_scope_without_search_or_status_filter(orga
             Employee(id='past', feishu_user_id='past', name='历史', status='inactive', is_activated=False),
         ])
         db.flush()
-        db.add_all([EmployeeDepartment(employee_id='direct', department_id='a', active=True),
-                    EmployeeDepartment(employee_id='direct', department_id='c', active=True),
-                    EmployeeDepartment(employee_id='child', department_id='c', active=True),
-                    EmployeeDepartment(employee_id='past', department_id='a', active=False)])
+        db.add_all([EmployeeDepartment(employee_id='direct', department_id='a', is_active=True),
+                    EmployeeDepartment(employee_id='direct', department_id='c', is_active=True),
+                    EmployeeDepartment(employee_id='child', department_id='c', is_active=True),
+                    EmployeeDepartment(employee_id='past', department_id='a', is_active=False)])
     params = dict(department_id='a', dataset_epoch='e', data_version=1)
     def read(**extra):
         return client.get('/admin/api/organization/employees', params={**params, **extra}).json()
@@ -285,9 +287,9 @@ def test_member_limit_is_based_on_unfiltered_deduplicated_subtree(organization_c
                             job_title='工程师', email='person@example.test', employee_type_name='正式员工',
                             field_readability={'email': 'readable'}))
             db.flush()
-            db.add(EmployeeDepartment(employee_id=identifier, department_id='c', active=True))
+            db.add(EmployeeDepartment(employee_id=identifier, department_id='c', is_active=True))
             if index == 0:
-                db.add(EmployeeDepartment(employee_id=identifier, department_id='a', active=True))
+                db.add(EmployeeDepartment(employee_id=identifier, department_id='a', is_active=True))
     params = {'dataset_epoch': 'e', 'data_version': 1, 'department_id': 'a'}
     summary = client.get('/admin/api/organization/summary', params=params).json()['data']
     assert summary['member_count'] == count

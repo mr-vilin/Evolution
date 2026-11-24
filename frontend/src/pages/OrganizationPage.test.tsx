@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { OrganizationPage } from './OrganizationPage';
-const department = { id: 'a', parent_id: '0', name: '总部', path: ['组织', '总部'], status: 'active', is_virtual_root: false, is_store: false, store_code: null, notes: null, has_children: true, sort_order: 0 };
+const department = { id: 'a', parent_id: '0', name: '总部', path: ['组织', '总部'], status: 'active', is_root: false, is_store: false, store_code: null, notes: null, has_children: true, sort_order: 0 };
 const envelope = (data: unknown, meta = {}) => Response.json({ data, meta: { dataset_epoch: 'e', data_version: 1, next_cursor: null, ...meta } });
 beforeEach(() => { vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })); vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} }); });
 afterEach(() => vi.unstubAllGlobals());

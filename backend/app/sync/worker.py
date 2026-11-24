@@ -182,7 +182,10 @@ class Worker:
             if row.normalized_data == {'pending': True}:
                 result.pending.append((row.object_type, row.source_id))
             elif row.object_type == 'department':
-                result.departments[row.source_id] = row.normalized_data
+                department = dict(row.normalized_data)
+                if 'is_virtual_root' in department:
+                    department.setdefault('is_root', department.pop('is_virtual_root'))
+                result.departments[row.source_id] = department
             elif row.object_type == 'employee':
                 result.employees[row.source_id] = row.normalized_data
         return result

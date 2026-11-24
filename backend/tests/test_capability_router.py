@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 from datetime import datetime
 from sqlalchemy import BigInteger, create_engine, event
@@ -15,11 +16,19 @@ from app.stores.service import StoreAdminService
 from unittest.mock import Mock
 
 import pytest
+import httpx
 from fastapi.testclient import TestClient
+from mcp import Client
+from pydantic import SecretStr
 
 from app.config import Settings, get_settings
 from app.dependencies import get_runtime
 from app.main import app
+from app.mcp import policy
+from app.mcp.client import CapabilityHttpClient
+from app.mcp.models import AgentPrincipal
+from app.mcp.server import build_server
+from app.mcp.trace import Tracer
 
 
 @pytest.fixture
@@ -69,7 +78,7 @@ def http():
         db.flush()
         db.add(Employee(id='u', feishu_user_id='u', name='员工', primary_department_id='a', sync_quality='complete'))
         db.flush()
-        db.add(EmployeeDepartment(employee_id='u', department_id='a', active=True))
+        db.add(EmployeeDepartment(employee_id='u', department_id='a', is_active=True))
         db.add(StoreProfile(department_id='a', is_store=True, store_code='A', notes='原备注'))
         db.add(SystemSetting(key='task_queue_lock', value='1'))
     capabilities = OrganizationCapabilities(sessions, SqlReadService(sessions, 'synthetic-cursor-key'), StoreAdminService(sessions), SqlSyncJobRepository(sessions), ReceiptRepository(), ObservationService(), environment='production')
@@ -111,6 +120,32 @@ def test_organization_queries_return_capability_result(http, path, expected):
     assert (data[0] if isinstance(data, list) else data)['id'] == expected
     assert result['data']['meta']['dataset_epoch'] == 'epoch'
     assert result['observation']['data_version'] == 7
+
+
+def test_department_root_flag_reaches_mcp_through_http_capabilities(http):
+    _, sessions = http
+    with sessions.begin() as db:
+        db.add(Department(id='0', feishu_department_id='0', name='本组织', is_root=True, sync_quality='complete'))
+        db.get(Department, 'a').parent_id = '0'
+
+    async def scenario():
+        principal = AgentPrincipal(actor_type='human_agent', actor_id='agent-a', environment='production')
+        upstream = CapabilityHttpClient(
+            'http://internal', SecretStr('synthetic-service-token'), environment='production',
+            transport=httpx.ASGITransport(app=app),
+        )
+        server = build_server(upstream, policy, Tracer(), principal=principal,
+                              inbound_token=SecretStr('synthetic-mcp-token'), environment='production')
+        async with Client(server) as client:
+            root = (await client.call_tool('get_department', {'department_id': '0'})).structured_content
+            assert root['data']['data']['is_root'] is True
+            assert 'is_virtual_root' not in root['data']['data']
+            children = (await client.call_tool('find_departments', {'parent_id': '0'})).structured_content
+            assert [(row['id'], row['is_root']) for row in children['data']['data']] == [('a', False)]
+            employee = (await client.call_tool('get_employee', {'employee_id': 'u'})).structured_content
+            assert employee['data']['data']['departments'][0]['is_root'] is False
+
+    asyncio.run(scenario())
 
 
 def test_authorized_apply_and_operation_observation_isolated_by_trusted_actor(http):

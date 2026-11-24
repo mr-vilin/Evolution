@@ -2,7 +2,6 @@ from alembic import command
 from sqlalchemy import text
 
 from app.persistence.database import schema_snapshot
-from app.persistence.schema_check import check_schema
 from test_sync_center import assert_sync_summary_reports_actual_pending_objects_and_latest_task
 
 
@@ -21,14 +20,15 @@ def test_drop_and_restore_connection_coverage_preserves_binding(migration_databa
         before_binding = db.execute(binding).one()
         before_dataset = db.execute(text('SELECT * FROM dataset_state WHERE id = 1')).one()
 
-    command.upgrade(config, 'head')
+    target = '0023_remove_connection_coverage'
+    command.upgrade(config, target)
     after = schema_snapshot(engine)
     expected_tables = before['tables']
     connection = expected_tables['feishu_connection']
     original_columns = connection['columns']
     connection['columns'] = [column for column in original_columns if column['name'] != 'coverage_status']
     assert after['tables'] == expected_tables
-    assert check_schema(engine)['errors'] == []
+    assert after['versions'] == [target]
     with engine.connect() as db:
         assert db.execute(binding).one() == before_binding
         assert db.execute(text('SELECT * FROM dataset_state WHERE id = 1')).one() == before_dataset

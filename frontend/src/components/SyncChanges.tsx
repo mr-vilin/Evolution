@@ -8,7 +8,7 @@ const fields: Record<string, string> = {
   status: '状态', sync_quality: '同步质量', parent_id: '上级部门', primary_department_id: '主部门', department_ids: '所属部门',
   leader_user_id: '直属上级', job_title: '职务', employee_type_id: '人员类型 ID', employee_type_name: '人员类型',
   permission_role_id: '权限角色 ID', permission_role_name: '权限角色', store_attribute_id: '门店属性 ID', store_attribute_name: '门店属性',
-  is_virtual_root: '虚拟根部门', sort_order: '排序', relations: '部门关系（部门、是否主部门、是否有效）',
+  is_root: '组织根节点', is_virtual_root: '组织根节点', sort_order: '排序', relations: '部门关系（部门、是否主部门、是否有效）',
   department_id: '部门', active: '是否有效', is_primary: '是否主部门', primary_store_status: '主门店状态',
   field_readability: '字段可读性', is_frozen: '是否暂停', is_resigned: '是否离职', is_activated: '是否激活', is_exited: '是否退出', is_unjoin: '是否未加入',
 };

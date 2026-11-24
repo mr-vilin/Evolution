@@ -134,7 +134,7 @@ def test_partial_publication_keeps_lease_and_finalization_preserves_first_change
     now = datetime.now()
     with sessions.begin() as db:
         db.add(SyncJob(id='j', type='full', requested_by='test', status='running', lease_generation=1, lease_expires_at=now+timedelta(hours=1), created_at=now, updated_at=now))
-    candidate = Candidate(departments={'d': {'id': 'd', 'feishu_department_id': 'd', 'parent_id': None, 'name': '部门', 'status': 'active', 'sync_quality': 'complete', 'is_virtual_root': False}})
+    candidate = Candidate(departments={'d': {'id': 'd', 'feishu_department_id': 'd', 'parent_id': None, 'name': '部门', 'status': 'active', 'sync_quality': 'complete', 'is_root': False}})
     publisher = Publisher(sessions)
     publisher.publish(candidate, 'j', 1, final=False)
     with sessions() as db:

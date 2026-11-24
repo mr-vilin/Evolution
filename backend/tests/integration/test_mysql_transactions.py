@@ -51,13 +51,13 @@ def test_store_marking_and_cancellation_publish_projection_with_version(mysql_se
     prefix = 'test_' + uuid4().hex
     shop, kitchen, user = prefix + '_shop', prefix + '_kitchen', prefix + '_user'
     with mysql_sessions.begin() as db:
-        db.add(Department(id=shop, feishu_department_id=shop, name='测试店', status='active', sync_quality='verified', is_virtual_root=False))
+        db.add(Department(id=shop, feishu_department_id=shop, name='测试店', status='active', sync_quality='verified', is_root=False))
         db.flush()
-        db.add(Department(id=kitchen, feishu_department_id=kitchen, parent_id=shop, name='后厨', status='active', sync_quality='verified', is_virtual_root=False))
+        db.add(Department(id=kitchen, feishu_department_id=kitchen, parent_id=shop, name='后厨', status='active', sync_quality='verified', is_root=False))
         db.flush()
         db.add(Employee(id=user, feishu_user_id=user, name='测试员工', status='active', sync_quality='verified', primary_department_id=kitchen))
         db.flush()
-        db.add(EmployeeDepartment(employee_id=user, department_id=kitchen, active=True, is_primary=True))
+        db.add(EmployeeDepartment(employee_id=user, department_id=kitchen, is_active=True, is_primary=True))
     stores = StoreAdminService(mysql_sessions)
     stores.apply([StorePatch(shop, True, prefix, '保留备注')], 1, 'integration', now)
     with mysql_sessions() as db:
@@ -75,7 +75,7 @@ def test_cross_page_version_change_is_rejected(mysql_sessions):
     reads = SqlReadService(mysql_sessions, 'c' * 32)
     prefix = 'test_' + uuid4().hex
     with mysql_sessions.begin() as db:
-        db.add_all([Department(id=prefix + str(n), feishu_department_id=prefix + str(n), name='测试部门', status='active', sync_quality='verified', is_virtual_root=False) for n in range(2)])
+        db.add_all([Department(id=prefix + str(n), feishu_department_id=prefix + str(n), name='测试部门', status='active', sync_quality='verified', is_root=False) for n in range(2)])
     _, meta = reads.list_departments(limit=1)
     assert meta['next_cursor']
     with mysql_sessions.begin() as db:

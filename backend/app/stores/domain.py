@@ -37,7 +37,7 @@ def validate_store_changes(changes: list[StorePatch], *, departments: dict[str, 
         item = replace(change, store_code=code)
         if department is None:
             errors.append(StoreValidationError(change.department_id, "DEPARTMENT_NOT_FOUND", "部门不存在"))
-        elif change.is_store and department["is_virtual_root"]:
+        elif change.is_store and department["is_root"]:
             errors.append(StoreValidationError(change.department_id, "VIRTUAL_ROOT", "虚拟根不能设为门店"))
         elif change.is_store and department["status"] != "active":
             errors.append(StoreValidationError(change.department_id, "DEPARTMENT_INACTIVE", "失效部门不能新设为门店"))

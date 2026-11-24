@@ -19,7 +19,7 @@ import { contactLabel } from '../components/employeePresentation';
 import { EmployeeMobile, EmployeeValue } from '../components/EmployeeValue';
 import { useOrganizationTableLayout } from './useOrganizationTableLayout';
 
-const ROOT: Department = { id: '0', parent_id: null, name: '本组织', path: ['本组织'], status: 'active', is_virtual_root: true, is_store: false, store_code: null, notes: null, has_children: true };
+const ROOT: Department = { id: '0', parent_id: null, name: '本组织', path: ['本组织'], status: 'active', is_root: true, is_store: false, store_code: null, notes: null, has_children: true };
 interface OrganizationSummary {
   department_id: string; department_count: number; employee_count: number; unactivated_count: number; unjoin_count: number; resigned_count: number; member_count: number; members_limited: boolean;
 }

@@ -28,7 +28,7 @@ def test_confirmed_inactive_with_unreadable_department_revokes_and_ends_current_
     with sessions() as db:
         assert db.get(Employee,'u').status=='inactive'
         assert db.get(Employee,'u').name=='员工'
-        assert db.get(EmployeeDepartment,('u','old')).active is False
+        assert db.get(EmployeeDepartment,('u','old')).is_active is False
         assert db.get(EmployeeStore,('u','old')) is None
         assert db.get(AdminSession,'session').revoked_at is not None
         assert db.get(Department,'missing') is None
@@ -44,7 +44,7 @@ def test_missing_membership_field_does_not_discard_explicit_inactive(sessions):
     with sessions() as db:
         assert db.get(Employee,'u').status=='inactive'
         assert db.get(AdminSession,'session').revoked_at is not None
-        assert db.get(EmployeeDepartment,('u','old')).active is False
+        assert db.get(EmployeeDepartment,('u','old')).is_active is False
 
 
 @pytest.mark.parametrize('raw',[
@@ -60,7 +60,7 @@ def test_unreadable_lifecycle_or_wrong_source_id_cannot_revoke(sessions,raw):
     with sessions() as db:
         assert db.get(Employee,'u').status=='active'
         assert db.get(AdminSession,'session').revoked_at is None
-        assert db.get(EmployeeDepartment,('u','old')).active is True
+        assert db.get(EmployeeDepartment,('u','old')).is_active is True
 
 
 @pytest.mark.parametrize('failure_target',['membership','security'])
@@ -75,7 +75,7 @@ def test_inactive_relations_and_revocation_roll_back_on_audit_failure(sessions,f
     finally:event.remove(ChangeLog,'before_insert',reject)
     with sessions() as db:
         assert db.get(Employee,'u').status=='active'
-        assert db.get(EmployeeDepartment,('u','old')).active is True
+        assert db.get(EmployeeDepartment,('u','old')).is_active is True
         assert db.get(EmployeeStore,('u','old')) is not None
         assert db.get(AdminSession,'session').revoked_at is None
         assert db.get(DatasetState,1).data_version==1
@@ -114,6 +114,6 @@ def test_relation_write_failure_rolls_back_employee_and_sessions(sessions):
     finally:event.remove(EmployeeDepartment,'before_update',reject)
     with sessions() as db:
         assert db.get(Employee,'u').status=='active'
-        assert db.get(EmployeeDepartment,('u','old')).active is True
+        assert db.get(EmployeeDepartment,('u','old')).is_active is True
         assert db.get(AdminSession,'session').revoked_at is None
         assert db.get(DatasetState,1).data_version==1

@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { StoreEditor } from './StoreEditor';
-const departments = [{ id:'d1', parent_id:null, name:'一店', path:['总部','一店'], status:'active' as const, is_virtual_root:false, is_store:true, store_code:'S1', notes:'旧备注' }, { id:'d2', parent_id:'d1', name:'二店', path:['总部','一店','二店'], status:'active' as const, is_virtual_root:false, is_store:false, store_code:null, notes:'保留备注' }];
+const departments = [{ id:'d1', parent_id:null, name:'一店', path:['总部','一店'], status:'active' as const, is_root:false, is_store:true, store_code:'S1', notes:'旧备注' }, { id:'d2', parent_id:'d1', name:'二店', path:['总部','一店','二店'], status:'active' as const, is_root:false, is_store:false, store_code:null, notes:'保留备注' }];
 beforeEach(() => { vi.stubGlobal('matchMedia', () => ({ matches:false, addListener:vi.fn(), removeListener:vi.fn(), addEventListener:vi.fn(), removeEventListener:vi.fn() })); vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} }); });
 afterEach(() => vi.unstubAllGlobals());
 it('批量预览全部规范化 changes，并从预览弹窗确认提交', async () => {

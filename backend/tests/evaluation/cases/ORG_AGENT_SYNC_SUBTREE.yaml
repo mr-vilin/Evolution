@@ -16,28 +16,28 @@ fixture:
     name: 组织
     status: active
     sync_quality: complete
-    is_virtual_root: true
+    is_root: true
   - id: eval_store
     feishu_department_id: eval_store
     parent_id: '0'
     name: 旧测试门店
     status: active
     sync_quality: complete
-    is_virtual_root: false
+    is_root: false
   - id: eval_team
     feishu_department_id: eval_team
     parent_id: eval_store
     name: 旧测试小组
     status: active
     sync_quality: complete
-    is_virtual_root: false
+    is_root: false
   - id: outside_store
     feishu_department_id: outside_store
     parent_id: '0'
     name: 范围外门店
     status: active
     sync_quality: complete
-    is_virtual_root: false
+    is_root: false
   employees:
   - id: eval_user
     feishu_user_id: eval_user
@@ -57,11 +57,11 @@ fixture:
   - employee_id: eval_user
     department_id: eval_team
     is_primary: true
-    active: true
+    is_active: true
   - employee_id: eval_employee_outside
     department_id: outside_store
     is_primary: true
-    active: true
+    is_active: true
   store_profiles:
   - department_id: eval_store
     is_store: true
@@ -254,7 +254,7 @@ expected_state:
       employee_id: eval_user_late
       department_id: eval_team
     equals:
-      active: true
+      is_active: true
       is_primary: true
     count: 1
   - table: employee_store
@@ -280,7 +280,7 @@ expected_state:
       employee_id: eval_user
       department_id: eval_team
     equals:
-      active: true
+      is_active: true
       is_primary: true
     count: 1
 forbidden_effects:

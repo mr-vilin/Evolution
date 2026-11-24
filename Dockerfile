@@ -12,6 +12,7 @@ RUN --mount=type=cache,id=evolution-npm,target=/root/.npm,sharing=locked \
 ARG COMMIT_SHA
 ARG RELEASE_TAG
 ARG SOURCE_DIRTY
+ARG PREVIEW_VERSION
 RUN node /build/scripts/versioning.mjs build-info --output /build/build-info.json
 ENV BUILD_INFO_FILE=/build/build-info.json
 RUN npm run build

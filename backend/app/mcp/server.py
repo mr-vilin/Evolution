@@ -85,7 +85,7 @@ def build_server(client, policy, tracer, *, principal=None, inbound_token=None,
                                include_inactive: StrictBool = False, limit: FindLimit = 100,
                                cursor: Cursor | None = None, dataset_epoch: Key | None = None,
                                data_version: Version | None = None) -> ToolResult:
-        """定位或分页查找部门；多个候选原样返回，不自动选择。"""
+        """定位或分页查找部门。is_root 表示该节点为整棵组织树的根。多个候选由调用方选择。"""
         values = locals()
         if sum(value is not None for value in (department_id, name, path)) > 1:
             raise SDKToolError("Only one department locator is allowed.")
@@ -95,7 +95,7 @@ def build_server(client, policy, tracer, *, principal=None, inbound_token=None,
 
     @register
     async def get_department(department_id: Identifier) -> ToolResult:
-        """按稳定 ID 读取部门。"""
+        """按稳定 ID 读取部门。is_root 表示该节点为整棵组织树的根。"""
         return await invoke("get_department", "/departments/" + path_id(department_id), {})
 
     @register
