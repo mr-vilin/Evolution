@@ -1,6 +1,7 @@
 """规范组织目录字段和索引，保留同步时间及关系数据。"""
 
 from alembic import context, op
+from alembic.script import ScriptDirectory
 import sqlalchemy as sa
 
 
@@ -96,6 +97,12 @@ def upgrade():
 def downgrade():
     offline = context.is_offline_mode()
     if not offline:
+        target = context.get_revision_argument()
+        if target not in {down_revision, '0022_mysql_general_ci', '0021_tencent_db_conventions',
+                          '0020_tencent_history', '-1', '-2', '-3'}:
+            # 跨版本回退先沿用财务证据检查，避免拒绝前已提交组织表 DDL。
+            history = ScriptDirectory.from_config(context.config).get_revision('0020_tencent_history')
+            history.module.check_downgrade(target)
         _preflight()
         if op.get_bind().scalar(sa.text('SELECT 1 FROM employee WHERE join_time > 9223372036854775807 LIMIT 1')):
             raise RuntimeError('ORGANIZATION_SCHEMA_DATA_OUT_OF_RANGE: employee.join_time')
