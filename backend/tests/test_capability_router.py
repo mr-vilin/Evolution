@@ -80,7 +80,7 @@ def http():
         db.flush()
         db.add(EmployeeDepartment(employee_id='u', department_id='a', is_active=True))
         db.add(StoreProfile(department_id='a', is_store=True, store_code='A', notes='原备注'))
-        db.add(SystemSetting(key='task_queue_lock', value='1'))
+        db.add(SystemSetting(setting_key='task_queue_lock', value='1'))
     capabilities = OrganizationCapabilities(sessions, SqlReadService(sessions, 'synthetic-cursor-key'), StoreAdminService(sessions), SqlSyncJobRepository(sessions), ReceiptRepository(), ObservationService(), environment='production')
     app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None, agent_service_token='synthetic-service-token', agent_environment='production')
     app.dependency_overrides[get_runtime] = lambda: SimpleNamespace(capabilities=capabilities)
@@ -407,7 +407,7 @@ def test_job_and_error_responses_filter_secrets(http, monkeypatch):
     client, sessions = http
     with sessions.begin() as db:
         db.add(SyncJob(id='failed', type='full', requested_by='agent-a', status='failed', error_code='REMOTE_ERROR',
-                       error_detail='Bearer synthetic-upstream-secret', created_at=datetime.now(), updated_at=datetime.now()))
+                       error_detail='Bearer synthetic-upstream-secret', create_time=datetime.now(), update_time=datetime.now()))
         db.flush()
         db.add(SyncJobDetail(job_id='failed', object_type='employee', object_id='u', status='failed', error_code='Bearer synthetic-upstream-secret'))
     response = client.get('/internal/capabilities/sync/jobs/failed', headers=HEADERS)

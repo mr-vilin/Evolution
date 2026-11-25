@@ -31,7 +31,7 @@ def receive(sessions, payload, app_id, tenant_key):
             if row['event_type'] == 'contact.scope.updated_v3':
                 state=db.scalar(select(DatasetState).where(DatasetState.id==1).with_for_update())
                 if state: state.coverage_status='unknown'
-                db.merge(SystemSetting(key='coverage_invalidated',value='true'))
+                db.merge(SystemSetting(setting_key='coverage_invalidated',value='true'))
     except IntegrityError:
         with sessions() as db:
             if db.get(EventInbox, row['event_id']) is None:

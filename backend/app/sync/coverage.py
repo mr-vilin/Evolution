@@ -28,18 +28,24 @@ class CoverageService:
             raise ValueError('COVERAGE_ACCEPTANCE_INVALID')
         now=datetime.now(timezone.utc).replace(tzinfo=None)
         with self.sessions.begin() as db:
-            lock=db.scalar(select(SystemSetting).where(SystemSetting.key=='task_queue_lock').with_for_update())
-            if lock is None: raise RuntimeError('DATABASE_SCHEMA_INCOMPLETE')
             state=db.scalar(select(DatasetState).where(DatasetState.id==1).with_for_update())
             if state is None: raise RuntimeError('DATABASE_SCHEMA_INCOMPLETE')
+            lock=db.scalar(select(SystemSetting).where(SystemSetting.setting_key=='task_queue_lock').with_for_update())
+            if lock is None: raise RuntimeError('DATABASE_SCHEMA_INCOMPLETE')
+            active = db.scalar(select(SyncJob.id).where(
+                SyncJob.type == 'reconcile', SyncJob.root_department_id.is_(None),
+                SyncJob.status.in_(('queued', 'running')),
+            ).with_for_update())
+            if active is not None:
+                raise ValueError('COVERAGE_RECONCILE_ALREADY_ACTIVE')
             row=db.get(SystemSetting,'coverage_acceptance')
             before=json.loads(row.value) if row else None
             after={'reference':reference.strip(),'all_members_verified':True,'departmentless_verified':True,'accepted_by':actor.strip(),'updated_at':now.isoformat()+'+00:00'}
-            db.merge(SystemSetting(key='coverage_acceptance',value=json.dumps(after,ensure_ascii=False)))
-            db.execute(delete(SystemSetting).where(SystemSetting.key=='coverage_invalidated'))
+            db.merge(SystemSetting(setting_key='coverage_acceptance',value=json.dumps(after,ensure_ascii=False)))
+            db.execute(delete(SystemSetting).where(SystemSetting.setting_key=='coverage_invalidated'))
             state.coverage_status='unknown'
             # 不复用正在执行的旧采集；始终保存一个验收后的全量核对。
-            job=SyncJob(id=secrets.token_urlsafe(12),type='reconcile',trigger_source='coverage',requested_by=actor.strip(),status='queued',phase='queued',created_at=now,updated_at=now)
+            job=SyncJob(id=secrets.token_urlsafe(12),type='reconcile',trigger_source='coverage',requested_by=actor.strip(),status='queued',phase='queued',create_time=now)
             db.add(job)
             db.add(ChangeLog(object_type='settings',object_id='coverage_acceptance',source='cli',actor=actor.strip(),job_id=job.id,before_data=before,after_data=after,committed_at=now))
             return {'job_id':job.id,**after}
@@ -60,6 +66,10 @@ def main(argv=None):
     try:
         bind_connection(runtime.sessions,settings.feishu_app_id,settings.feishu_tenant_key)
         result=CoverageService(runtime.sessions).accept(args.reference,args.actor,args.all_members_verified,args.departmentless_verified)
+    except ValueError as exc:
+        if str(exc) == "COVERAGE_RECONCILE_ALREADY_ACTIVE":
+            raise SystemExit("已有同范围活动核对任务，请在其结束后重新验收") from None
+        raise SystemExit("覆盖验收参数或状态不符合要求") from None
     except Exception:
         # CLI 不输出 SQL、异常原文或配置。
         raise SystemExit('覆盖验收操作失败；未确认提交，请检查配置及数据库状态') from None

@@ -63,7 +63,7 @@ export function SyncPage() {
           { title: '阶段', dataIndex: 'phase', render: value => label(syncPhases, value) },
           { title: '状态', dataIndex: 'status', render: value => <SyncStatus value={value} /> },
           { title: '进度', width: 220, render: (_, row) => <SyncProgress job={row} /> },
-          { title: '创建时间', dataIndex: 'created_at', render: formatTime },
+          { title: '创建时间', dataIndex: 'create_time', render: formatTime },
           { title: '操作', fixed: 'right', width: 96, render: (_, row) => <Link to={`/sync/jobs/${encodeURIComponent(row.job_id ?? row.id ?? '')}`}>查看详情</Link> },
         ]} />
       </ResourceState>

@@ -71,14 +71,14 @@ class SqlIdentityRepository:
     def initialize_allowlist_once(self, open_ids: set[str], now: datetime) -> bool:
         """仅首次初始化配置白名单；持久标记防止重启恢复已删除管理员。"""
         with self._sessions.begin() as db:
-            marker = db.scalar(select(SystemSetting).where(SystemSetting.key == "admin_allowlist_initialized").with_for_update())
+            marker = db.scalar(select(SystemSetting).where(SystemSetting.setting_key == "admin_allowlist_initialized").with_for_update())
             if marker is not None:
                 return False
             for open_id in open_ids:
                 # 恢复/人工清理后标记可能丢失，但白名单记录仍在；避免重复主键导致登录失败。
                 if db.get(AdminAllowlist, open_id) is None:
                     db.add(AdminAllowlist(open_id=open_id, created_at=now))
-            db.add(SystemSetting(key="admin_allowlist_initialized", value="true"))
+            db.add(SystemSetting(setting_key="admin_allowlist_initialized", value="true"))
             return True
 
     def issue_api_key(self, name: str, now: datetime) -> tuple[ApiClient, str]:
@@ -188,7 +188,7 @@ class SqlSyncJobRepository:
                 raise RuntimeError('INITIALIZATION_WIZARD_REQUIRED')
         elif state.initialization_status != 'complete':
             raise RuntimeError('INITIALIZATION_INCOMPLETE')
-        lock_row = db.scalar(select(SystemSetting).where(SystemSetting.key == "task_queue_lock").with_for_update().execution_options(populate_existing=True))
+        lock_row = db.scalar(select(SystemSetting).where(SystemSetting.setting_key == "task_queue_lock").with_for_update().execution_options(populate_existing=True))
         if lock_row is None:
             raise RuntimeError("DATABASE_SCHEMA_INCOMPLETE")
         existing = db.scalar(
@@ -205,7 +205,7 @@ class SqlSyncJobRepository:
             name=f"{job_type}同步", trigger_source=trigger_source if trigger_source is not None else ('manual' if requested_by.startswith('admin:') else requested_by),
             description=description or ('指定部门子树同步' if root_department_id else '全量组织同步'), requested_by=requested_by,
             status="queued", phase="queued", attempt=1, lease_generation=0, execution_count=0, retry_count=0,
-            created_at=now, updated_at=now,
+            create_time=now,
         )
         db.add(job)
         return job, False
@@ -221,7 +221,7 @@ class SqlSyncJobRepository:
                     or_(SyncJob.lease_expires_at.is_(None), SyncJob.lease_expires_at <= now),
                     # 初始化前不能认领核对任务，否则旧队首会反复抢占初始化。
                     or_(SyncJob.type == "initialize", initialized),
-                ).order_by(SyncJob.created_at, SyncJob.id).limit(1).with_for_update(skip_locked=True)
+                ).order_by(SyncJob.create_time, SyncJob.id).limit(1).with_for_update(skip_locked=True)
             )
             if job is None:
                 return None
@@ -230,7 +230,6 @@ class SqlSyncJobRepository:
             job.started_at = now
             job.lease_generation += 1
             job.lease_expires_at = lease_expires_at
-            job.updated_at = now
             return job
 
     def mark_succeeded(self, job_id: str, lease_generation: int, now: datetime) -> SyncJob:
@@ -246,7 +245,7 @@ class SqlSyncJobRepository:
             if job is None or job.status != "running" or job.lease_generation != lease_generation:
                 raise ValueError("job lease is stale")
             job.status, job.error_code, job.error_detail = status, error_code, error_detail
-            job.lease_expires_at, job.updated_at = None, now
+            job.lease_expires_at = None
             job.finished_at = now
             ReceiptRepository().finalize_job_in_session(db, job, now)
             return job
@@ -262,6 +261,13 @@ class SqlSyncJobRepository:
             raise ValueError('initialization must restart through the wizard')
         if job is None or job.status != "failed":
             raise ValueError("only failed jobs can be retried")
+        active = db.scalar(select(SyncJob.id).where(
+            SyncJob.type == job.type,
+            SyncJob.root_department_id == job.root_department_id,
+            SyncJob.status.in_(self.ACTIVE),
+        ).with_for_update())
+        if active is not None:
+            raise ValueError("同范围已有活动同步任务")
         job.status, job.requested_by, job.attempt = "queued", requested_by, job.attempt + 1
         job.retry_count = (job.retry_count or 0) + 1
         job.finished_at = None
@@ -269,5 +275,4 @@ class SqlSyncJobRepository:
         job.phase = 'queued'
         db.add(ChangeLog(object_type='sync_job', object_id=job.id, source='admin', actor=requested_by, job_id=job.id, before_data={'status': 'failed', 'attempt': job.attempt - 1}, after_data={'status': 'queued', 'attempt': job.attempt, 'retry_count': job.retry_count}, committed_at=now))
         job.error_code = job.error_detail = None
-        job.updated_at = now
         return job

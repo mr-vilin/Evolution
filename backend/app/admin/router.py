@@ -60,7 +60,7 @@ def sync_preflight(identity=Depends(get_admin_identity), runtime=Depends(get_run
 @router.get('/sync/jobs')
 def list_sync_jobs(status: str | None = None, limit: int = Query(50, ge=1, le=200), type: str | None = None, phase: str | None = None, cursor: str | None = None, identity=Depends(get_admin_identity), runtime=Depends(get_runtime)):
     with runtime.sessions() as db:
-        stmt = select(SyncJob).order_by(SyncJob.created_at.desc(), SyncJob.id.desc()).limit(limit + 1)
+        stmt = select(SyncJob).order_by(SyncJob.create_time.desc(), SyncJob.id.desc()).limit(limit + 1)
         if status: stmt = stmt.where(SyncJob.status == status)
         if type: stmt = stmt.where(SyncJob.type == type)
         if phase: stmt = stmt.where(SyncJob.phase == phase)
@@ -68,7 +68,7 @@ def list_sync_jobs(status: str | None = None, limit: int = Query(50, ge=1, le=20
             boundary = db.get(SyncJob, cursor)
             if boundary is None: raise HTTPException(422, {'code': 'INVALID_CURSOR', 'message': '任务分页位置已失效'})
             from sqlalchemy import or_, and_
-            stmt = stmt.where(or_(SyncJob.created_at < boundary.created_at, and_(SyncJob.created_at == boundary.created_at, SyncJob.id < boundary.id)))
+            stmt = stmt.where(or_(SyncJob.create_time < boundary.create_time, and_(SyncJob.create_time == boundary.create_time, SyncJob.id < boundary.id)))
         rows = list(db.scalars(stmt))
         from app.admin.sync_views import add_job_context
         page = rows[:limit]
@@ -76,7 +76,7 @@ def list_sync_jobs(status: str | None = None, limit: int = Query(50, ge=1, le=20
 
 
 def _job_summary(row):
-    return {'job_id': row.id, 'name': row.name, 'type': row.type, 'trigger_source': row.trigger_source, 'description': row.description, 'status': row.status, 'attempt': row.attempt, 'execution_count': row.execution_count, 'retry_count': row.retry_count, 'total_count': row.total_count, 'success_count': row.success_count, 'failure_count': row.failure_count, 'phase': row.phase, 'error_code': row.error_code, 'error_detail': row.error_detail, 'created_at': utc_datetime(row.created_at), 'updated_at': utc_datetime(row.updated_at), 'started_at': utc_datetime(row.started_at), 'finished_at': utc_datetime(row.finished_at)}
+    return {'job_id': row.id, 'name': row.name, 'type': row.type, 'trigger_source': row.trigger_source, 'description': row.description, 'status': row.status, 'attempt': row.attempt, 'execution_count': row.execution_count, 'retry_count': row.retry_count, 'total_count': row.total_count, 'success_count': row.success_count, 'failure_count': row.failure_count, 'phase': row.phase, 'error_code': row.error_code, 'error_detail': row.error_detail, 'create_time': utc_datetime(row.create_time), 'update_time': utc_datetime(row.update_time), 'started_at': utc_datetime(row.started_at), 'finished_at': utc_datetime(row.finished_at)}
 
 
 @router.get('/sync/jobs/{job_id}')

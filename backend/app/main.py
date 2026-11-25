@@ -291,7 +291,7 @@ def list_jobs(limit: int = Query(100, ge=1, le=500), status: str | None = None, 
     from sqlalchemy import select
     from .persistence.models import SyncJob
     with runtime.sessions() as db:
-        stmt = select(SyncJob).order_by(SyncJob.created_at.desc(), SyncJob.id.desc()).limit(limit)
+        stmt = select(SyncJob).order_by(SyncJob.create_time.desc(), SyncJob.id.desc()).limit(limit)
         if status:
             stmt = stmt.where(SyncJob.status == status)
         if cursor:
@@ -301,12 +301,12 @@ def list_jobs(limit: int = Query(100, ge=1, le=500), status: str | None = None, 
             except ValueError:
                 raise HTTPException(400, {"code": "INVALID_CURSOR", "message": "任务游标无效"})
             from sqlalchemy import or_, and_
-            stmt = stmt.where(or_(SyncJob.created_at < boundary, and_(SyncJob.created_at == boundary, SyncJob.id < cursor_id)))
+            stmt = stmt.where(or_(SyncJob.create_time < boundary, and_(SyncJob.create_time == boundary, SyncJob.id < cursor_id)))
         rows = list(db.scalars(stmt.limit(limit + 1)))
         page = rows[:limit]
         from .web import utc_datetime
-        next_cursor = f"{page[-1].created_at.isoformat()}|{page[-1].id}" if len(rows) > limit else None
-        return {"data": [{"job_id": job.id, "type": job.type, "root_department_id": job.root_department_id, "status": job.status, "phase": job.phase, "attempt": job.attempt, "error_code": job.error_code, "created_at": utc_datetime(job.created_at), "updated_at": utc_datetime(job.updated_at)} for job in page], "meta": {"next_cursor": next_cursor}}
+        next_cursor = f"{page[-1].create_time.isoformat()}|{page[-1].id}" if len(rows) > limit else None
+        return {"data": [{"job_id": job.id, "type": job.type, "root_department_id": job.root_department_id, "status": job.status, "phase": job.phase, "attempt": job.attempt, "error_code": job.error_code, "create_time": utc_datetime(job.create_time), "update_time": utc_datetime(job.update_time)} for job in page], "meta": {"next_cursor": next_cursor}}
 
 
 @app.get("/admin/api/sync/jobs/{job_id}")

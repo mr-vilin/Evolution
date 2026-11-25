@@ -35,7 +35,9 @@ def test_organization_schema_preserves_existing_data_on_upgrade_and_downgrade(mi
     previous_schema = schema_snapshot(engine)
 
     command.upgrade(config, TARGET)
+    command.upgrade(config, 'head')
     assert check_schema(engine)['errors'] == []
+    command.downgrade(config, TARGET)
     with Session(engine) as db:
         root = db.get(Department, '0')
         shop = db.get(Department, 'shop')

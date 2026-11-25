@@ -22,7 +22,9 @@ def snapshot():
             'counts': {table: conn.scalar(text('SELECT COUNT(*) FROM ' + table))
                        for table in ('department', 'employee', 'employee_department', 'store_profile', 'admin_allowlist')},
         }
-        value = conn.scalar(text("SELECT value FROM system_setting WHERE `key`='initialization_flow'"))
+        columns = {row[0] for row in conn.execute(text("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='system_setting'"))}
+        key_column = 'setting_key' if 'setting_key' in columns else '`key`'
+        value = conn.scalar(text(f"SELECT value FROM system_setting WHERE {key_column}='initialization_flow'"))
         result['flow_phase'] = json.loads(value).get('phase') if value else None
         result['build'] = product_build_info()
         return result

@@ -5,7 +5,7 @@ import re
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .contracts import AgentContext
@@ -160,9 +160,9 @@ class ReceiptRepository:
             OperationReceipt.job_id == job.id, OperationReceipt.status == 'accepted',
         ).order_by(OperationReceipt.operation_id).with_for_update().execution_options(populate_existing=True)))
         # 与终态及审计在同一事务冻结；当前读避免沿用调用方较早的 RR 快照。
-        failed_detail_count = len(list(db.scalars(select(SyncJobDetail.id).where(
+        failed_detail_count = db.scalar(select(func.count()).select_from(SyncJobDetail).where(
             SyncJobDetail.job_id == job.id, SyncJobDetail.status == 'failed',
-        ).with_for_update())))
+        ).with_for_update())
         summary = {'job_id': job.id, 'status': job.status,
                    'success_count': job.success_count, 'failure_count': job.failure_count,
                    'failed_detail_count': failed_detail_count}

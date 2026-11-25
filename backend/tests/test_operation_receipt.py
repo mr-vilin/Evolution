@@ -214,7 +214,7 @@ def test_review_i3_failure_freezes_all_audit_ids_in_original_transaction(receipt
         row = repo.create(db, receipt_ctx(), "request_sync", "failure-audit", "hash", now)
         operation_id = row.operation_id
         repo.mark_accepted(db, row.operation_id, "job", "e", 1, {}, now)
-        job = SyncJob(id="job", type="full", requested_by="actor", status="failed", error_code="SYNC_FAILED", created_at=now, updated_at=now)
+        job = SyncJob(id="job", type="full", requested_by="actor", status="failed", error_code="SYNC_FAILED", create_time=now, update_time=now)
         db.add(job)
         for identifier in range(1, 126):
             db.add(ChangeLog(id=identifier, object_type="sync_job", object_id="job", job_id="job", source="sync", actor="actor", after_data={"status":"failed"}, committed_at=now))

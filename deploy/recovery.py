@@ -32,11 +32,11 @@ def reset_restored_state(sessions, *, actor: str, admin_open_id: str | None = No
         session.execute(update(ApiClient).where(ApiClient.revoked_at.is_(None)).values(revoked_at=now))
         session.execute(update(SyncJob).where(SyncJob.status.in_(['queued', 'running'])).values(
             status='failed', error_code='RESTORE_REQUIRES_RECONCILIATION', error_detail=None,
-            lease_generation=SyncJob.lease_generation + 1, lease_expires_at=None, updated_at=now))
+            lease_generation=SyncJob.lease_generation + 1, lease_expires_at=None))
         session.execute(update(EventInbox).where(EventInbox.status.in_(['queued', 'failed', 'running'])).values(status='ignored_restored'))
         session.execute(delete(OAuthState))
         session.execute(update(WorkerLease).values(owner=None, expires_at=None, generation=WorkerLease.generation + 1))
-        session.execute(delete(SystemSetting).where(SystemSetting.key == 'reconcile_last_day'))
+        session.execute(delete(SystemSetting).where(SystemSetting.setting_key == 'reconcile_last_day'))
         if admin_open_id and session.get(AdminAllowlist, admin_open_id) is None:
             session.add(AdminAllowlist(open_id=admin_open_id, created_at=now))
             session.add(ChangeLog(object_type='admin_allowlist', object_id=admin_open_id, source='recovery',

@@ -25,6 +25,16 @@ def _default(value):
     return None if value is None else re.sub('_utf8mb4', '', str(value), flags=re.I).strip("()'\" ")
 
 
+def _computed(value):
+    if isinstance(value, dict):
+        value = value.get('sqltext')
+    if value is None:
+        return None
+    value = str(value).replace("\\'", "'")
+    # MySQL canonicalizes whitespace, identifier quoting and literal character-set introducers.
+    return re.sub(r"[\s()`]", "", re.sub(r"_utf8mb4(?=')", "", str(value), flags=re.I)).lower()
+
+
 def check_schema(engine):
     snapshot = schema_snapshot(engine)
     errors = []
@@ -65,7 +75,7 @@ def check_schema(engine):
             observed = columns.get(col.name)
             if observed is None:
                 continue
-            raw_default = col.server_default.arg if col.server_default is not None else None
+            raw_default = col.server_default.arg if col.server_default is not None and col.computed is None else None
             if hasattr(raw_default, 'compile'):
                 raw_default = str(raw_default.compile(dialect=engine.dialect))
             expected_extra = ''
@@ -76,7 +86,10 @@ def check_schema(engine):
                         'default': _default(raw_default)}
             values = dict(observed, type=_type(observed['type']), default=_default(observed['default']))
             if is_mysql:
-                expected.update(comment=col.comment, autoincrement=table.autoincrement_column is col, computed=None)
+                expected.update(comment=col.comment, autoincrement=table.autoincrement_column is col, computed=_computed(col.computed.sqltext if col.computed is not None else None))
+                values["computed"] = _computed(observed["computed"])
+                if col.computed is not None:
+                    expected_extra = "stored generated" if col.computed.persisted else "virtual generated"
                 if isinstance(col.type, (String, Text)):
                     expected.update(collation=col.type.collation or 'utf8mb4_general_ci', charset='utf8mb4')
                 observed_extra = (observed.get('extra') or '').lower().replace('auto_increment', '').replace('default_generated', '').replace('()', '').strip()
