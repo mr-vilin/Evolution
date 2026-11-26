@@ -30,7 +30,7 @@ def assert_reset_baseline(factory):
         assert (connection.app_id, connection.tenant_key) == (FAKE_APP_ID, FAKE_TENANT_KEY)
         counts = {table.name: db.scalar(select(func.count()).select_from(table)) for table in m.Base.metadata.tables.values()}
         assert {key: value for key, value in counts.items() if value} == {
-            'dataset_state': 1, 'system_setting': 2, 'worker_lease': 1, 'feishu_connection': 1}
+            'org_dataset_state': 1, 'system_setting': 2, 'org_worker_lease': 1, 'feishu_connection': 1}
         assert db.scalar(text('SELECT version_num FROM alembic_version')) == CURRENT_SCHEMA_HEAD
 
 

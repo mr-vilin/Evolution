@@ -4,11 +4,10 @@ import json
 
 from app.evaluation.evidence import (
     BUSINESS_TABLES, EvaluationEvidence, DatabaseSnapshot, CapturedOutput, McpResponseEvidence,
-    capture_worker_output,
+    capture_worker_output, evidence_table,
 )
 from app.evaluation.models import AgentRun, ToolTraceEvent
 from app.mcp.policy import TOOL_LEVELS
-from app.persistence.models import Base
 
 _MESSAGES = {
     'UNSUPPORTED_PREDICATE': '不支持的断言条件。', 'INVALID_PREDICATE': '断言条件格式不合法。',
@@ -373,7 +372,7 @@ def _validate_row_literals(table, values, label):
     _need(isinstance(values, dict), 'INVALID_PREDICATE', label)
     _need(set(values) <= _ROW_FIELDS[table], 'UNSUPPORTED_PREDICATE', label)
     for field, literal in values.items():
-        column = Base.metadata.tables[table].columns[field]
+        column = evidence_table(table).columns[field]
         valid = (literal is None and column.nullable) or type(literal) is column.type.python_type
         if field == 'path':
             valid = isinstance(literal, list) and all(type(item) is str for item in literal)

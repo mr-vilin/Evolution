@@ -11,14 +11,18 @@ def snapshot():
     from app.version import product_build_info
     with create_mysql_engine(get_settings().database_url).connect() as conn:
         conn.exec_driver_sql('SET TRANSACTION READ ONLY')
+        from sqlalchemy import inspect
+        tables = set(inspect(conn).get_table_names())
+        dataset_table = 'org_dataset_state' if 'org_dataset_state' in tables else 'dataset_state'
+        jobs_table = 'org_sync_job' if 'org_sync_job' in tables else 'sync_job'
         result = {
             'schema': conn.scalar(text('SELECT version_num FROM alembic_version')),
             'database': dict(conn.execute(text(
                 'SELECT VERSION() AS version, @@character_set_connection AS connection_charset, '
                 '@@collation_connection AS connection_collation, @@character_set_server AS server_charset, '
                 '@@collation_server AS server_collation')).mappings().one()),
-            'state': dict(conn.execute(text('SELECT dataset_epoch,data_version,initialization_status,coverage_status FROM dataset_state WHERE id=1')).mappings().one()),
-            'active_jobs': conn.scalar(text("SELECT COUNT(*) FROM sync_job WHERE status IN ('queued','running')")),
+            'state': dict(conn.execute(text(f'SELECT dataset_epoch,data_version,initialization_status,coverage_status FROM {dataset_table} WHERE id=1')).mappings().one()),
+            'active_jobs': conn.scalar(text(f"SELECT COUNT(*) FROM {jobs_table} WHERE status IN ('queued','running')")),
             'counts': {table: conn.scalar(text('SELECT COUNT(*) FROM ' + table))
                        for table in ('department', 'employee', 'employee_department', 'store_profile', 'admin_allowlist')},
         }

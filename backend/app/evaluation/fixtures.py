@@ -141,7 +141,7 @@ def seed_case(factory: sessionmaker, case: EvaluationCase) -> None:
         connection = db.connection()
         verify_test_database(connection)
         _require_quiet(connection)
-        baseline_counts = {'dataset_state': 1, 'system_setting': 2, 'worker_lease': 1, 'feishu_connection': 1}
+        baseline_counts = {m.DatasetState.__tablename__: 1, 'system_setting': 2, m.WorkerLease.__tablename__: 1, 'feishu_connection': 1}
         for table in m.Base.metadata.tables.values():
             if connection.scalar(select(func.count()).select_from(table)) != baseline_counts.get(table.name, 0):
                 raise ValueError('EVALUATION_RESET_REQUIRED')

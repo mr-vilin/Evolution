@@ -153,7 +153,7 @@ def test_create_locks_dataset_before_current_idempotency_read(receipt_sessions):
             statements.append(execute_state.statement)
         first = repo.create(db, receipt_ctx(), 'sync', 'lock-order', 'hash', now)
         assert repo.create(db, receipt_ctx(), 'sync', 'lock-order', 'hash', now) is first
-    assert [str(stmt.get_final_froms()[0]) for stmt in statements[:2]] == ['dataset_state', 'operation_receipt']
+    assert [str(stmt.get_final_froms()[0]) for stmt in statements[:2]] == ['org_dataset_state', 'operation_receipt']
     assert all(stmt._for_update_arg is not None for stmt in statements)
     assert all(stmt.get_execution_options().get('populate_existing') for stmt in statements)
 

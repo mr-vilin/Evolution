@@ -53,7 +53,7 @@ class LoginIdentity(Base):
 
 
 class WorkerLease(Base):
-    __tablename__ = "worker_lease"
+    __tablename__ = "org_worker_lease"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, comment="worker 租约单例标识")
     owner: Mapped[str | None] = mapped_column(SOURCE_ID, comment="当前 worker 标识")
     generation: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), "mysql"), default=0, comment="租约世代号")
@@ -64,7 +64,7 @@ class WorkerLease(Base):
 
 
 class PendingFact(Base):
-    __tablename__ = 'pending_fact'
+    __tablename__ = 'org_pending_fact'
     object_type: Mapped[str] = mapped_column(String(32),primary_key=True, comment="待核实对象类型")
     source_id: Mapped[str] = mapped_column(SOURCE_ID,primary_key=True, comment="待核实来源标识")
     normalized_data: Mapped[dict] = mapped_column(JSON, comment="待核实规范化数据")
@@ -76,7 +76,7 @@ class PendingFact(Base):
 
 
 class DatasetState(Base):
-    __tablename__ = "dataset_state"
+    __tablename__ = "org_dataset_state"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, comment="数据集状态单例标识")
     dataset_epoch: Mapped[str] = mapped_column(SOURCE_ID, comment="数据集世代标识")
     data_version: Mapped[int] = mapped_column(BigInteger().with_variant(MYSQL_BIGINT(unsigned=True), "mysql"), default=0, comment="已提交数据版本号")
@@ -234,7 +234,7 @@ class ApiClient(Base):
 
 class SyncJob(Base):
     __mapper_args__ = {"eager_defaults": True}
-    __tablename__ = "sync_job"
+    __tablename__ = "org_sync_job"
     id: Mapped[str] = mapped_column(SOURCE_ID, primary_key=True, comment="同步任务标识")
     type: Mapped[str] = mapped_column(String(32), comment="同步任务类型")
     name: Mapped[str | None] = mapped_column(String(255), comment="同步任务名称")
@@ -270,9 +270,9 @@ class SyncJob(Base):
 
 
 class SyncJobDetail(Base):
-    __tablename__ = "sync_job_detail"
+    __tablename__ = "org_sync_job_detail"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="任务明细自增标识")
-    job_id: Mapped[str] = mapped_column(SOURCE_ID, ForeignKey("sync_job.id"), index=True, comment="所属同步任务标识")
+    job_id: Mapped[str] = mapped_column(SOURCE_ID, ForeignKey("org_sync_job.id"), comment="所属同步任务标识")
     object_type: Mapped[str] = mapped_column(String(32), comment="任务对象类型")
     object_id: Mapped[str] = mapped_column(SOURCE_ID, comment="任务对象标识")
     object_name: Mapped[str | None] = mapped_column(String(255), comment="任务对象名称快照")
@@ -285,7 +285,7 @@ class SyncJobDetail(Base):
     change_log_id: Mapped[int | None] = mapped_column(BigInteger, comment="关联变更日志标识")
     create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text("CURRENT_TIMESTAMP"), comment="本地同步任务明细记录创建UTC时间，存量以迁移时刻为起点")
     update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"), comment="本地同步任务明细记录最后变更UTC时间")
-    __table_args__ = (UniqueConstraint("job_id", "object_type", "object_id", name="uq_sync_job_detail_object"), _table_args("同步任务明细"))
+    __table_args__ = (Index("ix_sync_job_detail_job_id", "job_id"), UniqueConstraint("job_id", "object_type", "object_id", name="uq_sync_job_detail_object"), _table_args("同步任务明细"))
 
 
 class EventInbox(Base):
@@ -301,8 +301,8 @@ class EventInbox(Base):
 
 
 class SyncStaging(Base):
-    __tablename__ = "sync_staging"
-    job_id: Mapped[str] = mapped_column(SOURCE_ID, ForeignKey("sync_job.id"), primary_key=True, comment="所属同步任务标识")
+    __tablename__ = "org_sync_staging"
+    job_id: Mapped[str] = mapped_column(SOURCE_ID, ForeignKey("org_sync_job.id"), primary_key=True, comment="所属同步任务标识")
     object_type: Mapped[str] = mapped_column(String(32), primary_key=True, comment="暂存对象类型")
     source_id: Mapped[str] = mapped_column(SOURCE_ID, primary_key=True, comment="来源对象标识")
     normalized_data: Mapped[dict] = mapped_column(JSON, comment="规范化对象数据")

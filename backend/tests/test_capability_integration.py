@@ -562,7 +562,7 @@ def test_store_write_dependency_reads_emit_mysql_current_read_sql():
     from sqlalchemy.dialects import mysql
     sessions, engine = make_sessions()
     seed_store(sessions)
-    dependencies = {'dataset_state', 'department', 'store_profile', 'store_code_reservation', 'employee_department', 'employee'}
+    dependencies = {'org_dataset_state', 'department', 'store_profile', 'store_code_reservation', 'employee_department', 'employee'}
     observed = []
     try:
         with sessions.begin() as db:

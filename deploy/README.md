@@ -296,12 +296,12 @@ Docker 先按原 `backend/requirements.lock` 安装业务依赖，再通过独�
 ```sql
 SELECT VERSION(), DATABASE(), @@character_set_connection, @@collation_connection;
 SELECT version_num FROM alembic_version;
-SELECT id, dataset_epoch, data_version, initialization_status, coverage_status FROM dataset_state WHERE id = 1;
+SELECT id, dataset_epoch, data_version, initialization_status, coverage_status FROM org_dataset_state WHERE id = 1;
 SELECT (SELECT COUNT(*) FROM department) AS departments,
        (SELECT COUNT(*) FROM employee) AS employees;
-SELECT status, COUNT(*) AS jobs FROM sync_job GROUP BY status;
+SELECT status, COUNT(*) AS jobs FROM org_sync_job GROUP BY status;
 SELECT status, COUNT(*) AS events FROM event_inbox GROUP BY status;
-SELECT id, generation, owner, expires_at FROM worker_lease WHERE id = 1;
+SELECT id, generation, owner, expires_at FROM org_worker_lease WHERE id = 1;
 SELECT `key`, JSON_UNQUOTE(JSON_EXTRACT(value, '$.phase')) AS phase
 FROM system_setting WHERE `key` = 'initialization_flow';
 ```

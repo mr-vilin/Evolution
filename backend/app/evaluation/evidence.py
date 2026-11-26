@@ -14,7 +14,7 @@ from app.evaluation.fixtures import verify_test_database
 from app.evaluation.models import AgentRun, AgentRunContext, ToolTraceEvent
 from app.mcp.policy import TOOL_LEVELS
 from app.persistence.database import create_mysql_engine
-from app.persistence.models import Base
+from app.persistence.models import Base, DatasetState, PendingFact, SyncJob, SyncJobDetail, SyncStaging
 
 BUSINESS_TABLES = (
     'department', 'employee', 'employee_department', 'employee_store', 'store_profile',
@@ -42,6 +42,20 @@ class EvidenceReadError(RuntimeError):
         super().__init__('EVALUATION_EVIDENCE_READ_FAILED')
 
 
+_ORG_EVIDENCE_TABLES = {
+    'dataset_state': DatasetState.__table__,
+    'pending_fact': PendingFact.__table__,
+    'sync_job': SyncJob.__table__,
+    'sync_job_detail': SyncJobDetail.__table__,
+    'sync_staging': SyncStaging.__table__,
+}
+
+
+def evidence_table(name):
+    """Resolve stable evaluation case keys to their physical tables."""
+    return _ORG_EVIDENCE_TABLES[name] if name in _ORG_EVIDENCE_TABLES else Base.metadata.tables[name]
+
+
 class IndependentReader:
     """在上下文存活期间，多次 snapshot() 共享同一 MySQL RR 快照。"""
     def __init__(self, connection):
@@ -51,7 +65,7 @@ class IndependentReader:
         try:
             tables = {}
             for name in BUSINESS_TABLES:
-                table = Base.metadata.tables[name]
+                table = evidence_table(name)
                 tables[name] = [dict(row) for row in self._connection.execute(
                     select(table).order_by(*table.primary_key.columns)).mappings()]
             return DatabaseSnapshot(tables)

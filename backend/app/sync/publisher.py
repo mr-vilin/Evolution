@@ -51,7 +51,7 @@ class Publisher:
                     for identifier, value in records.items():
                         db.merge(SyncStaging(job_id=job_id, object_type=kind, source_id=identifier, normalized_data=value))
             changes = 0
-            # 未解析事实只保存在 pending_fact；已有事实仅降质量。
+            # 未解析事实只保存在 org_pending_fact；已有事实仅降质量。
             for kind, identifier in candidate.pending:
                 model = Department if kind == 'department' else Employee
                 row = db.get(model, identifier)
