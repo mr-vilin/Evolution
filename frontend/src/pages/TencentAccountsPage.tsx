@@ -59,7 +59,7 @@ export function TencentAccountsPage() {
     { key:'created',...sorting.column('created'),title:'登记时间（北京时间）',dataIndex:'create_time',render:value => <TencentTime value={value} />,width:190 },
     { key:'actions',title:'操作',fixed:'right',width:96,render:(_,row) => <Space size={8}><Tooltip title="实时余额"><Button type="text" aria-label="实时余额" icon={<WalletOutlined />} href={`/tencent/accounts/${encodeURIComponent(row.id)}/balance`} disabled={!row.is_enabled || row.verification_status !== 'verified'} /></Tooltip><Tooltip title="维护账号"><Button type="text" aria-label="维护账号" icon={<EditOutlined />} onClick={() => setEditing(row)} /></Tooltip></Space> },
   ];
-  return <PageHeader area="业务管理" title="腾讯云账号" description="登记各自独立的腾讯云账号，分别查看费用和实时余额。">
+  return <PageHeader area="腾讯云管理" title="账号管理" description="登记各自独立的腾讯云账号，分别查看费用和实时余额。">
     {maintenanceNotice && <Alert type="warning" showIcon title={maintenanceNotice} style={{marginBottom:16}} />}
     <TencentCostTableCard<TencentAccount> title="腾讯云账号列表" showTable={!accounts.loading && !accounts.error && !!accounts.data?.length} rowKey="id" columns={columns} dataSource={rows} onChange={sorting.onChange} scroll={{x:1186}} pagination={{current:Math.min(page,Math.max(1,Math.ceil(rows.length/20))),pageSize:20,onChange:setPage,showSizeChanger:false}}>
       <div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap',marginBottom:16,minWidth:0}}>

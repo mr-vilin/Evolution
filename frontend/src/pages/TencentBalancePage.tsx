@@ -39,8 +39,8 @@ export function TencentBalancePage() {
   const data = state.id === id ? state.data : undefined;
   const loading = state.id !== id || state.loading;
   function reload() { setState({id,loading:true}); setRefresh(value => value+1); }
-  return <PageHeader area="业务管理" title="实时余额" description="直接查询当前账号，金额单位为元。每次查询均核验账号归属，可手动刷新。" extra={<Space>
-    <Link to="/tencent/accounts">返回腾讯云账号</Link>
+  return <PageHeader area="腾讯云管理" title="实时余额" description="直接查询当前账号，金额单位为元。每次查询均核验账号归属，可手动刷新。" extra={<Space>
+    <Link to="/tencent/accounts">返回账号管理</Link>
     <Button aria-label="刷新余额" icon={<ReloadOutlined />} loading={loading} onClick={reload}>刷新余额</Button>
   </Space>}>
     {state.id === id && state.error && <Alert showIcon type="error" title="本次余额查询失败" description={state.error} style={{marginBottom:16}} />}

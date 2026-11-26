@@ -115,7 +115,7 @@ export function TencentCostDashboardPage() {
   const accounts = useResource<TencentAccount[]>('/admin/api/tencent/accounts');
   const [selected,setSelected] = useState<string | null>(null);
   const account = accounts.data?.find(row=>row.id===selected) ?? accounts.data?.[0];
-  return <><PageHeader title="腾讯云费用看板" description="从已采集费用查看多月份趋势、覆盖与全部产品；浏览页面不调用腾讯云。" />
+  return <><PageHeader title="费用看板" description="从已采集费用查看多月份趋势、覆盖与全部产品；浏览页面不调用腾讯云。" />
     <Card style={{marginBottom:24}}><ResourceState {...accounts} empty={accounts.data?.length===0}><Form layout="vertical"><Form.Item label="腾讯云账号" style={{marginBottom:0}}><Select aria-label="腾讯云账号" value={account?.id} onChange={setSelected} options={(accounts.data ?? []).map(row=>({value:row.id,label:`${row.alias}（${row.uin}）${row.is_enabled ? '':' · 已停用'}`}))} style={{width:'100%',maxWidth:480}} /></Form.Item></Form></ResourceState></Card>
     {account && !accounts.error && <DashboardPanel key={account.id} account={account} />}
   </>;
