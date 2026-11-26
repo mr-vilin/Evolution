@@ -97,8 +97,8 @@ def _reset(connection):
         connection.execute(delete(table))
     connection.execute(insert(m.DatasetState), [{'id': 1, 'dataset_epoch': 'pending', 'data_version': 0,
                                                 'initialization_status': 'pending', 'coverage_status': 'unknown'}])
-    connection.execute(insert(m.SystemSetting), [{'key': 'task_queue_lock', 'value': '1'},
-                                                {'key': 'reconcile_schedule', 'value': _DISABLED_SCHEDULE}])
+    connection.execute(insert(m.SystemSetting), [{'setting_key': 'task_queue_lock', 'value': '1'},
+                                                {'setting_key': 'reconcile_schedule', 'value': _DISABLED_SCHEDULE}])
     connection.execute(insert(m.WorkerLease), [{'id': 1, 'generation': 0}])
     connection.execute(insert(m.FeishuConnection), [{'id': 1, 'app_id': FAKE_APP_ID, 'tenant_key': FAKE_TENANT_KEY,
                                                     'status': 'degraded', 'custom_attrs': {}}])
@@ -141,7 +141,7 @@ def seed_case(factory: sessionmaker, case: EvaluationCase) -> None:
         connection = db.connection()
         verify_test_database(connection)
         _require_quiet(connection)
-        baseline_counts = {'dataset_state': 1, 'system_setting': 2, 'worker_lease': 1, 'feishu_connection': 1}
+        baseline_counts = {m.DatasetState.__tablename__: 1, 'system_setting': 2, m.WorkerLease.__tablename__: 1, 'feishu_connection': 1}
         for table in m.Base.metadata.tables.values():
             if connection.scalar(select(func.count()).select_from(table)) != baseline_counts.get(table.name, 0):
                 raise ValueError('EVALUATION_RESET_REQUIRED')
@@ -154,7 +154,7 @@ def seed_case(factory: sessionmaker, case: EvaluationCase) -> None:
         for row in settings:
             if row['key'] == 'task_queue_lock':
                 raise ValueError('EVALUATION_RESERVED_SETTING')
-            db.merge(m.SystemSetting(**row))
+            db.merge(m.SystemSetting(setting_key=row['key'], value=row['value']))
         db.flush()
         db.merge(m.DatasetState(**fixture['dataset_state']))
         db.flush()

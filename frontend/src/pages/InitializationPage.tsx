@@ -13,7 +13,7 @@ import './InitializationPage.css';
 interface CheckItem { key: string; title: string; status: string; message: string; field?: string; object_id?: string; object_type?: string; readability?: string }
 interface FieldRequirement { key: string; object_type: string; field: string; title: string; requirement: string; rule: string }
 interface Check { step: number; title: string; status: string; items: CheckItem[] }
-interface ProgressData { departments_processed?: number; employees_processed?: number; departments_total?: number | null; employees_total?: number | null }
+interface ProgressData { observed_at?: string; departments_processed?: number; employees_processed?: number; departments_total?: number | null; employees_total?: number | null }
 export interface InitializationStatus {
   flow_id: string | null; phase: string; complete: boolean; checks: Check[]; checking_step?: number;
   configuration?: InitializationConfiguration;
@@ -21,7 +21,7 @@ export interface InitializationStatus {
   field_sample?: { mode: 'manual' | 'automatic'; user_ids: string[] };
   required_fields?: FieldRequirement[];
   last_error?: { code: string; message: string; issues?: { object_id: string; field?: string; message: string }[] };
-  job?: { job_id: string; status: string; phase: string; started_at?: string; updated_at?: string; finished_at?: string; progress: ProgressData } | null;
+  job?: { job_id: string; status: string; phase: string; started_at?: string; update_time?: string; finished_at?: string; progress: ProgressData } | null;
 }
 const titles = ['检查配置', '测试飞书连接', '试读部门与人员', '核验所需字段', '执行全量同步'];
 const phases: Record<string, string> = { queued: '等待后台任务', scopes: '确认企业范围', departments: '采集部门', employees: '采集人员', collected: '完成采集', validating: '校验全量数据', publishing: '提交初始化数据', published: '初始化完成', collection_failed: '初始化失败', interrupted: '后台任务中断' };
@@ -145,7 +145,7 @@ function SyncDetails({ data }: { data: InitializationStatus }) {
         <p>采集进度</p>
         <Progress percent={Math.round(processed / total * 100)} status={data.phase === 'failed' ? 'exception' : 'active'} />
       </div> : data.phase === 'running' && <div className="initialization-progress"><Space><Spin size="small" />正在发现和读取数据</Space></div>}
-      {job.updated_at && <p className="initialization-muted initialization-progress">最近更新：{new Date(job.updated_at).toLocaleString()}</p>}
+      {(job.progress?.observed_at || job.update_time) && <p className="initialization-muted initialization-progress">最近更新：{new Date(job.progress?.observed_at || job.update_time!).toLocaleString()}</p>}
     </Card>}
   </>;
 }

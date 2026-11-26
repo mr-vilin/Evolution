@@ -35,8 +35,8 @@ def tencent_http(request):
         if target[0] != parsed.database or not target[1].startswith('8.4.') or target[2:] != ('utf8mb4','utf8mb4_general_ci','+00:00','REPEATABLE-READ'):
             engine.dispose()
             pytest.fail('实际 MySQL 测试目标或连接会话不符，禁止写入')
-        lease = db.execute(text('SELECT COUNT(*) FROM worker_lease WHERE owner IS NOT NULL')).scalar_one()
-        active = db.execute(text("SELECT COUNT(*) FROM sync_job WHERE status IN ('validating','pending','running')")).scalar_one()
+        lease = db.execute(text('SELECT COUNT(*) FROM org_worker_lease WHERE owner IS NOT NULL')).scalar_one()
+        active = db.execute(text("SELECT COUNT(*) FROM org_sync_job WHERE status IN ('validating','pending','running')")).scalar_one()
         if 'tencent_sync_job' in inspect(db).get_table_names():
             active += db.execute(text("SELECT COUNT(*) FROM tencent_sync_job WHERE status IN ('validating','pending','queued','running','retry_wait')")).scalar_one()
         if 'tencent_sync_config' in inspect(db).get_table_names():

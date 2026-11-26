@@ -3,6 +3,7 @@ import json
 from datetime import datetime, timezone
 from sqlalchemy import delete, select, func
 from app.persistence.models import DatasetState, Department, Employee, EmployeeDepartment, SyncJob, SyncJobDetail, SyncStaging, ChangeLog, EventInbox, SystemSetting, WorkerLease, PendingFact, LoginIdentity, AdminSession
+from app.persistence.deletion import delete_checked
 from app.stores.service import StoreAdminService
 from app.capabilities.receipts import ReceiptRepository
 
@@ -50,7 +51,7 @@ class Publisher:
                     for identifier, value in records.items():
                         db.merge(SyncStaging(job_id=job_id, object_type=kind, source_id=identifier, normalized_data=value))
             changes = 0
-            # 未解析事实只保存在 pending_fact；已有事实仅降质量。
+            # 未解析事实只保存在 org_pending_fact；已有事实仅降质量。
             for kind, identifier in candidate.pending:
                 model = Department if kind == 'department' else Employee
                 row = db.get(model, identifier)
@@ -125,12 +126,11 @@ class Publisher:
                 StoreAdminService._rebuild_projection(db)
                 state.data_version += 1
             if job:
-                job.updated_at = now
                 job.success_count = db.scalar(select(func.count()).select_from(SyncJobDetail).where(SyncJobDetail.job_id == job_id, SyncJobDetail.status == 'succeeded')) or 0
                 job.failure_count = db.scalar(select(func.count()).select_from(SyncJobDetail).where(SyncJobDetail.job_id == job_id, SyncJobDetail.status == 'failed')) or 0
                 if final:
                     job.status, job.phase, job.lease_expires_at, job.finished_at = 'succeeded', 'published', None, now
-                    db.execute(delete(SyncStaging).where(SyncStaging.job_id == job_id))
+                    delete_checked(db, SyncStaging, SyncStaging.job_id == job_id)
                     # 分批已提交的变更也计入最终回执。
                     changed_count = db.scalar(select(func.count()).select_from(ChangeLog).where(
                         ChangeLog.job_id == job_id, ChangeLog.source == 'feishu')) or 0
@@ -140,7 +140,7 @@ class Publisher:
                 event.status = 'failed' if candidate.pending else 'succeeded'
                 event.attempts += 1
                 if candidate.pending: event.payload={**event.payload,'error_code':'PENDING_VERIFICATION'}
-                db.merge(SystemSetting(key='last_event_processed_at', value=now.isoformat()+'+00:00'))
+                db.merge(SystemSetting(setting_key='last_event_processed_at', value=now.isoformat()+'+00:00'))
 
     @staticmethod
     def _defer_unresolved(db,candidate,now):
@@ -182,7 +182,7 @@ class Publisher:
         for kind,records in [('department',departments),('employee',employees)]:
             for identifier in records:
                 if (kind,identifier) not in pending:
-                    db.execute(delete(PendingFact).where(PendingFact.object_type==kind,PendingFact.source_id==identifier))
+                    delete_checked(db, PendingFact, PendingFact.object_type == kind, PendingFact.source_id == identifier)
         return replace(candidate,departments=departments,employees=employees,pending=sorted(pending))
 
     def _end_department_memberships(self,db,department_id,job_id,now):

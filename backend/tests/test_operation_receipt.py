@@ -153,7 +153,7 @@ def test_create_locks_dataset_before_current_idempotency_read(receipt_sessions):
             statements.append(execute_state.statement)
         first = repo.create(db, receipt_ctx(), 'sync', 'lock-order', 'hash', now)
         assert repo.create(db, receipt_ctx(), 'sync', 'lock-order', 'hash', now) is first
-    assert [str(stmt.get_final_froms()[0]) for stmt in statements[:2]] == ['dataset_state', 'operation_receipt']
+    assert [str(stmt.get_final_froms()[0]) for stmt in statements[:2]] == ['org_dataset_state', 'operation_receipt']
     assert all(stmt._for_update_arg is not None for stmt in statements)
     assert all(stmt.get_execution_options().get('populate_existing') for stmt in statements)
 
@@ -214,7 +214,7 @@ def test_review_i3_failure_freezes_all_audit_ids_in_original_transaction(receipt
         row = repo.create(db, receipt_ctx(), "request_sync", "failure-audit", "hash", now)
         operation_id = row.operation_id
         repo.mark_accepted(db, row.operation_id, "job", "e", 1, {}, now)
-        job = SyncJob(id="job", type="full", requested_by="actor", status="failed", error_code="SYNC_FAILED", created_at=now, updated_at=now)
+        job = SyncJob(id="job", type="full", requested_by="actor", status="failed", error_code="SYNC_FAILED", create_time=now, update_time=now)
         db.add(job)
         for identifier in range(1, 126):
             db.add(ChangeLog(id=identifier, object_type="sync_job", object_id="job", job_id="job", source="sync", actor="actor", after_data={"status":"failed"}, committed_at=now))

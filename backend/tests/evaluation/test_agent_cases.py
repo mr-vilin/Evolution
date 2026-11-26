@@ -76,7 +76,7 @@ def test_real_mysql_smoke_six_cases_twice(tmp_path):
     engine = create_mysql_engine(url)
     try:
         with engine.connect() as connection:
-            baseline = {'dataset_state': 1, 'worker_lease': 1, 'system_setting': 2, 'feishu_connection': 1}
+            baseline = {'org_dataset_state': 1, 'org_worker_lease': 1, 'system_setting': 2, 'feishu_connection': 1}
             for table in Base.metadata.tables.values():
                 assert connection.scalar(select(func.count()).select_from(table)) == baseline.get(table.name, 0)
             assert connection.execute(select(DatasetState.dataset_epoch, DatasetState.data_version)).one() == ('pending', 0)

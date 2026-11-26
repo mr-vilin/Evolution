@@ -9,7 +9,7 @@ def test_single_worker_lease_fences_old_owner_and_recovers_expired_job(sessions)
     now = datetime(2026,9,15)
     with sessions.begin() as db:
         db.add(WorkerLease(id=1, generation=0))
-        db.add(SyncJob(id='j', type='full', requested_by='test', status='running', lease_generation=1, lease_expires_at=now-timedelta(seconds=1), created_at=now, updated_at=now))
+        db.add(SyncJob(id='j', type='full', requested_by='test', status='running', lease_generation=1, lease_expires_at=now-timedelta(seconds=1), create_time=now, update_time=now))
     a, b = Worker(sessions, None, owner='a'), Worker(sessions, None, owner='b')
     assert a.acquire(now) is True
     assert b.acquire(now) is False

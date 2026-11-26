@@ -108,8 +108,8 @@ def test_readiness_does_not_initialize_or_mutate_the_admin_allowlist():
     "INSERT INTO alembic_version VALUES ('other_head')",
     "DROP TABLE employee_store",
     "ALTER TABLE admin_session DROP COLUMN csrf_hash",
-    "DELETE FROM dataset_state",
-    "DELETE FROM worker_lease",
+    "DELETE FROM org_dataset_state",
+    "DELETE FROM org_worker_lease",
     "DELETE FROM system_setting",
 ])
 def test_readiness_rejects_incomplete_schema_without_writing(damage):

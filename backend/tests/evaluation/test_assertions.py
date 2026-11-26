@@ -330,7 +330,7 @@ def test_real_mysql_independent_readonly_consistent_snapshot_and_cleanup(name):
             verify_test_database(connection)
             counts = {t.name: connection.scalar(select(func.count()).select_from(t)) for t in Base.metadata.tables.values()}
             assert {k:v for k,v in counts.items() if v} == {
-                'dataset_state': 1, 'worker_lease': 1, 'system_setting': 2, 'feishu_connection': 1}
+                'org_dataset_state': 1, 'org_worker_lease': 1, 'system_setting': 2, 'feishu_connection': 1}
             assert connection.scalar(select(DatasetState.data_version)) == 0
     finally:
         engine.dispose()
@@ -411,7 +411,7 @@ def test_real_mysql_receipt_job_audit_facts_and_corruption(job):
         with factory.begin() as writer:
             writer.execute(update(DatasetState).where(DatasetState.id == 1).values(data_version=2))
             if job:
-                writer.add(SyncJob(**template.after.rows('sync_job')[0], created_at=now, updated_at=now))
+                writer.add(SyncJob(**template.after.rows('sync_job')[0], create_time=now, update_time=now))
             log_values = deepcopy(template.after.rows('change_log')[0])
             if not job:
                 profile = next(r for r in before.rows('store_profile') if r['department_id'] == 'store_people')

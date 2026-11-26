@@ -56,7 +56,7 @@
 
 - `POST /admin/api/sync/jobs`：`{"type":"full|subtree|reconcile","root_department_id":"..."}`，返回 202。相同活动范围返回原 `job_id` 且 `reused=true`。
 - `GET /admin/api/sync/jobs/{job_id}`：返回 `phase/status/attempt/error_code` 与 `progress={phase,departments_processed,employees_processed,departments_total,employees_total}`。未开始的计数和未知总量为 null；采集中的已处理数量来自真实候选记录，不能据此伪造百分比。阶段为 `scopes/departments/employees/collected/published/collection_failed`，后台持续持久更新。
-- `POST /admin/api/sync/jobs/{job_id}/retry`：仅失败任务可重试，返回 202；其他状态返回 409。
+- `POST /admin/api/sync/jobs/{job_id}/retry`：仅失败任务可重试，返回 202；其他状态或同范围已有活动任务返回 409。
 
 worker 通过 `SqlSyncJobRepository.claim_next()` 认领任务；全局租约、任务租约世代与发布事务防止过期 worker 覆盖数据。失败采集最多自动执行五次，间隔从 30 秒开始指数退避；达到上限后可由管理接口重试。所有全量任务均回查旧对象，子树任务也回查先前子树内已移动对象；缺失或不可读的详情保留旧事实并标记 `pending_verification`，不猜测离职或删除。
 
@@ -82,7 +82,7 @@ worker 通过 `SqlSyncJobRepository.claim_next()` 认领任务；全局租约、
 
 执行前须核验已发布应用的全部成员权限、无部门员工覆盖并准备真实验收依据；不要在 reference 中填写 secret/token。CLI 校验数据库组织绑定，在同一事务保存依据、清除失效标记、记录审计并新建 reconcile 任务，返回 `job_id/status=queued`。覆盖仍为 unknown，只有重新验收之后开始的完整采集才可恢复 complete；旧的在途采集不能恢复。worker 每轮读取持久记录，无需重启才能生效。
 
-未解析的新部门及依赖它的新事实保存在内部 `pending_fact`，不向部门/员工正常列表发布虚构 active 占位。已有事实和关系原样保留、质量降为 pending；新祖先缺失时主门店为 unknown。后续全量任务回查这些稳定来源 ID，详情明确后再原子发布并清理 pending。未解析候选永远不等于离职或删除。
+未解析的新部门及依赖它的新事实保存在内部 `org_pending_fact`，不向部门/员工正常列表发布虚构 active 占位。已有事实和关系原样保留、质量降为 pending；新祖先缺失时主门店为 unknown。后续全量任务回查这些稳定来源 ID，详情明确后再原子发布并清理 pending。未解析候选永远不等于离职或删除。
 
 可信离职生命周期与部门关系完整性分开处理：详情来源 ID 匹配且 `is_resigned/is_exited` 明确为布尔 true 时，即使部门关系字段缺失或新部门/父链不可读，仍发布 inactive、结束全部当前活动关系/门店归属并撤销关联管理员会话，以上与日志及版本同事务。已有员工保留最后已知姓名、来源 ID 与历史部门关系；未解析的新关系留在 pending。新员工仅保存已确认的身份资料和 inactive，缺失部门不造假。生命周期缺失、字符串 true、请求 ID 不符或详情失败都不能推断离职。
 
@@ -102,7 +102,7 @@ worker 通过 `SqlSyncJobRepository.claim_next()` 认领任务；全局租约、
 - `GET /admin/api/admin-allowlist`；`POST /admin/api/admin-allowlist` body `{"open_id":"ou_..."}`；`DELETE /admin/api/admin-allowlist/{open_id}`。删除会在同一事务撤销该身份的活动会话，删除最后一名也立即生效。添加、删除与脱敏日志同事务提交。
 - `GET /admin/api/api-clients`；`POST /admin/api/api-clients` body `{"name":"薪资系统"}`；`POST /admin/api/api-clients/{client_id}/rotate`；`POST /admin/api/api-clients/{client_id}/revoke`。创建与轮换响应包含一次性的 `secret`；列表、后续查询和日志不返回 secret 或哈希。轮换在一个事务中锁定并撤销旧凭据、创建新凭据和写审计，任一步失败整笔回滚。
 
-管理页面读取使用 `/admin/api/status`、`/admin/api/departments[/{id}]`、`/admin/api/employees[/{id}]`、`/admin/api/stores[/{id}]`、`/admin/api/stores/{id}/employees`，参数和响应字段与同名公共接口一致。部门含 `path/is_store/store_code`。员工含部门关系和主门店解析状态。门店含 `path/employee_count/primary_employee_count`。同步任务列表为 `GET /admin/api/sync/jobs?status=&limit=&cursor=`，按 `(created_at,id)` 倒序稳定分页，读取任务无需 CSRF。
+管理页面读取使用 `/admin/api/status`、`/admin/api/departments[/{id}]`、`/admin/api/employees[/{id}]`、`/admin/api/stores[/{id}]`、`/admin/api/stores/{id}/employees`，参数和响应字段与同名公共接口一致。部门含 `path/is_store/store_code`。员工含部门关系和主门店解析状态。门店含 `path/employee_count/primary_employee_count`。同步任务列表为 `GET /admin/api/sync/jobs?status=&limit=&cursor=`，按 `(create_time,id)` 倒序稳定分页，读取任务无需 CSRF。同步任务列表、详情、重试及初始化进度中的任务时间字段统一为 create_time、update_time，原 created_at、updated_at 字段已迁移。
 
 部门对象统一返回 JSON 布尔字段 `is_root`。ID 为 `0` 的「本组织」取 `true`，顶层业务部门及其下级部门均取 `false`。这适用于公共及管理部门接口、组织工作台、员工响应中的 `departments`，以及 MCP 的 `find_departments`、`get_department` 和含部门对象的员工工具。升级时将客户端读取的 `is_virtual_root` 改为 `is_root`。
 

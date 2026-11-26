@@ -32,7 +32,7 @@ def test_publication_is_atomic_preserves_missing_and_noop_version(sessions):
     from app.sync.publisher import Publisher
     from app.sync.collector import Candidate
     with sessions.begin() as db:
-        db.add(SyncJob(id='job', type='full', requested_by='test', status='running', lease_generation=1, lease_expires_at=datetime.now()+timedelta(hours=1), created_at=datetime.now(), updated_at=datetime.now()))
+        db.add(SyncJob(id='job', type='full', requested_by='test', status='running', lease_generation=1, lease_expires_at=datetime.now()+timedelta(hours=1), create_time=datetime.now(), update_time=datetime.now()))
     candidate = Candidate(departments={'a': {'id':'a', 'feishu_department_id':'a', 'parent_id':None, 'name':'门店', 'status':'active', 'sync_quality':'complete', 'is_root':False}}, full=True)
     publisher = Publisher(sessions)
     publisher.publish(candidate, 'job', 1)
@@ -68,8 +68,8 @@ def test_daily_schedule_skips_local_day_of_successful_initialization(sessions, f
     with sessions.begin() as db:
         db.add(SyncJob(
             id='init', type='initialize', requested_by='admin', status='succeeded',
-            created_at=finished_at - timedelta(hours=2),
-            updated_at=finished_at, finished_at=finished_at,
+            create_time=finished_at - timedelta(hours=2),
+            update_time=finished_at, finished_at=finished_at,
         ))
 
     schedule = ScheduleService(sessions)
@@ -84,7 +84,7 @@ def test_daily_schedule_skips_local_day_of_successful_initialization(sessions, f
     with sessions() as db:
         job = db.scalar(select(SyncJob).where(SyncJob.trigger_source == 'schedule'))
         assert job.type == 'reconcile'
-        assert job.created_at == datetime(2026, 11, 22, 19)
+        assert job.create_time == datetime(2026, 11, 22, 19)
 
 
 def test_oauth_state_single_use_bound_to_browser_and_identity(sessions):

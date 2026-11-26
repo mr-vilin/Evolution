@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import JSON, BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text as sql_text
+from sqlalchemy import Computed, FetchedValue, JSON, BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text as sql_text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql.elements import TextClause
 from sqlalchemy.ext.compiler import compiles
@@ -53,39 +53,47 @@ class LoginIdentity(Base):
 
 
 class WorkerLease(Base):
-    __tablename__ = "worker_lease"
+    __tablename__ = "org_worker_lease"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, comment="worker 租约单例标识")
     owner: Mapped[str | None] = mapped_column(SOURCE_ID, comment="当前 worker 标识")
-    generation: Mapped[int] = mapped_column(Integer, default=0, comment="租约世代号")
+    generation: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), "mysql"), default=0, comment="租约世代号")
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, comment="租约过期时间")
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text("CURRENT_TIMESTAMP"), comment="本地Worker租约记录创建UTC时间，存量以迁移时刻为起点")
+    update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"), comment="本地Worker租约记录最后变更UTC时间")
     __table_args__ = _table_args("同步 Worker 租约")
 
 
 class PendingFact(Base):
-    __tablename__ = 'pending_fact'
+    __tablename__ = 'org_pending_fact'
     object_type: Mapped[str] = mapped_column(String(32),primary_key=True, comment="待核实对象类型")
     source_id: Mapped[str] = mapped_column(SOURCE_ID,primary_key=True, comment="待核实来源标识")
     normalized_data: Mapped[dict] = mapped_column(JSON, comment="待核实规范化数据")
     error_code: Mapped[str] = mapped_column(String(64), comment="待核实错误编码")
     updated_at: Mapped[datetime] = mapped_column(DateTime, comment="待核实记录更新时间")
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text("CURRENT_TIMESTAMP"), comment="本地待核实事实记录创建UTC时间，存量以迁移时刻为起点")
+    update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"), comment="本地待核实事实记录最后变更UTC时间")
     __table_args__ = _table_args("待核实同步事实")
 
 
 class DatasetState(Base):
-    __tablename__ = "dataset_state"
+    __tablename__ = "org_dataset_state"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, comment="数据集状态单例标识")
     dataset_epoch: Mapped[str] = mapped_column(SOURCE_ID, comment="数据集世代标识")
-    data_version: Mapped[int] = mapped_column(BigInteger, default=0, comment="已提交数据版本号")
+    data_version: Mapped[int] = mapped_column(BigInteger().with_variant(MYSQL_BIGINT(unsigned=True), "mysql"), default=0, comment="已提交数据版本号")
     initialization_status: Mapped[str] = mapped_column(String(32), default="pending", comment="初始化状态")
     coverage_status: Mapped[str] = mapped_column(String(32), default="unknown", comment="通讯录覆盖状态")
     last_full_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), comment="最近一次全量同步时间")
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text("CURRENT_TIMESTAMP"), comment="本地数据集状态记录创建UTC时间，存量以迁移时刻为起点")
+    update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"), comment="本地数据集状态记录最后变更UTC时间")
     __table_args__ = _table_args("组织数据集状态单例")
 
 
 class SystemSetting(Base):
     __tablename__ = "system_setting"
-    key: Mapped[str] = mapped_column(String(128), primary_key=True, comment="系统设置键名")
+    setting_key: Mapped[str] = mapped_column(String(128), primary_key=True, comment="系统设置键名")
     value: Mapped[str] = mapped_column(Text, comment="系统设置值")
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text("CURRENT_TIMESTAMP"), comment="本地系统设置记录创建UTC时间，存量以迁移时刻为起点")
+    update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"), comment="本地系统设置记录最后变更UTC时间")
     __table_args__ = _table_args("系统设置")
 
 
@@ -225,7 +233,8 @@ class ApiClient(Base):
 
 
 class SyncJob(Base):
-    __tablename__ = "sync_job"
+    __mapper_args__ = {"eager_defaults": True}
+    __tablename__ = "org_sync_job"
     id: Mapped[str] = mapped_column(SOURCE_ID, primary_key=True, comment="同步任务标识")
     type: Mapped[str] = mapped_column(String(32), comment="同步任务类型")
     name: Mapped[str | None] = mapped_column(String(255), comment="同步任务名称")
@@ -233,40 +242,50 @@ class SyncJob(Base):
     description: Mapped[str | None] = mapped_column(Text, comment="同步任务说明")
     root_department_id: Mapped[str | None] = mapped_column(SOURCE_ID, comment="子树同步根部门标识")
     requested_by: Mapped[str] = mapped_column(String(255), comment="任务请求方")
-    status: Mapped[str] = mapped_column(String(32), index=True, comment="任务状态")
+    status: Mapped[str] = mapped_column(String(32), comment="任务状态")
     phase: Mapped[str | None] = mapped_column(String(64), comment="任务阶段")
-    attempt: Mapped[int] = mapped_column(Integer, default=1, comment="任务尝试次数")
-    execution_count: Mapped[int] = mapped_column(Integer, default=0, server_default=sql_text("0"), comment="任务执行次数")
-    retry_count: Mapped[int] = mapped_column(Integer, default=0, server_default=sql_text("0"), comment="任务重试次数")
-    total_count: Mapped[int | None] = mapped_column(Integer, comment="任务对象总数")
-    success_count: Mapped[int] = mapped_column(Integer, default=0, server_default=sql_text("0"), comment="任务成功对象数")
-    failure_count: Mapped[int] = mapped_column(Integer, default=0, server_default=sql_text("0"), comment="任务失败对象数")
-    lease_generation: Mapped[int] = mapped_column(Integer, default=0, comment="任务租约世代号")
+    attempt: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), "mysql"), default=1, comment="任务尝试次数")
+    execution_count: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), "mysql"), default=0, server_default=sql_text("0"), comment="任务执行次数")
+    retry_count: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), "mysql"), default=0, server_default=sql_text("0"), comment="任务重试次数")
+    total_count: Mapped[int | None] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), "mysql"), comment="任务对象总数")
+    success_count: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), "mysql"), default=0, server_default=sql_text("0"), comment="任务成功对象数")
+    failure_count: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), "mysql"), default=0, server_default=sql_text("0"), comment="任务失败对象数")
+    lease_generation: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), "mysql"), default=0, comment="任务租约世代号")
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), comment="任务租约过期时间")
     error_code: Mapped[str | None] = mapped_column(String(64), comment="任务错误编码")
     error_detail: Mapped[str | None] = mapped_column(Text, comment="任务错误详情")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), comment="任务创建时间")
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), comment="任务更新时间")
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text("CURRENT_TIMESTAMP"), comment="任务创建时间")
+    update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"), server_onupdate=FetchedValue(), comment="任务更新时间")
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), comment="任务开始时间")
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), comment="任务结束时间")
-    __table_args__ = (Index("ix_sync_job_scope", "type", "root_department_id", "status"), _table_args("同步任务"))
+    active_root_kind: Mapped[int | None] = mapped_column(Integer().with_variant(TINYINT(unsigned=True), "mysql"), Computed("CASE WHEN status IN ('queued','running') THEN CASE WHEN root_department_id IS NULL THEN 0 ELSE 1 END ELSE NULL END", persisted=True), comment="活动任务根范围类型，0为全量，1为指定根，非活动任务为空")
+    active_root_id: Mapped[str | None] = mapped_column(SOURCE_ID, Computed("COALESCE(root_department_id, '')", persisted=True), nullable=True, comment="活动任务根范围标识，空根转换为空字符串")
+    __table_args__ = (
+        Index("ix_sync_job_scope", "type", "root_department_id", "status"),
+        Index("idx_sync_job_create_time", "create_time", "id"),
+        Index("idx_sync_job_status_create_time", "status", "create_time", "id"),
+        UniqueConstraint("type", "active_root_kind", "active_root_id", name="uk_sync_job_active_scope"),
+        _table_args("同步任务"),
+    )
 
 
 class SyncJobDetail(Base):
-    __tablename__ = "sync_job_detail"
+    __tablename__ = "org_sync_job_detail"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="任务明细自增标识")
-    job_id: Mapped[str] = mapped_column(SOURCE_ID, ForeignKey("sync_job.id"), index=True, comment="所属同步任务标识")
+    job_id: Mapped[str] = mapped_column(SOURCE_ID, ForeignKey("org_sync_job.id"), comment="所属同步任务标识")
     object_type: Mapped[str] = mapped_column(String(32), comment="任务对象类型")
     object_id: Mapped[str] = mapped_column(SOURCE_ID, comment="任务对象标识")
     object_name: Mapped[str | None] = mapped_column(String(255), comment="任务对象名称快照")
     status: Mapped[str] = mapped_column(String(32), comment="对象处理状态")
     error_code: Mapped[str | None] = mapped_column(String(64), comment="对象错误编码")
     error_message: Mapped[str | None] = mapped_column(Text, comment="对象错误摘要")
-    attempt: Mapped[int] = mapped_column(Integer, default=1, comment="对象处理尝试次数")
+    attempt: Mapped[int] = mapped_column(Integer().with_variant(INTEGER(unsigned=True), "mysql"), default=1, comment="对象处理尝试次数")
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), comment="对象处理开始时间")
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), comment="对象处理结束时间")
     change_log_id: Mapped[int | None] = mapped_column(BigInteger, comment="关联变更日志标识")
-    __table_args__ = (UniqueConstraint("job_id", "object_type", "object_id", name="uq_sync_job_detail_object"), _table_args("同步任务明细"))
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=sql_text("CURRENT_TIMESTAMP"), comment="本地同步任务明细记录创建UTC时间，存量以迁移时刻为起点")
+    update_time: Mapped[datetime] = mapped_column(DateTime, server_default=_UpdateTimestamp("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"), comment="本地同步任务明细记录最后变更UTC时间")
+    __table_args__ = (Index("ix_sync_job_detail_job_id", "job_id"), UniqueConstraint("job_id", "object_type", "object_id", name="uq_sync_job_detail_object"), _table_args("同步任务明细"))
 
 
 class EventInbox(Base):
@@ -282,8 +301,8 @@ class EventInbox(Base):
 
 
 class SyncStaging(Base):
-    __tablename__ = "sync_staging"
-    job_id: Mapped[str] = mapped_column(SOURCE_ID, ForeignKey("sync_job.id"), primary_key=True, comment="所属同步任务标识")
+    __tablename__ = "org_sync_staging"
+    job_id: Mapped[str] = mapped_column(SOURCE_ID, ForeignKey("org_sync_job.id"), primary_key=True, comment="所属同步任务标识")
     object_type: Mapped[str] = mapped_column(String(32), primary_key=True, comment="暂存对象类型")
     source_id: Mapped[str] = mapped_column(SOURCE_ID, primary_key=True, comment="来源对象标识")
     normalized_data: Mapped[dict] = mapped_column(JSON, comment="规范化对象数据")

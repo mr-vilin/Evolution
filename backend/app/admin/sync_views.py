@@ -11,7 +11,7 @@ from app.web import utc_datetime
 
 def sync_summary(db):
     latest_job = db.execute(
-        select(SyncJob.id, SyncJob.status).order_by(SyncJob.created_at.desc(), SyncJob.id.desc()).limit(1)
+        select(SyncJob.id, SyncJob.status).order_by(SyncJob.create_time.desc(), SyncJob.id.desc()).limit(1)
     ).one_or_none()
     pending_objects = union(
         select(PendingFact.object_type, PendingFact.source_id),
@@ -28,8 +28,8 @@ def progress_records(db, jobs):
     keys = ['job_progress:' + job.id for job in jobs]
     if not keys:
         return {}
-    return {row.key.removeprefix('job_progress:'): json.loads(row.value)
-            for row in db.scalars(select(SystemSetting).where(SystemSetting.key.in_(keys)))}
+    return {row.setting_key.removeprefix('job_progress:'): json.loads(row.value)
+            for row in db.scalars(select(SystemSetting).where(SystemSetting.setting_key.in_(keys)))}
 
 
 def job_progress(row, observation=None):

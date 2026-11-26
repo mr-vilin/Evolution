@@ -48,7 +48,7 @@ def pending_worker(sessions):
 
 def old_queued_job(sessions, job_type, now):
     # 模拟切换前遗留的任务；普通提交入口现在禁止初始化前创建业务同步。
-    job = SyncJob(id='legacy-' + job_type, type=job_type, requested_by='legacy', status='queued', created_at=now, updated_at=now)
+    job = SyncJob(id='legacy-' + job_type, type=job_type, requested_by='legacy', status='queued', create_time=now, update_time=now)
     with sessions.begin() as db:
         db.add(job)
     return job

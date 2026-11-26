@@ -16,4 +16,4 @@ def connection_summary(settings, observation):
 
 def observe(sessions, status):
     with sessions.begin() as db:
-        db.merge(SystemSetting(key='feishu_connection_observation', value=json.dumps({'status':status,'checked_at':datetime.now(timezone.utc).isoformat()})))
+        db.merge(SystemSetting(setting_key='feishu_connection_observation', value=json.dumps({'status':status,'checked_at':datetime.now(timezone.utc).isoformat()})))

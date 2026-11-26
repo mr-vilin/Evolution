@@ -19,7 +19,7 @@ def make_sessions():
 def test_observation_job_mapping_and_partial():
     sessions, engine = make_sessions()
     with sessions.begin() as db:
-        db.add(SyncJob(id='job', type='full', requested_by='a', status='succeeded', created_at=datetime.now(), updated_at=datetime.now()))
+        db.add(SyncJob(id='job', type='full', requested_by='a', status='succeeded', create_time=datetime.now(), update_time=datetime.now()))
     service=ObservationService()
     with sessions() as db:
         obs=service.observation_for_job(db,'job')
@@ -33,7 +33,7 @@ def test_observation_job_mapping_and_partial():
 def test_observation_pending_and_unconfirmed():
     sessions, engine=make_sessions(); service=ObservationService()
     with sessions.begin() as db:
-        db.add(SyncJob(id='job',type='full',requested_by='a',status='succeeded',created_at=datetime.now(),updated_at=datetime.now()))
+        db.add(SyncJob(id='job',type='full',requested_by='a',status='succeeded',create_time=datetime.now(),update_time=datetime.now()))
         db.add(PendingFact(object_type='department',source_id='x',normalized_data={},error_code='PENDING',updated_at=datetime.now()))
     with sessions() as db:
         obs=service.observation_for_job(db,'job')
@@ -51,7 +51,7 @@ def test_all_job_statuses(status, execution):
     sessions, engine = make_sessions()
     try:
         with sessions.begin() as db:
-            db.add(SyncJob(id='job', type='full', requested_by='a', status=status, created_at=datetime.now(), updated_at=datetime.now()))
+            db.add(SyncJob(id='job', type='full', requested_by='a', status=status, create_time=datetime.now(), update_time=datetime.now()))
         with sessions() as db:
             obs = ObservationService().observation_for_job(db, 'job')
             assert obs.execution == execution
@@ -107,7 +107,7 @@ def test_commit_observation_uses_job_partial_and_one_fresh_dataset_pair():
     sessions, engine = make_sessions()
     try:
         with sessions.begin() as db:
-            db.add(SyncJob(id='job', type='full', requested_by='a', status='succeeded', created_at=datetime.now(), updated_at=datetime.now()))
+            db.add(SyncJob(id='job', type='full', requested_by='a', status='succeeded', create_time=datetime.now(), update_time=datetime.now()))
             db.add(SyncJobDetail(id=1, job_id='job', object_type='department', object_id='x', status='failed'))
         with sessions() as db:
             cached = db.get(DatasetState, 1)
@@ -187,9 +187,9 @@ def test_job_acceptance_joins_caller_transaction(action, rollback):
     repo = SqlSyncJobRepository(sessions)
     try:
         with sessions.begin() as db:
-            db.add(SystemSetting(key='task_queue_lock', value='1'))
+            db.add(SystemSetting(setting_key='task_queue_lock', value='1'))
             if action == 'retry':
-                db.add(SyncJob(id='retry-job', type='full', requested_by='a', status='failed', attempt=2, retry_count=1, lease_generation=3, error_code='REMOTE_ERROR', error_detail='Bearer SYNTHETIC_SECRET', finished_at=now, created_at=now, updated_at=now))
+                db.add(SyncJob(id='retry-job', type='full', requested_by='a', status='failed', attempt=2, retry_count=1, lease_generation=3, error_code='REMOTE_ERROR', error_detail='Bearer SYNTHETIC_SECRET', finished_at=now, create_time=now, update_time=now))
         with sessions() as db:
             with db.begin():
                 receipt = new_receipt(db)
@@ -227,7 +227,7 @@ def running_receipt(sessions, key='key'):
     now = datetime.now()
     with sessions.begin() as db:
         if db.get(SyncJob, 'job') is None:
-            db.add(SyncJob(id='job', type='full', requested_by='agent', status='running', lease_generation=1, lease_expires_at=now+timedelta(hours=1), created_at=now, updated_at=now))
+            db.add(SyncJob(id='job', type='full', requested_by='agent', status='running', lease_generation=1, lease_expires_at=now+timedelta(hours=1), create_time=now, update_time=now))
         receipt = new_receipt(db, key)
         state = db.get(DatasetState, 1)
         ReceiptRepository().mark_accepted(db, receipt.operation_id, 'job', state.dataset_epoch, state.data_version, {'job_id':'job'}, now)
@@ -431,8 +431,8 @@ def failing_worker(sessions, attempt, message):
     with sessions.begin() as db:
         job = db.get(SyncJob, 'job')
         job.status, job.attempt, job.lease_expires_at = 'queued', attempt, None
-        db.add(SystemSetting(key='task_queue_lock', value='1'))
-        db.add(SystemSetting(key='reconcile_schedule', value='{"enabled": false}'))
+        db.add(SystemSetting(setting_key='task_queue_lock', value='1'))
+        db.add(SystemSetting(setting_key='reconcile_schedule', value='{"enabled": false}'))
     worker = Worker(sessions, FailingCollector(), owner='worker')
     assert worker.acquire(utcnow())
     return worker
@@ -511,7 +511,7 @@ def test_retry_caller_session_cannot_requeue_a_job_from_stale_cached_failure():
     now = datetime.now()
     try:
         with sessions.begin() as db:
-            db.add(SyncJob(id='job', type='full', requested_by='agent', status='failed', attempt=1, created_at=now, updated_at=now))
+            db.add(SyncJob(id='job', type='full', requested_by='agent', status='failed', attempt=1, create_time=now, update_time=now))
         with sessions() as stale:
             cached = stale.get(SyncJob, 'job')
             stale.commit()
@@ -562,7 +562,7 @@ def test_store_write_dependency_reads_emit_mysql_current_read_sql():
     from sqlalchemy.dialects import mysql
     sessions, engine = make_sessions()
     seed_store(sessions)
-    dependencies = {'dataset_state', 'department', 'store_profile', 'store_code_reservation', 'employee_department', 'employee'}
+    dependencies = {'org_dataset_state', 'department', 'store_profile', 'store_code_reservation', 'employee_department', 'employee'}
     observed = []
     try:
         with sessions.begin() as db:
@@ -681,7 +681,7 @@ def test_facade_sync_reuse_retry_and_safe_evidence():
     sessions, engine = make_sessions()
     seed_store(sessions)
     try:
-        with sessions.begin() as db: db.add(SystemSetting(key="task_queue_lock", value="1"))
+        with sessions.begin() as db: db.add(SystemSetting(setting_key="task_queue_lock", value="1"))
         service = facade(sessions)
         one = service.request_sync(agent(), "full", "sync-1")
         two = service.request_sync(agent(), "full", "sync-2")
@@ -708,7 +708,7 @@ def test_facade_long_actor_preserves_identity_and_bounded_original_trigger(actor
     other_context = agent(actor_type=actor_type, actor_id='other-agent', run_id='test-other')
     try:
         with sessions.begin() as db:
-            db.add(SystemSetting(key='task_queue_lock', value='1'))
+            db.add(SystemSetting(setting_key='task_queue_lock', value='1'))
         service = facade(sessions)
         accepted = service.request_sync(first_context, 'full', 'long-actor')
         reused = service.request_sync(other_context, 'full', 'reused')
@@ -885,8 +885,8 @@ def test_facade_sync_receipt_failure_rolls_back_job_and_audit(action):
     sessions, engine = make_sessions()
     now = datetime.now()
     with sessions.begin() as db:
-        db.add(SystemSetting(key="task_queue_lock", value="1"))
-        if action == "retry": db.add(SyncJob(id="failed", type="full", requested_by="old", status="failed", attempt=1, created_at=now, updated_at=now))
+        db.add(SystemSetting(setting_key="task_queue_lock", value="1"))
+        if action == "retry": db.add(SyncJob(id="failed", type="full", requested_by="old", status="failed", attempt=1, create_time=now, update_time=now))
     def fail(*args): raise RuntimeError("INJECTED_RECEIPT_FAILURE")
     event.listen(OperationReceipt, "before_update", fail)
     try:

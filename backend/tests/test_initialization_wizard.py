@@ -416,7 +416,7 @@ def test_full_stage_failure_keeps_pending_and_never_automatically_retries(setup,
         api.fail = True
     else:
         with sessions.begin() as db:
-            db.add(SystemSetting(key='coverage_invalidated', value='true'))
+            db.add(SystemSetting(setting_key='coverage_invalidated', value='true'))
     worker = worker_for(setup)
     assert worker.step()
     with sessions() as db:
@@ -551,7 +551,7 @@ def test_ready_flow_rechecks_scope_and_environment_changes(setup):
     sessions, service, _, settings = setup
     ready(service)
     with sessions.begin() as db:
-        db.add(SystemSetting(key='coverage_invalidated', value='true'))
+        db.add(SystemSetting(setting_key='coverage_invalidated', value='true'))
     status = service.status()
     assert status['phase'] == 'pending' and len(status['checks']) == 1 and status['evidence'] is None
     ready(service)

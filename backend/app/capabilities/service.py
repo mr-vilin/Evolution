@@ -267,7 +267,10 @@ class OrganizationCapabilities:
             if job is None: raise OperationNotFound()
             self._sync_scope(db, job.type, job.root_department_id)
             if job.status != "failed": raise OperationConflict()
-            job = self.jobs.retry_in_session(db, job_id, context.actor_id, now)
+            try:
+                job = self.jobs.retry_in_session(db, job_id, context.actor_id, now)
+            except ValueError:
+                raise OperationConflict() from None
             db.flush()
             state = self.receipts._lock_state(db)
             self.receipts.mark_accepted(db, row.operation_id, job.id, state.dataset_epoch, state.data_version, {"job_id":job.id}, now)

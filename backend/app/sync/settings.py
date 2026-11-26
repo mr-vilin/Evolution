@@ -24,20 +24,20 @@ class ScheduleService:
             state = db.get(DatasetState, 1)
             if value.get('enabled') and (state is None or state.initialization_status != 'complete'):
                 raise ValueError('INITIALIZATION_INCOMPLETE')
-            db.scalar(select(SystemSetting).where(SystemSetting.key == 'task_queue_lock').with_for_update())
+            db.scalar(select(SystemSetting).where(SystemSetting.setting_key == 'task_queue_lock').with_for_update())
             row = db.get(SystemSetting, 'reconcile_schedule')
             before = json.loads(row.value) if row else dict(DEFAULT)
             after = {**value, 'updated_at': now.isoformat()}
-            db.merge(SystemSetting(key='reconcile_schedule', value=json.dumps(after)))
+            db.merge(SystemSetting(setting_key='reconcile_schedule', value=json.dumps(after)))
             db.add(ChangeLog(object_type='settings', object_id='reconcile_schedule', source='admin', actor=actor, before_data=before, after_data=after, committed_at=now.replace(tzinfo=None)))
         return after
 
     def due(self, now):
         with self.sessions.begin() as db:
-            db.scalar(select(SystemSetting).where(SystemSetting.key == 'task_queue_lock').with_for_update())
+            state = db.scalar(select(DatasetState).where(DatasetState.id == 1).with_for_update())
+            db.scalar(select(SystemSetting).where(SystemSetting.setting_key == 'task_queue_lock').with_for_update())
             setting = db.get(SystemSetting, 'reconcile_schedule')
             schedule = json.loads(setting.value) if setting else DEFAULT
-            state = db.get(DatasetState, 1)
             if state is None or state.initialization_status != 'complete':
                 return False
             local = now.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=8)))
@@ -57,12 +57,12 @@ class ScheduleService:
             )
             if initialization is not None:
                 # 初始化已完成当天的全量采集，记录当天已处理。
-                db.merge(SystemSetting(key='reconcile_last_day', value=day))
+                db.merge(SystemSetting(setting_key='reconcile_last_day', value=day))
                 return False
 
             # 调度标记与排队必须由同一事务完成，避免崩溃丢失日任务。
-            active = db.scalar(select(SyncJob).where(SyncJob.type == 'reconcile', SyncJob.root_department_id.is_(None), SyncJob.status.in_(['queued', 'running'])))
+            active = db.scalar(select(SyncJob).where(SyncJob.type == 'reconcile', SyncJob.root_department_id.is_(None), SyncJob.status.in_(['queued', 'running'])).with_for_update())
             if active is None:
-                db.add(SyncJob(id=secrets.token_urlsafe(12), type='reconcile', name='定时组织同步', trigger_source='schedule', description='按管理端配置自动触发的全量核对', requested_by='schedule', status='queued', phase='queued', created_at=now, updated_at=now))
-            db.merge(SystemSetting(key='reconcile_last_day', value=day))
+                db.add(SyncJob(id=secrets.token_urlsafe(12), type='reconcile', name='定时组织同步', trigger_source='schedule', description='按管理端配置自动触发的全量核对', requested_by='schedule', status='queued', phase='queued', create_time=now))
+            db.merge(SystemSetting(setting_key='reconcile_last_day', value=day))
             return True

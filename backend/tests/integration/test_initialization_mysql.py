@@ -110,9 +110,9 @@ def test_large_enterprise_evidence_roundtrips_without_exceeding_text_columns(mig
         save_flow(db, flow)
     with sessions() as db:
         assert load_flow(db) == flow
-        chunks = list(db.scalars(select(SystemSetting).where(SystemSetting.key.like('initialization_flow:chunk:%'))))
+        chunks = list(db.scalars(select(SystemSetting).where(SystemSetting.setting_key.like('initialization_flow:chunk:%'))))
         assert len(chunks) > 1 and all(len(row.value.encode('utf-8')) <= 48000 for row in chunks)
     with sessions.begin() as db:
         save_flow(db, {'flow_id': 'small', 'phase': 'pending', 'checks': [], 'evidence': None})
     with sessions() as db:
-        assert list(db.scalars(select(SystemSetting).where(SystemSetting.key.like('initialization_flow:chunk:%')))) == []
+        assert list(db.scalars(select(SystemSetting).where(SystemSetting.setting_key.like('initialization_flow:chunk:%')))) == []

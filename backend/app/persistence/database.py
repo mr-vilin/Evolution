@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from .models import Base
 
 
-CURRENT_SCHEMA_HEAD = "0024_organization_schema"
+CURRENT_SCHEMA_HEAD = "0026_org_table_names"
 REQUIRED_COLUMNS = {table.name: set(table.columns.keys()) for table in Base.metadata.tables.values()}
 
 
@@ -68,9 +68,9 @@ def database_ready(engine: Engine, expected_head: str = CURRENT_SCHEMA_HEAD) -> 
             if required - columns:
                 raise DatabaseReadinessError("SCHEMA_NOT_READY", "数据库缺少必要字段")
         for query in (
-            "SELECT dataset_epoch, data_version, initialization_status FROM dataset_state WHERE id = 1",
-            "SELECT generation FROM worker_lease WHERE id = 1",
-            "SELECT value FROM system_setting WHERE `key` = 'task_queue_lock'",
+            "SELECT dataset_epoch, data_version, initialization_status FROM org_dataset_state WHERE id = 1",
+            "SELECT generation FROM org_worker_lease WHERE id = 1",
+            "SELECT value FROM system_setting WHERE setting_key = 'task_queue_lock'",
         ):
             if connection.execute(text(query)).first() is None:
                 raise DatabaseReadinessError("SCHEMA_NOT_READY", "数据库缺少必要单例记录")

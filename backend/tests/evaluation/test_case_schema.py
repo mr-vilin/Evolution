@@ -176,6 +176,9 @@ def test_fixtures_match_seed_model_columns_and_foreign_keys_without_database(pat
             if not column.nullable and column.default is None and column.server_default is None
         }
         for row in rows:
+            if model is SystemSetting:
+                row = {**row, "setting_key": row["key"]}
+                del row["key"]
             assert set(row) <= columns
             assert required <= set(row)
             model(**row)  # 仅构造 ORM 行，不创建 engine 或 Session。

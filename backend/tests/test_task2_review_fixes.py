@@ -101,7 +101,7 @@ def test_inactive_revocation_rolls_back_with_publication_failure(sessions,monkey
 
 def test_coverage_reacceptance_records_evidence_clears_marker_and_queues_atomically(sessions):
     from app.sync.coverage import CoverageService
-    with sessions.begin() as db: db.add(SystemSetting(key='coverage_invalidated',value='true'))
+    with sessions.begin() as db: db.add(SystemSetting(setting_key='coverage_invalidated',value='true'))
     service=CoverageService(sessions)
     result=service.accept('验收记录-2026-09','operator:ops',True,True)
     with sessions() as db:
@@ -152,7 +152,7 @@ def test_missing_field_error_code_survives_worker_failure(sessions):
 
 def test_coverage_audit_failure_rolls_back_marker_evidence_and_queue(sessions):
     from app.sync.coverage import CoverageService
-    with sessions.begin() as db: db.add(SystemSetting(key='coverage_invalidated',value='true'))
+    with sessions.begin() as db: db.add(SystemSetting(setting_key='coverage_invalidated',value='true'))
     def reject_audit(mapper,connection,target):
         if target.object_id=='coverage_acceptance': raise RuntimeError('audit-failed')
     event.listen(ChangeLog,'before_insert',reject_audit)

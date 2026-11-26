@@ -120,7 +120,7 @@ def test_real_mysql_official_mcp_vertical(filename):
     engine = create_mysql_engine(url)
     try:
         with engine.connect() as connection:
-            expected = {'dataset_state':1,'system_setting':2,'worker_lease':1,'feishu_connection':1}
+            expected = {'org_dataset_state':1,'system_setting':2,'org_worker_lease':1,'feishu_connection':1}
             for table in Base.metadata.tables.values():
                 assert connection.scalar(select(func.count()).select_from(table)) == expected.get(table.name,0)
             assert connection.execute(select(DatasetState.dataset_epoch, DatasetState.data_version)).one() == ('pending',0)

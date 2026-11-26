@@ -34,7 +34,7 @@ def test_restore_requires_new_epoch_initialization_and_new_credentials(mysql_ses
         assert lease is not None, '请执行完整迁移链以建立 worker 租约'
         lease.owner, lease.generation, lease.expires_at = 'old-worker', 10, now + timedelta(hours=1)
         db.add(SyncJob(id=token, type='full', requested_by='recovery-test', status='running',
-                       lease_generation=4, lease_expires_at=now + timedelta(hours=1), created_at=now, updated_at=now))
+                       lease_generation=4, lease_expires_at=now + timedelta(hours=1), create_time=now, update_time=now))
         db.add(EventInbox(event_id=token, event_type='contact.user.updated_v3', payload={}, status='queued', received_at=now))
     recovery_admin = 'ou_recovery_' + uuid4().hex
     new_epoch = reset_restored_state(mysql_sessions, actor='integration-restore', admin_open_id=recovery_admin)

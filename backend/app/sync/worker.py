@@ -64,7 +64,7 @@ class Worker:
                     from app.initialization.service import fail_interrupted
                     fail_interrupted(db, job, now)
                 else:
-                    job.status, job.lease_generation, job.updated_at = 'queued', job.lease_generation+1, now
+                    job.status, job.lease_generation = 'queued', job.lease_generation+1
                     job.lease_expires_at = None
 
     def step(self):
@@ -78,7 +78,7 @@ class Worker:
                 with self.sessions.begin() as db:
                     row = db.get(SyncJob, job.id)
                     if row and row.status == 'running':
-                        row.status, row.phase, row.lease_expires_at, row.updated_at = 'queued', 'waiting_initialization', None, now
+                        row.status, row.phase, row.lease_expires_at = 'queued', 'waiting_initialization', None
                 return False
             self.current_job = (job.id, job.lease_generation)
             try:
@@ -221,9 +221,9 @@ class Worker:
             if not self.current_job: return
             row=db.scalar(select(SyncJob).where(SyncJob.id==self.current_job[0]).with_for_update())
             if row.status!='running' or row.lease_generation!=self.current_job[1]: raise ValueError('STALE_LEASE')
-            row.phase,row.updated_at=value['phase'],now
-            value['observed_at'] = now.isoformat()
-            db.merge(SystemSetting(key='job_progress:'+row.id,value=json.dumps(value)))
+            row.phase=value['phase']
+            value['observed_at'] = now.replace(tzinfo=timezone.utc).isoformat()
+            db.merge(SystemSetting(setting_key='job_progress:'+row.id,value=json.dumps(value)))
 
     def _fail_event(self,event_id):
         now=utcnow()
@@ -249,7 +249,7 @@ class Worker:
             failure = isinstance(exc, InitializationFailure)
             row.error_code = exc.code if failure else str(exc) if str(exc) in SAFE_SYNC_ERRORS else 'SYNC_FAILED'
             row.error_detail = exc.message if failure else '飞书读取或后台处理失败，请检查连接和权限后重来' if row.type == 'initialize' else None
-            row.phase, row.updated_at = 'collection_failed', now
+            row.phase = 'collection_failed'
             row.status = 'queued' if row.type != 'initialize' and row.attempt < 5 else 'failed'
             if row.status == 'queued':
                 row.retry_count = (row.retry_count or 0) + 1

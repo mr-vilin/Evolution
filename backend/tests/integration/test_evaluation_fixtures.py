@@ -30,7 +30,7 @@ def assert_reset_baseline(factory):
         assert (connection.app_id, connection.tenant_key) == (FAKE_APP_ID, FAKE_TENANT_KEY)
         counts = {table.name: db.scalar(select(func.count()).select_from(table)) for table in m.Base.metadata.tables.values()}
         assert {key: value for key, value in counts.items() if value} == {
-            'dataset_state': 1, 'system_setting': 2, 'worker_lease': 1, 'feishu_connection': 1}
+            'org_dataset_state': 1, 'system_setting': 2, 'org_worker_lease': 1, 'feishu_connection': 1}
         assert db.scalar(text('SELECT version_num FROM alembic_version')) == CURRENT_SCHEMA_HEAD
 
 
@@ -48,10 +48,10 @@ def test_literal_fixture_seed_read_cleanup_repeat(evaluation_mysql_database, cas
                                    ('employee_departments', m.EmployeeDepartment), ('store_profiles', m.StoreProfile),
                                    ('employee_stores', m.EmployeeStore), ('system_settings', m.SystemSetting)]:
                 for literal in case.fixture[section]:
-                    identity = tuple(literal[column.key] for column in model.__mapper__.primary_key)
+                    identity = tuple(literal['key' if model is m.SystemSetting else column.key] for column in model.__mapper__.primary_key)
                     actual_row = db.get(model, identity)
                     assert actual_row is not None
-                    assert {key: getattr(actual_row, key) for key in literal} == literal
+                    assert {key: getattr(actual_row, "setting_key" if model is m.SystemSetting and key == "key" else key) for key in literal} == literal
             employee = db.get(m.Employee, case.expected_state['employee_id'])
             assert employee.primary_department_id == case.expected_state['primary_department_id']
             assert employee.primary_store_status == case.expected_state['primary_store_status']
@@ -132,7 +132,7 @@ def test_reset_clears_all_runtime_audit_identity_and_self_referencing_rows(evalu
     seed_case(factory, load_case(CASES / 'ORG_AGENT_READ_PRIMARY_STORE.yaml'))
     now = datetime(2026, 10, 15)
     with factory.begin() as db:
-        db.add(m.SyncJob(id='test-job', type='reconcile', requested_by='eval', status='failed', created_at=now, updated_at=now))
+        db.add(m.SyncJob(id='test-job', type='reconcile', requested_by='eval', status='failed', create_time=now, update_time=now))
         db.flush()
         db.add_all([
             m.SyncJobDetail(job_id='test-job', object_type='employee', object_id='eval_employee_primary', status='failed'),

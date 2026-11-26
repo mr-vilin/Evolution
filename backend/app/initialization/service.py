@@ -11,6 +11,7 @@ from app.persistence.models import (
     EventInbox, FeishuConnection, PendingFact, StoreCodeReservation, StoreProfile,
     SyncJob, SyncStaging, SystemSetting, WorkerLease,
 )
+from app.persistence.deletion import delete_checked
 from app.persistence.repositories import SqlSyncJobRepository
 from .validation import (
     DEPARTMENT_FIELD_TITLES, USER_FIELD_TITLES, InitializationFailure,
@@ -37,19 +38,19 @@ def load_flow(db):
 def save_flow(db, flow):
     payload = json.dumps(flow, ensure_ascii=False)
     # TEXT 上限为 64 KiB；大型企业全员名单按 Unicode 字符分片，事务内一起切换。
-    db.execute(delete(SystemSetting).where(SystemSetting.key.like(FLOW_KEY + ':chunk:%')))
+    delete_checked(db, SystemSetting, SystemSetting.setting_key.like(FLOW_KEY + ':chunk:%'))
     if len(payload.encode('utf-8')) > 48000:
         parts = [payload[i:i + 12000] for i in range(0, len(payload), 12000)]
         for i, part in enumerate(parts):
-            db.add(SystemSetting(key=f'{FLOW_KEY}:chunk:{i}', value=part))
+            db.add(SystemSetting(setting_key=f'{FLOW_KEY}:chunk:{i}', value=part))
         payload = json.dumps({**{key: flow[key] for key in ('flow_id', 'phase', 'checks')}, '_chunks': len(parts)}, ensure_ascii=False)
-    db.merge(SystemSetting(key=FLOW_KEY, value=payload))
+    db.merge(SystemSetting(setting_key=FLOW_KEY, value=payload))
 
 
 def fail_interrupted(db, job, now):
     job.status, job.phase, job.error_code = 'failed', 'interrupted', 'INITIALIZATION_INTERRUPTED'
     job.error_detail = '后台初始化任务已中断，请清理后重新开始'
-    job.finished_at, job.updated_at, job.lease_expires_at = now, now, None
+    job.finished_at, job.lease_expires_at = now, None
     job.lease_generation += 1
     flow = load_flow(db)
     if flow.get('job_id') == job.id:
@@ -161,7 +162,7 @@ class InitializationService:
             result['required_fields'] = field_requirements()
             result['job'] = None if not job else {
                 'job_id': job.id, 'status': job.status, 'phase': job.phase,
-                'started_at': iso(job.started_at), 'updated_at': iso(job.updated_at), 'finished_at': iso(job.finished_at),
+                'started_at': iso(job.started_at), 'update_time': iso(job.update_time), 'finished_at': iso(job.finished_at),
                 'error_code': job.error_code, 'error_detail': job.error_detail,
                 'progress': json.loads(record.value) if record else {},
             }
@@ -207,7 +208,7 @@ class InitializationService:
             if len(flow['checks']) < step - 1 or any(c['status'] != 'passed' for c in flow['checks'][:step - 1]):
                 raise InitializationFailure('PREFLIGHT_REQUIRED', '请从第一步依次完成检查')
             if step == 2 and db.get(SystemSetting, 'coverage_invalidated'):
-                db.execute(delete(SystemSetting).where(SystemSetting.key == 'coverage_invalidated'))
+                db.execute(delete(SystemSetting).where(SystemSetting.setting_key == 'coverage_invalidated'))
                 flow['evidence'] = None
             flow.update(phase='checking', checking_step=step, operation=operation,
                         operation_expires_at=(utcnow() + timedelta(minutes=5)).isoformat(),
@@ -354,17 +355,20 @@ class InitializationService:
             # 不终止仍健康的空闲 worker；任务自身的世代号和数据集世代隔离旧执行。
             for old in db.scalars(select(SyncJob).where(SyncJob.status.in_(('queued', 'running'))).with_for_update()):
                 old.status, old.phase, old.error_code = 'failed', 'superseded', 'INITIALIZATION_RESTARTED'
-                old.finished_at, old.updated_at, old.lease_expires_at = utcnow(), utcnow(), None
+                old.finished_at, old.lease_expires_at = utcnow(), None
                 old.lease_generation += 1
             db.execute(update(EventInbox).where(EventInbox.status == 'queued').values(status='superseded'))
             for model in (SyncStaging, PendingFact, EmployeeStore, EmployeeDepartment, StoreCodeReservation, StoreProfile):
-                db.execute(delete(model))
+                if model in (SyncStaging, PendingFact):
+                    delete_checked(db, model)
+                else:
+                    db.execute(delete(model))
             db.execute(update(Employee).values(primary_department_id=None))
             db.execute(delete(Employee))
             db.execute(update(Department).values(parent_id=None))
             db.execute(delete(Department))
-            db.execute(delete(SystemSetting).where(SystemSetting.key.like('job_progress:%')))
-            db.execute(delete(SystemSetting).where(SystemSetting.key.in_(('coverage_acceptance', 'coverage_invalidated', 'last_event_processed_at'))))
+            delete_checked(db, SystemSetting, SystemSetting.setting_key.like('job_progress:%'))
+            delete_checked(db, SystemSetting, SystemSetting.setting_key.in_(('coverage_acceptance', 'coverage_invalidated', 'last_event_processed_at')))
             state.dataset_epoch, state.data_version = uuid.uuid4().hex, 0
             state.initialization_status, state.coverage_status, state.last_full_sync_at = 'pending', 'unknown', None
             audit(db, 'cleanup', actor, flow, previous_error=flow.get('last_error'))
