@@ -330,7 +330,7 @@ def test_real_mysql_independent_readonly_consistent_snapshot_and_cleanup(name):
             verify_test_database(connection)
             counts = {t.name: connection.scalar(select(func.count()).select_from(t)) for t in Base.metadata.tables.values()}
             assert {k:v for k,v in counts.items() if v} == {
-                'dataset_state': 1, 'worker_lease': 1, 'system_setting': 2, 'feishu_connection': 1}
+                'org_dataset_state': 1, 'org_worker_lease': 1, 'system_setting': 2, 'feishu_connection': 1}
             assert connection.scalar(select(DatasetState.data_version)) == 0
     finally:
         engine.dispose()
