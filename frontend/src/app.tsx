@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { RunTimeLayoutConfig } from '@umijs/max';
 import { Link } from '@umijs/max';
 import { Button, ConfigProvider, Space, theme } from 'antd';
-import { AppstoreOutlined, BgColorsOutlined, BookOutlined, SettingOutlined, InfoCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { ApartmentOutlined, ShopOutlined, CloudOutlined, BgColorsOutlined, BookOutlined, SettingOutlined, InfoCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { AdminActions } from './components/AdminActions';
 import { useWorkspaceSettings } from './components/WorkspaceSettings';
 import { Providers } from './components/Providers';
@@ -38,12 +38,16 @@ export const layout: RunTimeLayoutConfig = () => {
     actionsRender: () => [<ConfigProvider key="admin" theme={{ components: { Button: { textTextColor: token.colorTextLightSolid, textTextHoverColor: token.colorTextLightSolid, textTextActiveColor: token.colorTextLightSolid, textHoverBg: token.colorPrimaryHover, colorBgTextActive: token.colorPrimaryActive } } }}><Space className="workspace-actions" size={0}><Button type="text" aria-label="布局设置" title="布局设置" icon={<SettingOutlined />} onClick={preferences.open} /><Link aria-label="系统信息" title="系统信息" to="/system-info"><Button type="text" aria-label="系统信息" icon={<InfoCircleOutlined />} /></Link><Button type="text" aria-label="官方参考帮助" title="官方参考帮助" icon={<QuestionCircleOutlined />} href="https://pro.ant.design/zh-CN/" target="_blank" rel="noopener noreferrer" /><AdminActions /></Space></ConfigProvider>],
     rightContentRender: false,
     menuDataRender: (items) => {
-      const business = items.filter(item => ['/organization', '/stores', '/tencent/accounts', '/tencent/costs', '/tencent/cost-dashboard'].includes(item.path ?? '') || item.path?.startsWith('/employees/'));
-      const system = items.filter(item => ['/sync', '/logs', '/settings', '/system-info'].includes(item.path ?? ''));
+      const organization = items.filter(item => ['/organization', '/sync', '/logs'].includes(item.path ?? '') || item.path?.startsWith('/employees/') || item.path?.startsWith('/sync/jobs/'));
+      const stores = items.filter(item => item.path === '/stores');
+      const tencent = items.filter(item => item.path?.startsWith('/tencent/'));
+      const system = items.filter(item => ['/settings', '/system-info'].includes(item.path ?? ''));
       const examples = items.filter(item => item.path?.startsWith('/examples/'));
       const standards = items.filter(item => item.path?.startsWith('/ui-standards/'));
       return [
-        { path: '/business', name: '业务管理', icon: <AppstoreOutlined />, children: business },
+        { path: '/organization-management', name: '组织管理', icon: <ApartmentOutlined />, children: organization },
+        { path: '/store-management', name: '门店管理', icon: <ShopOutlined />, children: stores },
+        { path: '/tencent-management', name: '腾讯云管理', icon: <CloudOutlined />, children: tencent },
         { path: '/system', name: '系统管理', icon: <SettingOutlined />, children: system },
         { path: '/ui-standards', name: 'UI标准', icon: <BgColorsOutlined />, children: standards },
         { path: '/examples', name: '参考案例', icon: <BookOutlined />, children: examples },

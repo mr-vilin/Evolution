@@ -39,7 +39,7 @@ export function SyncPage() {
   const latestJob = current?.sync_summary?.latest_job;
   const options = (values: Record<string, string>) => Object.entries(values).map(([value, text]) => ({ value, label: text }));
   const help = (text: string) => <Tooltip title={text}><QuestionCircleOutlined tabIndex={0} aria-label={text} /></Tooltip>;
-  return <PageHeader area="系统管理" title="同步中心" description="查看同步进度与结果；同步按批次入库，可在任务完成前查看已更新的数据。" extra={<Button type="primary" icon={<ReloadOutlined />} loading={busy} onClick={create}>一键全量更新</Button>}>
+  return <PageHeader area="组织管理" title="组织同步" description="查看同步进度与结果；同步按批次入库，可在任务完成前查看已更新的数据。" extra={<Button type="primary" icon={<ReloadOutlined />} loading={busy} onClick={create}>一键全量更新</Button>}>
     <Card><ResourceState {...status} loading={status.loading && !status.data}>{current && <Descriptions column={{ xs: 1, md: 2, xl: 4 }} items={[
       { key: 'initialized', label: '初始化日期', children: current.initialized_at ? formatTime(current.initialized_at) : '暂无历史日期' },
       { key: 'full', label: '最近全量完成', children: formatTime(status.meta.last_full_sync_at as string | null) },

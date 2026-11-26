@@ -30,7 +30,7 @@ export function SyncJobPage() {
   }
   const job = detail.data;
   const rows = job?.details ?? [];
-  return <PageHeader area="系统管理" title="同步任务详情" description="按对象查看处理结果与已提交的字段变更。" extra={<Space><Link to="/sync">返回同步中心</Link>{job?.status === 'failed' && job.type !== 'initialize' && <Button danger loading={busy} onClick={retry}>重试任务</Button>}<Button onClick={detail.reload}>刷新</Button></Space>}>
+  return <PageHeader area="组织管理" title="同步任务详情" description="按对象查看处理结果与已提交的字段变更。" extra={<Space><Link to="/sync">返回组织同步</Link>{job?.status === 'failed' && job.type !== 'initialize' && <Button danger loading={busy} onClick={retry}>重试任务</Button>}<Button onClick={detail.reload}>刷新</Button></Space>}>
     <ResourceState {...detail} loading={detail.loading && !job}>{job && <>
       <Card><Descriptions column={{ xs: 1, md: 2, xl: 3 }} items={[
         { key: 'type', label: '类型', children: label(syncTypes, job.type) },

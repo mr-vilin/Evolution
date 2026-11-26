@@ -146,7 +146,7 @@ export function TencentCostPage() {
   const accounts = useResource<TencentAccount[]>('/admin/api/tencent/accounts');
   const [selected, setSelected] = useState<string | null>(null);
   const account = accounts.data?.find(item => item.id === selected) ?? accounts.data?.[0];
-  return <PageHeader area="业务管理" title="腾讯云成本" description="按独立账号采集日/月费用，切换自动频率并查看完整产品、精确费用及实际执行结果。">
+  return <PageHeader area="腾讯云管理" title="成本看板" description="按独立账号采集日/月费用，切换自动频率并查看完整产品、精确费用及实际执行结果。">
     <Space orientation="vertical" size={24} style={{width:'100%'}}>
       <Card><ResourceState {...accounts} empty={accounts.data?.length === 0}>
         <Form layout="vertical"><Form.Item label="腾讯云账号" style={{marginBottom:0}}><Select aria-label="腾讯云账号" value={account?.id} options={(accounts.data ?? []).map(item => ({value:item.id,label:`${item.alias}（${item.uin}）${item.is_enabled ? '' : ' · 已停用'}`}))} onChange={setSelected} style={{width:'100%',maxWidth:480}} /></Form.Item></Form>

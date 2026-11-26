@@ -27,7 +27,7 @@ const closingRules = [
   { topic: '动画反馈', do: '沿用组件动效与命名令牌；没有更具体约定时使用中速时长与默认缓动。', dont: '随意编造缓动曲线，或用统一时长覆盖所有组件的进入与退出。' },
 ];
 const typographyStyles = [
-  { name: 'page-title', sample: '页面标题 · 标识当前页面，如组织架构、同步中心。', fontSize: '24px', lineHeight: '32px', fontWeight: 600, color: 'colorTextHeading' },
+  { name: 'page-title', sample: '页面标题 · 标识当前页面，如组织架构、组织同步。', fontSize: '24px', lineHeight: '32px', fontWeight: 600, color: 'colorTextHeading' },
   { name: 'section-title', sample: '模块标题 · 说明这一区域的内容，如同步任务、成员详情。', fontSize: '16px', lineHeight: '24px', fontWeight: 600, color: 'colorTextHeading' },
   { name: 'body-text', sample: '主要内容 · 展示姓名、部门、手机号码等业务数据，以及表单输入与普通控件文字。', fontSize: '14px', lineHeight: '22px', fontWeight: 400, color: 'colorText' },
   { name: 'secondary-text', sample: '次要信息 · 解释主要内容，用于页面说明、详情字段名称和需要读懂的表单帮助。', fontSize: '14px', lineHeight: '22px', fontWeight: 400, color: 'colorTextSecondary' },
