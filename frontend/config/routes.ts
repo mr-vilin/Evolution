@@ -8,7 +8,7 @@ export default [
   { path: '/sync', name: '组织同步', icon: 'SyncOutlined', component: './SyncPage' },
   { path: '/sync/jobs/:id', name: '同步任务详情', component: './SyncJobPage', hideInMenu: true, parentKeys: ['/organization-management', '/sync'] },
   { path: '/organization-config', name: '配置中心', icon: 'SettingOutlined', component: './OrganizationConfigPage' },
-  { path: '/logs', name: '组织变更记录', icon: 'AuditOutlined', component: './LogsPage' },
+  { path: '/logs', name: '变更记录', icon: 'AuditOutlined', component: './LogsPage' },
   { path: '/stores', name: '门店', icon: 'ShopOutlined', component: './StoresPage' },
   { path: '/tencent/accounts', name: '账号管理', icon: 'CloudOutlined', component: './TencentAccountsPage' },
   { path: '/tencent/accounts/:id/balance', name: '实时余额', component: './TencentBalancePage', hideInMenu: true, parentKeys: ['/tencent-management', '/tencent/accounts'] },

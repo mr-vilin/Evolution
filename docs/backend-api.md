@@ -100,6 +100,7 @@ worker 通过 `SqlSyncJobRepository.claim_next()` 认领任务；全局租约、
 
 ### 日志与安全设置
 
+- `GET /admin/api/organization-changes`：组织变更专用查询，沿用管理员会话认证。必选单一对象类型 `employee|department`（默认 employee），可按 `object_id/keyword/source/action/actor/committed_after/committed_before` 查询。来源可选 `initialize|full|subtree|reconcile|event`，操作可选 `create|update|deactivate|reactivate`。时间需要带时区。按提交时间、日志 ID 倒序，`page` 从 1 开始，`page_size` 默认 20、上限 100。全部视图 `view=all` 返回对象名称、任务或事件 ID、来源、执行人、变更类型及 changes 字段差异，并附 department_change（完整有效部门前后集合及主部门标记）、raw_records（关联原始变更前后 JSON）和执行人头像信息；`view=grouped` 以对象 ID 分组，返回每组 total、最近五条 records，按最近变更时间倒序。两种视图均通过 meta.total 返回分页总数。无法确定的历史来源返回 null。员工关系记录合并为员工变更，查询忽略仅涉及同步质量等内部状态的记录。
 - `GET /admin/api/change-logs`：参数 `object_type/object_id/source/job_id/actor/action/committed_after/committed_before/limit` 与数字文本 `cursor`。响应 `meta.next_cursor` 统一为 `string|null`，后续请求可直接传回；不返回 JSON 数字游标。`action=create|update|delete` 根据 before/after 是否为空分类；事实从 active 改 inactive 仍为 update。时间必须带时区，转换为 UTC 后按包含边界过滤；返回 before/after、action、actor、job_id 和 committed_at。
 - `GET /admin/api/admin-allowlist`；`POST /admin/api/admin-allowlist` body `{"open_id":"ou_..."}`；`DELETE /admin/api/admin-allowlist/{open_id}`。删除会在同一事务撤销该身份的活动会话，删除最后一名也立即生效。添加、删除与脱敏日志同事务提交。
 - `GET /admin/api/api-clients`；`POST /admin/api/api-clients` body `{"name":"薪资系统"}`；`POST /admin/api/api-clients/{client_id}/rotate`；`POST /admin/api/api-clients/{client_id}/revoke`。创建与轮换响应包含一次性的 `secret`；列表、后续查询和日志不返回 secret 或哈希。轮换在一个事务中锁定并撤销旧凭据、创建新凭据和写审计，任一步失败整笔回滚。

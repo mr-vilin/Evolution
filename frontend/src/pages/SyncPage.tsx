@@ -9,6 +9,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ResourceState } from '../components/ResourceState';
 import { AdaptiveTableCard } from '../components/AdaptiveTableCard';
 import { CopyValue } from '../components/CopyValue';
+import { TableActionButton } from '../components/TableActionButton';
 import { EmployeeIdentity } from '../components/EmployeeIdentity';
 import { PendingObjectsModal } from '../components/PendingObjectsModal';
 import { formatTableTime, label, SyncProgress, SyncStatus, syncPhases, syncStatuses, syncTypes } from '../components/SyncPresentation';
@@ -67,7 +68,7 @@ export function SyncPage() {
           { key: 'status', title: '状态', width: 120, dataIndex: 'status', render: (value, row) => <SyncStatus value={(row.display_status as string | undefined) ?? (value === 'succeeded' && row.failure_count ? 'completed_with_errors' : value)} /> },
           { key: 'progress', title: <span className="sync-progress-heading">进度<Tooltip title="成功/失败/总数" trigger={['hover', 'focus']}><ExclamationCircleOutlined className="sync-title-info" tabIndex={0} aria-label="进度说明" /></Tooltip></span>, width: 160, render: (_, row) => <SyncProgress job={row} compact /> },
           { key: 'create_time', title: '创建时间', dataIndex: 'create_time', width: 160, sorter: true, sortOrder: sort === 'asc' ? 'ascend' : sort === 'desc' ? 'descend' : null, render: value => <span className="sync-caption">{formatTableTime(value)}</span> },
-          { key: 'actions', title: '操作', fixed: 'right', width: 96, render: (_, row) => <Tooltip title="查看详情"><Button type="text" aria-label="查看详情" icon={<EyeOutlined />} onClick={() => navigate('/sync/jobs/' + encodeURIComponent(row.job_id ?? row.id ?? ''))} /></Tooltip> },
+          { key: 'actions', title: '操作', fixed: 'right', width: 96, render: (_, row) => <TableActionButton tooltip="查看详情" aria-label="查看详情" icon={<EyeOutlined />} onClick={() => navigate('/sync/jobs/' + encodeURIComponent(row.job_id ?? row.id ?? ''))} /> },
         ]}>
         <div className="sync-toolbar">
           <Space wrap size={8}>

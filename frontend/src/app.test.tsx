@@ -13,7 +13,7 @@ it('业务菜单按组织、门店和腾讯云分组，详情页归属对应菜�
     pages: group.children?.filter(page => !page.hideInMenu).map(page => page.name),
   }));
   expect(visiblePages).toEqual([
-    { name: '组织管理', pages: ['组织架构', '组织同步', '配置中心', '组织变更记录'] },
+    { name: '组织管理', pages: ['组织架构', '组织同步', '配置中心', '变更记录'] },
     { name: '门店管理', pages: ['门店'] },
     { name: '腾讯云管理', pages: ['账号管理', '费用看板', '成本看板'] },
     { name: '系统管理', pages: ['管理设置', '系统信息'] },

@@ -10,6 +10,7 @@ import { useResource } from '../services/useResource';
 import { datasetQuery, sameDataset, useOrganizationPeople, useOrganizationTree } from '../services/useOrganization';
 import { PageHeader } from '../components/PageHeader';
 import { ResourceTable } from '../components/ResourceTable';
+import { TableActionButton } from '../components/TableActionButton';
 import { StoreEditor } from '../components/StoreEditor';
 import { EmployeeDepartments } from '../components/EmployeeDepartments';
 import { EmployeeDetailDrawer } from '../components/EmployeeDetailDrawer';
@@ -46,8 +47,6 @@ export function OrganizationPage() {
   };
   const navigate = useNavigate();
   const [employeeId, setEmployeeId] = useState<string>();
-  const [detailTipId, setDetailTipId] = useState<string>();
-  const dismissedDetailTip = useRef<string>(undefined);
   const [departmentId, setDepartmentId] = useState<string>();
   const [includeInactive, setIncludeInactive] = useState(false);
   const tree = useOrganizationTree(includeInactive);
@@ -268,20 +267,8 @@ export function OrganizationPage() {
               { key: 'store-attribute', title: '门店属性', width: 160, render: (_, row) => <EmployeeValue value={row.store_attribute_name || row.store_attribute_id} /> },
               { key: 'permission-role', title: '权限角色', width: 160, render: (_, row) => <EmployeeValue value={row.permission_role_name || row.permission_role_id} /> },
               { key: 'actions', title: '操作', width: actionWidth, render: (_, row) =>
-                <Tooltip title="查看详情" trigger={['hover', 'focus']} open={!employeeId && detailTipId === row.id}
-                  onOpenChange={open => {
-                    if (!open) setDetailTipId(current => current === row.id ? undefined : current);
-                    else if (!employeeId && dismissedDetailTip.current !== row.id) setDetailTipId(row.id);
-                  }}>
-                  <Button type="text" size="small" aria-label={'查看' + row.name + '的详情'} icon={<EyeOutlined />}
-                    onMouseEnter={() => { if (!employeeId) dismissedDetailTip.current = undefined; }}
-                    onBlur={() => { if (!employeeId) dismissedDetailTip.current = undefined; }}
-                    onClick={() => {
-                      dismissedDetailTip.current = row.id;
-                      setDetailTipId(undefined);
-                      setEmployeeId(row.id);
-                    }} />
-                </Tooltip> },
+                <TableActionButton tooltip="查看详情" size="small" aria-label={'查看' + row.name + '的详情'}
+                  icon={<EyeOutlined />} onClick={() => setEmployeeId(row.id)} /> },
             ]} />
           </div>
         </Card>
