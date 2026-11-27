@@ -27,11 +27,18 @@ def receive(sessions, payload, app_id, tenant_key):
     row = normalize_event(payload, app_id, tenant_key)
     try:
         with sessions.begin() as db:
-            db.add(EventInbox(**row, attempts=0, received_at=datetime.now(timezone.utc).replace(tzinfo=None)))
+            now = datetime.now(timezone.utc)
+            db.add(EventInbox(**row, attempts=0, received_at=now.replace(tzinfo=None)))
+            db.flush()
             if row['event_type'] == 'contact.scope.updated_v3':
                 state=db.scalar(select(DatasetState).where(DatasetState.id==1).with_for_update())
                 if state: state.coverage_status='unknown'
                 db.merge(SystemSetting(setting_key='coverage_invalidated',value='true'))
+            if row['object_id']:
+                db.scalar(select(SystemSetting).where(SystemSetting.setting_key == 'task_queue_lock').with_for_update())
+                previous = db.get(SystemSetting, 'feishu_last_event_received_at')
+                if previous is None or datetime.fromisoformat(previous.value) < now:
+                    db.merge(SystemSetting(setting_key='feishu_last_event_received_at', value=now.isoformat()))
     except IntegrityError:
         with sessions() as db:
             if db.get(EventInbox, row['event_id']) is None:

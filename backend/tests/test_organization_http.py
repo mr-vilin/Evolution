@@ -248,7 +248,8 @@ def test_sync_preserves_local_order_appends_moves_and_keeps_raw_optional_facts(o
     rows = client.get('/admin/api/organization/departments').json()['data']
     assert [row['id'] for row in rows] == ['x', 'a', 'c']
     employee = client.get('/admin/api/employees/u').json()['data']
-    assert employee['mobile'] == ''
+    assert employee['mobile'] is None
+    assert employee['sync_quality'] == 'pending_verification'
     assert employee['field_readability']['mobile'] == 'readable'
     assert employee['account_status']['is_activated'] is False
     assert employee['account_status']['is_unjoin'] is None

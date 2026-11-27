@@ -30,7 +30,7 @@ MAPPINGS = {'permission_role': 'role', 'store_attribute': 'store', 'employee_typ
 class Feishu:
     def __init__(self):
         self.departments = {'d': {'open_department_id': 'd', 'parent_department_id': '0', 'name': '部门', 'leader_user_id': None, 'status': {'is_deleted': False}}}
-        self.users = {identifier: {'user_id': identifier, 'name': identifier, 'employee_no': None, 'job_title': None,
+        self.users = {identifier: {'user_id': identifier, 'name': identifier, 'mobile': '+8613800000000', 'employee_no': None, 'job_title': None,
             'leader_user_id': None, 'employee_type': 1, 'status': {'is_resigned': False},
             'department_ids': ['d'],
             'orders': [{'department_id': 'd', 'is_primary_dept': True}],
@@ -104,6 +104,7 @@ def test_field_report_keeps_passed_fields_and_all_independent_failures(setup):
     _, service, api, _ = setup
     api.users['u']['custom_attrs'] = {}
     api.users['u'].pop('job_title')
+    api.users['u'].pop('mobile')
     for step in (1, 2, 3):
         service.run_check(step, 'admin:ou')
     status = service.run_check(4, 'admin:ou')
@@ -111,8 +112,8 @@ def test_field_report_keeps_passed_fields_and_all_independent_failures(setup):
     assert status['phase'] == 'precheck_failed'
     assert fields['name']['status'] == 'passed'
     assert fields['employee_no']['status'] == 'passed'  # 明确的空值仍合法。
-    assert {k for k, v in fields.items() if v['status'] == 'failed'} == {'job_title', 'permission_role', 'store_attribute'}
-    assert len(fields) == 12
+    assert {k for k, v in fields.items() if v['status'] == 'failed'} == {'mobile', 'permission_role', 'store_attribute'}
+    assert len(fields) == 13
     assert len(status['last_error']['issues']) == 3
 
 
@@ -129,9 +130,9 @@ def test_manual_sample_replaces_automatic_users_rereads_and_does_not_bypass_full
     assert status['field_sample'] == {'mode': 'manual', 'user_ids': ['manual']}
     assert {i['object_id'] for i in status['checks'][-1]['items'] if i.get('object_type') == 'user'} == {'manual'}
     assert 'samples' not in status and 'last_error' not in status
-    api.users['manual'].pop('job_title')
+    api.users['manual'].pop('mobile')
     assert service.run_check(4, 'admin:ou', user_id='manual')['phase'] == 'precheck_failed'
-    api.users['manual']['job_title'] = None
+    api.users['manual']['mobile'] = '+8613800000000'
     service.run_check(4, 'admin:ou', user_id='manual')
     service.start('admin:ou')
     assert worker_for(setup).step()
@@ -142,11 +143,11 @@ def test_automatic_retry_rereads_samples_and_clears_manual_source(setup):
     _, service, api, _ = setup
     ready(service)
     service.run_check(4, 'admin:ou', user_id='v')
-    api.users['u'].pop('job_title')
+    api.users['u'].pop('mobile')
     status = service.run_check(4, 'admin:ou')
     assert status['phase'] == 'precheck_failed'
     assert status['field_sample'] == {'mode': 'automatic', 'user_ids': ['u']}
-    api.users['u']['job_title'] = None
+    api.users['u']['mobile'] = '+8613800000000'
     assert service.run_check(4, 'admin:ou')['phase'] == 'ready'
 
 
@@ -347,18 +348,20 @@ def test_field_requirements_cover_all_checked_fields_before_preflight(setup):
     assert fields['user:orders']['requirement'] == '条件必填'
     assert fields['user:name']['requirement'] == '必填'
     assert fields['user:job_title']['requirement'] == '非必填'
-    assert '接口仍须返回' in fields['user:job_title']['rule']
+    assert '省略' in fields['user:job_title']['rule']
+    assert fields['user:mobile']['requirement'] == '必填'
 
 
 def test_optional_contact_facts_report_unknown_without_claiming_read_permissions(setup):
     _, service, api, _ = setup
-    api.users['u']['mobile'] = ''
+    api.users['u']['email'] = ''
     api.users['u']['status']['is_activated'] = False
     for step in (1, 2, 3):
         service.run_check(step, 'admin:ou')
     status = service.run_check(4, 'admin:ou')
     items = {item['field']: item for item in status['checks'][3]['items'] if item.get('object_id') == 'u'}
-    assert items['mobile']['readability'] == 'readable'
+    assert items['mobile']['status'] == 'passed'
+    assert items['email']['readability'] == 'readable'
     assert items['is_activated']['readability'] == 'readable'
     assert items['is_unjoin']['readability'] == 'not_collected'
     assert '未知' in items['is_unjoin']['message']
@@ -409,7 +412,7 @@ def test_full_stage_failure_keeps_pending_and_never_automatically_retries(setup,
     ready(service)
     job_id = service.start('admin:ou')
     if problem == 'missing_field':
-        del api.users['v']['job_title']
+        del api.users['v']['mobile']
     elif problem == 'missing_primary':
         api.users['v']['orders'] = []
     elif problem == 'read_failure':
@@ -662,10 +665,11 @@ def test_text_store_attribute_rejects_unreadable_and_invalid_values(attr):
 
 
 @pytest.mark.parametrize('value', [{}, {'text': 42}, {'text': '店' * 256}])
-def test_regular_sync_marks_invalid_text_store_attribute_pending(value):
+def test_regular_sync_records_invalid_optional_store_attribute_without_pending(value):
     api = Feishu()
     api.users['u']['custom_attrs'][1] = {'id': 'store', 'type': 'TEXT', 'value': value}
     candidate = Candidate()
     Collector(api, custom_mappings=MAPPINGS)._user(candidate, 'u')
-    assert candidate.pending == [('employee', 'u')]
-    assert not candidate.employees
+    assert candidate.pending == []
+    assert candidate.employees['u']['sync_quality'] == 'complete'
+    assert set(candidate.employees['u']['optional_field_issues']) == {'store_attribute_id', 'store_attribute_name'}

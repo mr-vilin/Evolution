@@ -1,6 +1,6 @@
 import { Table } from 'antd';
 import type { ChangeLog } from '../domain';
-import { formatTime } from '../domain';
+import { formatTableTime } from './SyncPresentation';
 
 const fields: Record<string, string> = {
   id: '对象 ID', feishu_user_id: '飞书用户 ID', open_id: '飞书开放 ID', feishu_department_id: '飞书部门 ID',
@@ -17,7 +17,7 @@ function show(value: unknown, field?: string): string {
   if (value === undefined) return '未记录';
   if (value === null || value === '') return '空';
   if (typeof value === 'boolean') return value ? '是' : '否';
-  if (field === 'join_time' && typeof value === 'number') return formatTime(new Date(value * 1000).toISOString());
+  if (field === 'join_time' && typeof value === 'number') return formatTableTime(new Date(value * 1000).toISOString());
   if (Array.isArray(value)) return value.length ? value.map(item => show(item)).join('；') : '无';
   if (typeof value === 'object') return Object.entries(value as Record<string, unknown>).map(([key, item]) => `${fields[key] ?? key}：${show(item, key)}`).join('；');
   return values[String(value)] ?? String(value);
@@ -31,7 +31,7 @@ export function SyncChanges({ changes }: { changes: ChangeLog[] }) {
       .map(key => ({ key: `${log.id}:${key}`, field: `${log.object_type === 'membership' ? '部门关系 · ' : ''}${fields[key] ?? key}`, before: show(before[key], key), after: show(after[key], key), log: log.id, time: log.committed_at }));
   });
   return <Table size="small" rowKey="key" dataSource={rows} pagination={false} scroll={{ x: 640 }} columns={[
-    { title: '变更字段', dataIndex: 'field' }, { title: '变更前', dataIndex: 'before' }, { title: '变更后', dataIndex: 'after' },
-    { title: '关联记录', dataIndex: 'log', render: value => `#${value}` }, { title: '提交时间', dataIndex: 'time', render: formatTime },
+    { key: 'field', title: '变更字段', dataIndex: 'field', fixed: 'left', width: 140 }, { key: 'before', title: '变更前', dataIndex: 'before' }, { key: 'after', title: '变更后', dataIndex: 'after' },
+    { key: 'log', title: '关联记录', dataIndex: 'log', render: value => `#${value}` }, { key: 'time', title: '提交时间', dataIndex: 'time', width: 160, sorter: (a, b) => new Date(a.time ?? 0).valueOf() - new Date(b.time ?? 0).valueOf(), render: value => <span className="sync-caption">{formatTableTime(value)}</span> },
   ]} />;
 }

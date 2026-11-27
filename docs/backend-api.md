@@ -66,11 +66,13 @@ worker 通过 `SqlSyncJobRepository.claim_next()` 认领任务；全局租约、
 
 ### 连接与每日核对
 
-- `GET /admin/api/status` 即使初始化未完成也提供管理诊断。`data.connection={status:'connected|degraded|unconfigured',checked_at,app_id_masked,tenant_key_masked,scopes:string[]}`；`last_event_processed_at` 为最近成功处理事务的 UTC 时间，`failed_event_count` 为失败事件数。
+- `GET /admin/api/status` 即使初始化未完成也提供管理诊断。`data.connection={status:'normal|warning|disconnected|unconfigured',checked_at,last_event_received_at,monitoring_started_at,elapsed_minutes,normal_minutes,disconnect_minutes,app_id_masked,tenant_key_masked,scopes:string[]}`；`last_event_processed_at` 为最近成功处理事务的 UTC 时间，`failed_event_count` 为失败事件数。
 - `data.sync_summary.latest_job` 返回最近创建的同步任务的 `job_id` 和 `status`，暂无任务时为 `null`。`pending_object_count` 统计当前已发现且待核实的部门或人员。已存在的记录和待核实事实按对象类型及 ID 去重，分批发布结束后仍可能有待核实对象。
 - `GET /admin/api/sync/preflight` 的 `ready` 根据数据库结构、飞书绑定和初始化状态计算。`checks.coverage_accepted` 是弃用兼容字段，供现有调用方迁移。
 - 首连无公开确认通知，因此初始状态 degraded；合法事件入箱或 SDK 公开重连成功 hook 提供最近连接证据。90 秒无新证据时退回 degraded，不能把进程存活当 connected。`scopes` 是部署者声明的已授权 scope 名称，不能当作接口验证过的权限清单。
 - `data.coverage_acceptance` 是弃用兼容字段，返回 `reference`、`all_members_verified`、`departmentless_verified`。存在持久验收记录时附带 `accepted_by` 和 `updated_at`。授权范围变更继续触发重新核对，并使旧验收依据失效。兼容期内可用下述 CLI 记录新依据。
+- `GET /admin/api/sync/pending-objects` 返回去重待核实对象类型、ID、名称、原因编码及时间。
+- `GET /admin/api/settings/event-monitor` 读取正常及断开时限（分钟），默认 60/180。同路径 `PUT` 要求管理员写权限，断开时限大于正常时限，保存后立即生效。
 - `GET /admin/api/settings/reconcile-schedule` 返回 `{data:{enabled,local_time,timezone,updated_at},meta:{}}`。默认 `true/03:00/Asia/Shanghai/null`。
 - `PUT` 同路径接受 `{enabled:boolean,local_time:'HH:mm',timezone:'Asia/Shanghai'}`，须 CSRF；无效参数返回 `422 VALIDATION_ERROR`，设置与审计同事务。worker 实际读取此配置，日任务与北京时间日期去重标记在同一事务持久化。启动与长连接恢复均安排幂等全量核对。
 
@@ -102,7 +104,7 @@ worker 通过 `SqlSyncJobRepository.claim_next()` 认领任务；全局租约、
 - `GET /admin/api/admin-allowlist`；`POST /admin/api/admin-allowlist` body `{"open_id":"ou_..."}`；`DELETE /admin/api/admin-allowlist/{open_id}`。删除会在同一事务撤销该身份的活动会话，删除最后一名也立即生效。添加、删除与脱敏日志同事务提交。
 - `GET /admin/api/api-clients`；`POST /admin/api/api-clients` body `{"name":"薪资系统"}`；`POST /admin/api/api-clients/{client_id}/rotate`；`POST /admin/api/api-clients/{client_id}/revoke`。创建与轮换响应包含一次性的 `secret`；列表、后续查询和日志不返回 secret 或哈希。轮换在一个事务中锁定并撤销旧凭据、创建新凭据和写审计，任一步失败整笔回滚。
 
-管理页面读取使用 `/admin/api/status`、`/admin/api/departments[/{id}]`、`/admin/api/employees[/{id}]`、`/admin/api/stores[/{id}]`、`/admin/api/stores/{id}/employees`，参数和响应字段与同名公共接口一致。部门含 `path/is_store/store_code`。员工含部门关系和主门店解析状态。门店含 `path/employee_count/primary_employee_count`。同步任务列表为 `GET /admin/api/sync/jobs?status=&limit=&cursor=`，按 `(create_time,id)` 倒序稳定分页，读取任务无需 CSRF。同步任务列表、详情、重试及初始化进度中的任务时间字段统一为 create_time、update_time，原 created_at、updated_at 字段已迁移。
+管理页面读取使用 `/admin/api/status`、`/admin/api/departments[/{id}]`、`/admin/api/employees[/{id}]`、`/admin/api/stores[/{id}]`、`/admin/api/stores/{id}/employees`，参数和响应字段与同名公共接口一致。部门含 `path/is_store/store_code`。员工含部门关系和主门店解析状态。门店含 `path/employee_count/primary_employee_count`。同步任务列表为 `GET /admin/api/sync/jobs?status=&limit=&cursor=`，按 `(create_time,id)` 倒序稳定分页，读取任务无需 CSRF。管理端支持 `page`、`limit`、`keyword`（任务名称或 ID 前缀）、`sort=asc|desc`，返回 `meta.total_count`，状态筛选支持 `completed_with_errors`。同步任务列表、详情、重试及初始化进度中的任务时间字段统一为 create_time、update_time，原 created_at、updated_at 字段已迁移。
 
 部门对象统一返回 JSON 布尔字段 `is_root`。ID 为 `0` 的「本组织」取 `true`，顶层业务部门及其下级部门均取 `false`。这适用于公共及管理部门接口、组织工作台、员工响应中的 `departments`，以及 MCP 的 `find_departments`、`get_department` 和含部门对象的员工工具。升级时将客户端读取的 `is_virtual_root` 改为 `is_root`。
 

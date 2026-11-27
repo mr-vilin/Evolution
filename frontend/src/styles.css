@@ -111,3 +111,21 @@ body:has(.organization-page), #root:has(.organization-page) { overflow-x: clip; 
   .workspace-header { padding: 0 8px; gap: 0; }
   .workspace-title { gap: 0; font-size: 12px; }
 }
+
+.sync-page.page-heading h1 { font-size: 24px; line-height: 32px; font-weight: 600; }
+.sync-section { margin-top: 24px; min-width: 0; }
+.sync-caption { font-size: 12px; line-height: 20px; font-weight: 400; color: var(--app-muted); }
+.sync-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 16px; }
+.sync-toolbar > .ant-space { min-width: 0; }
+
+.sync-title, .sync-progress-heading { display: inline-flex; align-items: center; gap: 4px; }
+.sync-title { gap: 8px; }
+.sync-title-info { font-size: 14px; line-height: 1; color: var(--app-muted); cursor: help; }
+.sync-pending { font-weight: 400; font-size: 14px; }
+.sync-pending .anticon { color: var(--app-muted); }
+.sync-list-page.page-heading { margin-bottom: 0; }
+.sync-list-page .ant-pro-page-container-children-container { padding-bottom: 0; }
+.ant-pro-layout .ant-pro-layout-content:has(.sync-list-page) { padding-bottom: 24px; min-width: 0; }
+.sync-list-section { min-width: 0; }
+.sync-progress-cell { min-width: 0; width: 100%; }
+.sync-progress-detail { width: min(320px, 100%); }

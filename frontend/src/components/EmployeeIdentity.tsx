@@ -6,7 +6,7 @@ import { personInitial } from './employeePresentation';
 
 export function EmployeeIdentity({ name, avatar, onClick }: { name?: string | null; avatar?: string | null; onClick?: () => void }) {
   if (!name?.trim()) return <EmployeeValue />;
-  const content = <><Avatar size={28} src={avatar || undefined} alt={`${name}的头像`}>{personInitial(name)}</Avatar><span className="employee-name">{name}</span></>;
+  const content = <><Avatar size={24} src={avatar || undefined} alt={`${name}的头像`}>{personInitial(name)}</Avatar><span className="employee-name">{name}</span></>;
   return <Tooltip title={name} trigger={['hover', 'focus']}>
     {onClick ? <Button type="link" className="employee-identity-button" style={{ border: 0 }} onClick={onClick}>
       <span className="employee-identity">{content}</span>

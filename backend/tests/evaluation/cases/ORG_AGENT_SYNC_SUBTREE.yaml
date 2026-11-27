@@ -187,6 +187,7 @@ fixture:
       result:
         user_id: eval_user_late
         name: 后页独有员工
+        mobile: '+8613800000001'
         department_ids:
         - eval_team
         orders:
@@ -201,6 +202,7 @@ fixture:
       result:
         user_id: eval_user
         name: 合成员工
+        mobile: '+8613800000000'
         department_ids:
         - eval_team
         orders:

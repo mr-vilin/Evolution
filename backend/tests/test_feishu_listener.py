@@ -107,3 +107,34 @@ def test_listener_reconcile_switches_load_from_environment(monkeypatch, startup,
     settings = Settings()
     assert settings.feishu_reconcile_on_startup is (startup == 'true')
     assert settings.feishu_reconcile_on_reconnect is (reconnect == 'true')
+
+
+def test_event_status_uses_only_valid_event_time_and_configured_thresholds(sessions):
+    from datetime import datetime, timedelta, timezone
+    from app.feishu.health import event_connection_summary, save_event_monitor_config, EVENT_MONITOR_STARTED
+    from app.feishu.listener import Listener
+
+    settings = Settings(feishu_app_id='a', feishu_app_secret='s', feishu_tenant_key='t')
+    listener = Listener(sessions, settings)
+    listener.starting()
+    with sessions() as db:
+        started = datetime.fromisoformat(db.get(SystemSetting, EVENT_MONITOR_STARTED).value)
+    listener.reconnected()
+    listener.starting()
+    with sessions() as db:
+        assert datetime.fromisoformat(db.get(SystemSetting, EVENT_MONITOR_STARTED).value) == started
+        assert event_connection_summary(settings, db, started)['status'] == 'warning'
+        assert event_connection_summary(settings, db, started + timedelta(minutes=181))['status'] == 'disconnected'
+    event = {'header': {'event_id': 'monitor-event', 'event_type': 'contact.user.updated_v3',
+                        'app_id': 'a', 'tenant_key': 't'}, 'event': {'object': {'user_id': 'u'}}}
+    listener.receive(event)
+    with sessions() as db:
+        last = datetime.fromisoformat(db.get(SystemSetting, 'feishu_last_event_received_at').value)
+        assert event_connection_summary(settings, db, last + timedelta(minutes=60))['status'] == 'normal'
+        assert event_connection_summary(settings, db, last + timedelta(minutes=180))['status'] == 'warning'
+        assert event_connection_summary(settings, db, last + timedelta(minutes=181))['status'] == 'disconnected'
+    listener.receive(event)
+    save_event_monitor_config(sessions, {'normal_minutes': 30, 'disconnect_minutes': 60}, 'admin:test')
+    with sessions() as db:
+        assert datetime.fromisoformat(db.get(SystemSetting, 'feishu_last_event_received_at').value) == last
+        assert event_connection_summary(settings, db, last + timedelta(minutes=31))['status'] == 'warning'

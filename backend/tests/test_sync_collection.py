@@ -16,7 +16,7 @@ def test_missing_primary_and_conflicting_orders_are_not_inferred():
     raw = {"user_id": "u", "name": "员工", "department_ids": ["a", "b"], "status": {"is_resigned": False}}
     assert normalize_user(raw)["primary_department_id"] is None
     raw["orders"] = [{"department_id": "a", "is_primary_dept": True}, {"department_id": "b", "is_primary_dept": True}]
-    assert normalize_user(raw)["sync_quality"] == "inconsistent"
+    assert normalize_user(raw)["sync_quality"] == "pending_verification"
 
 
 def test_unreadable_details_are_pending_and_deleted_event_cannot_override_current_fact():

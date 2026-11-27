@@ -1,7 +1,7 @@
 """初始化使用严格校验；缺失字段不能悄悄降为待核实事实。"""
 from contextlib import contextmanager
 
-from app.sync.collector import Collector, normalize_department, normalize_user
+from app.sync.collector import Collector, normalize_department, normalize_user, department_relation_exempt, mobile_readable
 
 
 class InitializationFailure(RuntimeError):
@@ -106,19 +106,20 @@ def field_requirements():
     users = [
         ('user_id', '必填', '人员标识须返回且非空。'),
         ('name', '必填', '姓名须返回且非空，最多 255 字符。'),
-        ('employee_no', '非必填', '允许未填写或空值，最多 128 字符；接口仍须返回此字段以确认可读。'),
-        ('job_title', '非必填', '允许未填写或空值，最多 255 字符；接口仍须返回此字段以确认可读。'),
+        ('mobile', '必填', '手机号须返回且为可读的非空值。'),
+        ('employee_no', '非必填', '允许未填写、空值或省略，最多 128 字符。'),
+        ('job_title', '非必填', '允许未填写、空值或省略，最多 255 字符。'),
         ('leader_user_id', '非必填', '允许未配置、空值或接口省略；填写时须为有效人员标识且不能形成上级环。'),
         ('open_id', '非必填', '允许空值或接口省略；已返回的标识须有效且唯一。'),
-        ('department_ids', '非必填', '允许无部门（空列表）；接口须明确返回部门列表，已填写的部门须有效。'),
+        ('department_ids', '条件必填', '允许无部门（空列表）；未加入、未激活、离职或退出时允许省略；已填写的部门须有效。'),
         ('orders', '条件必填', '有部门时须返回部门顺序，并且恰有一个主部门；无部门时允许省略或空列表。'),
         ('status', '必填', '接口须返回离职状态 is_resigned 或 is_exited（布尔值）。'),
-        ('employee_type', '非必填', '允许未填写或空值；接口仍须返回此字段，已填写值须在员工类型选项中。'),
+        ('employee_type', '非必填', '允许未填写、空值或省略，已填写值须在员工类型选项中。'),
         ('permission_role', '非必填', '字段定义须可读；允许未填写或接口省略，已返回值须为合法空值或已配置的单选项。'),
         ('store_attribute', '非必填', '字段定义须可读；允许未填写或接口省略，已返回文本最多 255 字符，或为已配置的单选项。'),
     ]
     users.extend((key, '可缺省', '保留飞书原始事实；缺失、不可读标为未知，不推断为否，也不据此宣称应用有字段读取权限。')
-                 for key in ('mobile', 'email', 'avatar_url', 'join_time', 'is_frozen', 'is_resigned', 'is_activated', 'is_exited', 'is_unjoin'))
+                 for key in ('email', 'avatar_url', 'join_time', 'is_frozen', 'is_resigned', 'is_activated', 'is_exited', 'is_unjoin'))
     result = [{'key': 'definition:' + key, 'object_type': 'definition', 'field': key,
                'title': title, 'requirement': requirement, 'rule': rule}
               for key, title, requirement, rule in definitions]
@@ -152,9 +153,12 @@ def validate_user(raw, mappings, definitions, field_results=None):
         required_text(raw, 'user_id', 'employee', identifier)
     with field_check(field_results, identifier, 'name'):
         required_text(raw, 'name', 'employee', identifier)
+    with field_check(field_results, identifier, 'mobile'):
+        if not mobile_readable(raw):
+            invalid('employee', identifier, 'mobile', '手机号缺失或不可读')
     for key in ('employee_no', 'job_title'):
         with field_check(field_results, identifier, key):
-            optional_text(raw, key, 'employee', identifier)
+            optional_text(raw, key, 'employee', identifier, allow_missing=True)
     with field_check(field_results, identifier, 'leader_user_id'):
         # 飞书会省略未配置的直属上级；不能用每个人员是否返回此键判断权限。
         optional_text(raw, 'leader_user_id', 'employee', identifier, allow_missing=True)
@@ -164,6 +168,8 @@ def validate_user(raw, mappings, definitions, field_results=None):
         if isinstance(raw.get('open_id'), str) and len(raw['open_id']) > 191:
             invalid('employee', identifier, 'open_id', 'open_id 超出存储长度限制')
     departments = raw.get('department_ids')
+    if departments is None and department_relation_exempt(raw['status'] if isinstance(raw.get('status'), dict) else {}):
+        departments = []
     with field_check(field_results, identifier, 'department_ids'):
         if (not isinstance(departments, list) or any(not isinstance(d, str) or not d or len(d) > 191 for d in departments)
                 or len(set(departments)) != len(departments)):
@@ -190,9 +196,7 @@ def validate_user(raw, mappings, definitions, field_results=None):
     type_id = None
     type_options = mappings.get('employee_type_options') or {}
     with field_check(field_results, identifier, 'employee_type'):
-        if 'employee_type' not in raw:
-            invalid('employee', identifier, 'employee_type', '员工类型未返回，无法证明字段可读')
-        type_value = raw['employee_type']
+        type_value = raw.get('employee_type')
         if type_value not in (None, '') and (type(type_value) not in (str, int)):
             invalid('employee', identifier, 'employee_type', '员工类型必须是枚举标识或合法空值')
         type_id = str(type_value) if type_value not in (None, '') else None
@@ -253,8 +257,14 @@ def validate_user(raw, mappings, definitions, field_results=None):
     for key, (option_id, option_name) in selected.items():
         value[key + '_id'], value[key + '_name'] = option_id, option_name
     value['sync_quality'] = 'complete'
+    value.pop('quality_issues', None)
+    value.pop('optional_field_issues', None)
+    if value['department_ids'] is None:
+        value['department_ids'] = []
     if field_results is not None:
         for key, readability in value['field_readability'].items():
+            if key == 'mobile':
+                continue
             field_results.append({'key': f'user:{identifier}:{key}', 'object_id': identifier,
                                   'object_type': 'user', 'field': key, 'title': USER_FIELD_TITLES[key],
                                   'status': 'passed', 'readability': readability,

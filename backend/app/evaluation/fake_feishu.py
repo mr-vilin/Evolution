@@ -8,7 +8,7 @@ _DEPARTMENTS = {
     'eval_store': {'open_department_id': 'eval_store', 'parent_department_id': '0', 'name': '合成门店', 'status': {'is_deleted': False}},
     'eval_team': {'open_department_id': 'eval_team', 'parent_department_id': 'eval_store', 'name': '合成小组', 'status': {'is_deleted': False}},
 }
-_USER = {'user_id': 'eval_user', 'name': '合成员工', 'department_ids': ['eval_team'],
+_USER = {'user_id': 'eval_user', 'name': '合成员工', 'mobile': '+8613800000000', 'department_ids': ['eval_team'],
          'orders': [{'department_id': 'eval_team', 'is_primary_dept': True}],
          'status': {'is_resigned': False, 'is_exited': False}}
 _SAFE_ERRORS = {'FEISHU_UNAVAILABLE', 'FEISHU_DETAIL_MISSING', 'FEISHU_API_ERROR', 'INVALID_PAGINATION'}

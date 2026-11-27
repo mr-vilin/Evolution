@@ -273,6 +273,7 @@ class SqlSyncJobRepository:
         job.finished_at = None
         job.started_at = None
         job.phase = 'queued'
+        job.total_count, job.success_count, job.failure_count = None, 0, 0
         db.add(ChangeLog(object_type='sync_job', object_id=job.id, source='admin', actor=requested_by, job_id=job.id, before_data={'status': 'failed', 'attempt': job.attempt - 1}, after_data={'status': 'queued', 'attempt': job.attempt, 'retry_count': job.retry_count}, committed_at=now))
         job.error_code = job.error_detail = None
         return job
