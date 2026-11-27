@@ -1,5 +1,7 @@
 """采集完整候选；普通同步可在采集中提交独立批次，分页异常仍向上抛出。"""
 from dataclasses import dataclass, field
+import logging
+import re
 from datetime import datetime,timezone
 from urllib.parse import urlsplit
 
@@ -13,6 +15,7 @@ class Candidate:
     full: bool = False
     collection_started_at: str | None = None
     initialization_proof: dict | None = None
+    pending_reasons: dict = field(default_factory=dict)
 
 
 def _custom_value(raw, field_id, allow_text=False):
@@ -119,28 +122,64 @@ def optional_user_facts(raw):
     return facts
 
 
+def department_relation_exempt(status):
+    return (status.get('is_resigned') is True or status.get('is_exited') is True
+            or status.get('is_unjoin') is True or status.get('is_activated') is False)
+
+
+def mobile_readable(raw):
+    mobile = raw.get('mobile')
+    return (isinstance(mobile, str) and bool(re.fullmatch(r'\+?[\d ()-]+', mobile.strip()))
+            and any(char.isdigit() for char in mobile)
+            and len(mobile) <= 128 and raw.get('mobile_visible') is not False)
+
+
 def normalize_user(raw, custom_mappings=None, employee_type_options=None):
     status=raw.get('status')
     if not isinstance(status,dict) or not any(type(status.get(key)) is bool for key in ('is_resigned','is_exited')):
         raise RuntimeError('FEISHU_STATUS_UNREADABLE')
     inactive=status.get('is_resigned') is True or status.get('is_exited') is True
     relations_readable=isinstance(raw.get('department_ids'),list) and all(isinstance(d,str) and d for d in raw['department_ids'])
-    if not relations_readable and not inactive:
+    if not relations_readable and not department_relation_exempt(status):
         raise RuntimeError('FEISHU_MEMBERSHIP_UNREADABLE')
     identifier = raw["user_id"]
     if not isinstance(identifier,str) or not identifier: raise RuntimeError('FEISHU_ID_MISMATCH')
+    if not isinstance(raw.get('name'), str) or not raw['name'].strip() or len(raw['name']) > 255:
+        raise RuntimeError('FEISHU_NAME_UNREADABLE')
     departments = list(dict.fromkeys(raw['department_ids'])) if relations_readable else None
     primaries = {order["department_id"] for order in (raw.get("orders") or []) if isinstance(order,dict) and order.get("is_primary_dept") is True and order.get("department_id")} if relations_readable else set()
     primary = next(iter(primaries)) if len(primaries) == 1 else None
-    inconsistent = len(primaries) > 1 or (primary is not None and primary not in departments)
+    inconsistent = bool(departments and len(primaries) != 1) or (primary is not None and primary not in departments)
     mappings = custom_mappings or {}
-    type_id, type_name, type_quality = _employee_type(raw, mappings, employee_type_options)
-    role_id, role_name, role_present = _custom_value(raw, mappings.get('permission_role'))
-    store_id, store_name, store_present = _custom_value(raw, mappings.get('store_attribute'), allow_text=True)
-    quality = 'pending_verification' if not relations_readable else 'inconsistent' if inconsistent else 'complete'
-    if type_quality or (mappings.get('permission_role') and not role_present) or (mappings.get('store_attribute') and not store_present):
-        quality = 'pending_verification'
-    return {**optional_user_facts(raw), "id": identifier, "feishu_user_id": identifier, "open_id": raw.get("open_id"), "name": raw["name"], "employee_no": raw.get("employee_no"), "employee_type_id": type_id, "employee_type_name": type_name, "job_title": raw.get('job_title'), "leader_user_id": raw.get('leader_user_id'), "permission_role_id": role_id, "permission_role_name": role_name, "store_attribute_id": store_id, "store_attribute_name": store_name, "status": "inactive" if inactive else "active", "primary_department_id": primary if not inconsistent else None, "sync_quality": quality, "department_ids": departments}
+    optional_field_issues = []
+    try:
+        type_id, type_name, _ = _employee_type(raw, mappings, employee_type_options)
+    except RuntimeError:
+        type_id, type_name = None, None
+        optional_field_issues.extend(['employee_type_id', 'employee_type_name'])
+    try:
+        role_id, role_name, _ = _custom_value(raw, mappings.get('permission_role'))
+    except RuntimeError:
+        role_id, role_name = None, None
+        optional_field_issues.extend(['permission_role_id', 'permission_role_name'])
+    try:
+        store_id, store_name, _ = _custom_value(raw, mappings.get('store_attribute'), allow_text=True)
+    except RuntimeError:
+        store_id, store_name = None, None
+        optional_field_issues.extend(['store_attribute_id', 'store_attribute_name'])
+    if optional_field_issues:
+        logging.getLogger(__name__).warning('organization.optional_fields_invalid fields=%s', ','.join(optional_field_issues))
+    quality_issues = []
+    facts = optional_user_facts(raw)
+    if not mobile_readable(raw):
+        quality_issues.append('MOBILE_REQUIRED')
+        facts['mobile'] = None
+        if raw.get('mobile'):
+            facts['field_readability']['mobile'] = 'unreadable'
+    if inconsistent:
+        quality_issues.append('PRIMARY_DEPARTMENT_INVALID')
+    quality = 'pending_verification' if quality_issues else 'complete'
+    return {**facts, "id": identifier, "feishu_user_id": identifier, "open_id": raw.get("open_id"), "name": raw["name"], "employee_no": raw.get("employee_no"), "employee_type_id": type_id, "employee_type_name": type_name, "job_title": raw.get('job_title'), "leader_user_id": raw.get('leader_user_id'), "permission_role_id": role_id, "permission_role_name": role_name, "store_attribute_id": store_id, "store_attribute_name": store_name, "status": "inactive" if inactive else "active", "primary_department_id": primary if not inconsistent else None, "sync_quality": quality, "department_ids": departments, "quality_issues": quality_issues, "optional_field_issues": optional_field_issues}
 
 
 def normalize_department(raw):
@@ -148,6 +187,8 @@ def normalize_department(raw):
         raise RuntimeError('FEISHU_STATUS_UNREADABLE')
     identifier = raw["open_department_id"]
     if not isinstance(identifier,str) or not identifier: raise RuntimeError('FEISHU_ID_MISMATCH')
+    if not isinstance(raw.get('name'), str) or not raw['name'].strip() or len(raw['name']) > 255:
+        raise RuntimeError('FEISHU_NAME_UNREADABLE')
     parent_readable=isinstance(raw.get('parent_department_id'),str) and bool(raw['parent_department_id'])
     inactive=raw['status']['is_deleted']
     if not parent_readable and not inactive: raise RuntimeError('FEISHU_PARENT_UNREADABLE')
@@ -229,8 +270,9 @@ class Collector:
             raw=self.api.detail('user',identifier)
             if raw.get('user_id')!=identifier: raise RuntimeError('FEISHU_ID_MISMATCH')
             result.employees[identifier] = normalize_user(raw, self.custom_mappings, self.employee_type_options)
-        except RuntimeError:
+        except (RuntimeError, KeyError, TypeError) as exc:
             result.pending.append(("employee", identifier))
+            result.pending_reasons[('employee', identifier)] = str(exc) if str(exc).startswith('FEISHU_') else 'FEISHU_REQUIRED_FIELD_INVALID'
 
     def _ancestors(self, result):
         queue = [d["parent_id"] for d in result.departments.values() if d["parent_id"]]

@@ -39,7 +39,7 @@ def assert_batches_survive_later_collection_failure(sessions):
                     assert db.get(DatasetState, 1).data_version > version
                     assert not list(db.scalars(select(SyncStaging).where(SyncStaging.job_id == job.id)))
                 raise ConnectionError('simulated interruption after a committed batch')
-            return {'user_id': identifier, 'name': identifier, 'department_ids': [], 'status': {'is_resigned': False}}
+            return {'user_id': identifier, 'name': identifier, 'mobile': '+8613800000000', 'department_ids': [], 'status': {'is_resigned': False}}
 
     worker = Worker(sessions, Collector(API()), owner='batch-worker')
     assert worker.acquire(utcnow())
@@ -168,3 +168,44 @@ def test_retry_rejects_active_same_scope_and_preserves_failed_job(sessions):
     with sessions() as db:
         assert db.get(SyncJob, 'failed').status == 'failed'
         assert db.get(SyncJob, 'failed').attempt == 1
+
+
+def test_unique_object_total_and_required_mobile_with_lifecycle_exemptions(sessions):
+    from app.sync.collector import normalize_user, Candidate
+    from app.sync.publisher import Publisher
+    from app.admin.sync_views import pending_object_rows, sync_summary
+    from app.persistence.models import PendingFact
+
+    now = datetime.now()
+    with sessions.begin() as db:
+        db.add(SyncJob(id='unique', type='reconcile', requested_by='test', status='running',
+                       lease_generation=1, lease_expires_at=now+timedelta(hours=1)))
+    mappings = {'permission_role': 'role', 'store_attribute': 'store'}
+    valid = normalize_user({'user_id': 'valid', 'name': '离职', 'mobile': '+8613800000000',
+                            'status': {'is_resigned': True}}, mappings)
+    invalid = normalize_user({'user_id': 'invalid', 'name': '未激活', 'status': {
+        'is_resigned': False, 'is_activated': False}}, mappings)
+    Publisher(sessions).publish(Candidate(employees={'valid': valid, 'invalid': invalid}), 'unique', 1)
+    with sessions() as db:
+        job = db.get(SyncJob, 'unique')
+        assert (job.total_count, job.success_count, job.failure_count) == (2, 1, 1)
+        assert db.get(Employee, 'valid').sync_quality == 'complete'
+        assert db.get(PendingFact, ('employee', 'valid')) is None
+        assert db.get(Employee, 'invalid').sync_quality == 'pending_verification'
+        assert sync_summary(db)['pending_object_count'] == 1
+        assert sync_summary(db)['latest_job']['status'] == 'completed_with_errors'
+        assert pending_object_rows(db)[0]['reason_code'] == 'MOBILE_REQUIRED'
+    corrected = normalize_user({'user_id': 'invalid', 'name': '未激活', 'mobile': '+8613800000000',
+                                'status': {'is_resigned': False, 'is_activated': False}}, mappings)
+    Publisher(sessions).publish(Candidate(employees={'invalid': corrected}))
+    with sessions() as db:
+        assert sync_summary(db)['pending_object_count'] == 0
+
+
+def test_historical_duplicate_total_is_corrected_only_with_final_collection_evidence():
+    from app.admin.sync_views import job_progress
+    now = datetime.now()
+    row = SimpleNamespace(status='succeeded', started_at=now, success_count=991, failure_count=0, total_count=992)
+    progress = {'phase': 'publishing', 'observed_at': now.isoformat(), 'departments_total': 945, 'employees_total': 46}
+    assert job_progress(row, progress)['progress_total'] == 991
+    assert job_progress(row, {**progress, 'employees_total': 47})['progress_total'] == 992

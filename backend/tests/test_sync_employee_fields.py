@@ -28,15 +28,16 @@ def test_unknown_employee_type_keeps_identifier_without_inventing_name():
     value = normalize_user(raw, MAPPINGS)
     assert value['employee_type_id'] == '99'
     assert value['employee_type_name'] is None
-    assert value['sync_quality'] == 'pending_verification'
+    assert value['sync_quality'] == 'complete'
 
 
 @pytest.mark.parametrize('type_value', [True, 1.5, [], {'id': []}])
 def test_invalid_employee_type_is_not_published_as_an_empty_value(type_value):
     raw = Feishu().users['u']
     raw['employee_type'] = type_value
-    with pytest.raises(RuntimeError, match='FEISHU_EMPLOYEE_TYPE_UNREADABLE'):
-        normalize_user(raw, MAPPINGS)
+    value = normalize_user(raw, MAPPINGS)
+    assert value['sync_quality'] == 'complete'
+    assert set(value['optional_field_issues']) == {'employee_type_id', 'employee_type_name'}
 
 
 def test_preflight_reports_avatar_and_join_date_even_when_omitted():

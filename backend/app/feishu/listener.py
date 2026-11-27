@@ -2,7 +2,7 @@
 import json
 from datetime import datetime, timezone
 from app.feishu.events import receive, EVENT_TYPES
-from app.feishu.health import observe
+from app.feishu.health import observe, start_event_monitor
 from app.persistence.repositories import SqlSyncJobRepository
 
 
@@ -10,6 +10,7 @@ class Listener:
     def __init__(self,sessions,settings): self.sessions,self.settings=sessions,settings
 
     def starting(self):
+        start_event_monitor(self.sessions)
         observe(self.sessions,'degraded')
         if self.settings.feishu_reconcile_on_startup:
             self._reconcile('listener:startup')

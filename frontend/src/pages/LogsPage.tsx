@@ -1,6 +1,6 @@
 import { ResourceTable } from '../components/ResourceTable';
-import { useState } from 'react';
-import { Button, Card, DatePicker, Descriptions, Drawer, Form, Input, Select, Space, Table } from 'antd';
+import { useEffect, useState } from 'react';
+import { Button, Card, DatePicker, Descriptions, Drawer, Form, Input, Select, Space, Tooltip } from 'antd';
 import type { Dayjs } from 'dayjs';
 import type { ChangeLog } from '../domain';
 import { formatTime } from '../domain';
@@ -8,9 +8,18 @@ import { query } from '../services/http';
 import { useAllResource } from '../services/useAllResource';
 import { PageHeader } from '../components/PageHeader';
 import { ResourceState } from '../components/ResourceState';
+import { useResource } from '../services/useResource';
+import { EventConnectionStatus, formatTableTime } from '../components/SyncPresentation';
 interface FilterForm { object_id?: string; object_type?: string; action?: string; source?: string; actor?: string; job_id?: string; time?: [Dayjs, Dayjs] }
 export function LogsPage() {
   const [form] = Form.useForm<FilterForm>(); const [filters, setFilters] = useState<Record<string, string>>({}); const [selected, setSelected] = useState<ChangeLog | null>(null);
+  const status = useResource<{ connection?: { status: string; last_event_received_at?: string | null; elapsed_minutes?: number | null } }>('/admin/api/status', true);
+  useEffect(() => {
+    const timer = window.setInterval(status.reload, 30000);
+    return () => clearInterval(timer);
+  }, [status.reload]);
+  const connection = status.data?.connection;
+  const connectionStatus = <Space size={8} wrap><span>飞书事件连接</span>{connection ? <Tooltip title={'最近事件接收时间：' + formatTableTime(connection.last_event_received_at)} trigger={['hover', 'focus']}><span tabIndex={0}><EventConnectionStatus status={connection.status} /></span></Tooltip> : <span>{status.error ? '读取失败' : '-'}</span>}</Space>;
   const logs = useAllResource<ChangeLog>('/admin/api/change-logs' + query({ ...filters, limit: 100 }));
   function search(values: FilterForm) { const { time, ...rest } = values; setFilters({ ...Object.fromEntries(Object.entries(rest).filter(([, value]) => value).map(([key, value]) => [key, String(value)])), ...(time ? { committed_after: time[0].toDate().toISOString(), committed_before: time[1].toDate().toISOString() } : {}) }); }
   function reset() { form.resetFields(); setFilters({}); }
@@ -22,7 +31,7 @@ export function LogsPage() {
     <Form.Item name="actor" label="操作者"><Input placeholder="操作者" /></Form.Item><Form.Item name="job_id" label="任务 ID"><Input placeholder="任务 ID" /></Form.Item>
     <Form.Item name="time" label="提交时间"><DatePicker.RangePicker showTime /></Form.Item><Form.Item><Space><Button type="primary" htmlType="submit">查询</Button><Button onClick={reset}>重置</Button></Space></Form.Item>
   </Form>;
-  return <PageHeader area="组织管理" title="组织变更记录" description="按对象、操作、操作者、任务和时间查找已提交差异。"><Card>{filtersForm}<ResourceState {...logs} empty={!logs.data?.length}><ResourceTable className="block-gap" rowKey="id" dataSource={logs.data ?? []} pagination={{ pageSize:20 }} scroll={{ x:900 }} columns={[{ title:'提交时间', dataIndex:'committed_at', render:formatTime }, { title:'对象', render:(_,row)=>row.object_name ?? `${row.object_type ?? ''} ${row.object_id ?? ''}` }, { title:'操作', dataIndex:'action' }, { title:'来源 / 操作者', render:(_,row)=>row.actor ?? row.actor_open_id ?? row.source ?? '—' }, { title:'任务', dataIndex:'job_id', render:value=>value || '—' }, { title:'操作', render:(_,row)=><Button type="link" onClick={()=>setSelected(row)}>查看差异</Button> }]} /></ResourceState></Card><Drawer title="差异详情" open={Boolean(selected)} onClose={()=>setSelected(null)} size={720}>{selected && <><Descriptions column={1} items={[{ key:'object', label:'对象', children:selected.object_name ?? selected.object_id }, { key:'time', label:'提交时间', children:formatTime(selected.committed_at) }, { key:'actor', label:'来源 / 操作者', children:selected.actor ?? selected.actor_open_id ?? selected.source ?? '—' }]} /><div className="diff-grid"><Card size="small" title="修改前"><pre>{JSON.stringify(selected.before,null,2)}</pre></Card><Card size="small" title="修改后"><pre>{JSON.stringify(selected.after,null,2)}</pre></Card></div></>}</Drawer></PageHeader>;
+  return <PageHeader area="组织管理" title="组织变更记录" extra={connectionStatus} description="按对象、操作、操作者、任务和时间查找已提交差异。"><Card>{filtersForm}<ResourceState {...logs} empty={!logs.data?.length}><ResourceTable className="block-gap" rowKey="id" dataSource={logs.data ?? []} pagination={{ pageSize:20 }} scroll={{ x:900 }} columns={[{ title:'提交时间', dataIndex:'committed_at', render:formatTime }, { title:'对象', render:(_,row)=>row.object_name ?? `${row.object_type ?? ''} ${row.object_id ?? ''}` }, { title:'操作', dataIndex:'action' }, { title:'来源 / 操作者', render:(_,row)=>row.actor ?? row.actor_open_id ?? row.source ?? '—' }, { title:'任务', dataIndex:'job_id', render:value=>value || '—' }, { title:'操作', render:(_,row)=><Button type="link" onClick={()=>setSelected(row)}>查看差异</Button> }]} /></ResourceState></Card><Drawer title="差异详情" open={Boolean(selected)} onClose={()=>setSelected(null)} size={720}>{selected && <><Descriptions column={1} items={[{ key:'object', label:'对象', children:selected.object_name ?? selected.object_id }, { key:'time', label:'提交时间', children:formatTime(selected.committed_at) }, { key:'actor', label:'来源 / 操作者', children:selected.actor ?? selected.actor_open_id ?? selected.source ?? '—' }]} /><div className="diff-grid"><Card size="small" title="修改前"><pre>{JSON.stringify(selected.before,null,2)}</pre></Card><Card size="small" title="修改后"><pre>{JSON.stringify(selected.after,null,2)}</pre></Card></div></>}</Drawer></PageHeader>;
 }
 
 export default LogsPage;

@@ -167,7 +167,7 @@ def test_coverage_audit_failure_rolls_back_marker_evidence_and_queue(sessions):
 
 def test_pending_employee_publishes_after_authoritative_ancestor_resolution(sessions):
     from app.persistence.models import PendingFact
-    employee=normalize_user({'user_id':'u','name':'员工','department_ids':['a'],'status':{'is_resigned':False}})
+    employee=normalize_user({'user_id':'u','name':'员工','mobile':'+8613800000000','department_ids':['a'],'orders':[{'department_id':'a','is_primary_dept':True}],'status':{'is_resigned':False}})
     Publisher(sessions).publish(Candidate(employees={'u':employee},pending=[('department','a')]))
     department={'id':'a','feishu_department_id':'a','parent_id':None,'name':'已确认部门','status':'active','sync_quality':'complete','is_root':False}
     Publisher(sessions).publish(Candidate(departments={'a':department},employees={'u':employee}))

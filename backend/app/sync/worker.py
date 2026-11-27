@@ -16,7 +16,7 @@ from app.sync.settings import ScheduleService
 def utcnow(): return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-SAFE_SYNC_ERRORS=frozenset({'FEISHU_API_ERROR','FEISHU_UNAVAILABLE','INVALID_PAGINATION','DEPARTMENT_CYCLE','FEISHU_MEMBERSHIP_UNREADABLE','FEISHU_STATUS_UNREADABLE','FEISHU_PARENT_UNREADABLE','FEISHU_TOKEN_MISSING','FEISHU_DETAIL_MISSING','FEISHU_ID_MISMATCH'})
+SAFE_SYNC_ERRORS=frozenset({'FEISHU_API_ERROR','FEISHU_UNAVAILABLE','INVALID_PAGINATION','DEPARTMENT_CYCLE','FEISHU_MEMBERSHIP_UNREADABLE','FEISHU_STATUS_UNREADABLE','FEISHU_PARENT_UNREADABLE','FEISHU_TOKEN_MISSING','FEISHU_DETAIL_MISSING','FEISHU_ID_MISMATCH','SYNC_OBJECT_COUNT_MISMATCH','FEISHU_NAME_UNREADABLE','MOBILE_REQUIRED'})
 
 
 class Worker:
@@ -169,7 +169,7 @@ class Worker:
                 for identifier, value in records.items():
                     db.merge(SyncStaging(job_id=job_id, object_type=kind, source_id=identifier, normalized_data=value))
             for kind, identifier in candidate.pending:
-                db.merge(SyncStaging(job_id=job_id, object_type=kind, source_id=identifier, normalized_data={'pending': True}))
+                db.merge(SyncStaging(job_id=job_id, object_type=kind, source_id=identifier, normalized_data={'pending': True, 'reason': candidate.pending_reasons.get((kind, identifier))}))
 
     def _staged_candidate(self, job):
         """恢复已有规范化候选；没有完整检查点时返回 None 触发重新采集。"""
@@ -179,8 +179,10 @@ class Worker:
             return None
         result = Candidate(full=job.type != 'subtree')
         for row in rows:
-            if row.normalized_data == {'pending': True}:
+            if row.normalized_data.get('pending') is True:
                 result.pending.append((row.object_type, row.source_id))
+                if row.normalized_data.get('reason'):
+                    result.pending_reasons[(row.object_type, row.source_id)] = row.normalized_data['reason']
             elif row.object_type == 'department':
                 department = dict(row.normalized_data)
                 if 'is_virtual_root' in department:

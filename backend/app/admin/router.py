@@ -58,12 +58,30 @@ def sync_preflight(identity=Depends(get_admin_identity), runtime=Depends(get_run
 
 
 @router.get('/sync/jobs')
-def list_sync_jobs(status: str | None = None, limit: int = Query(50, ge=1, le=200), type: str | None = None, phase: str | None = None, cursor: str | None = None, identity=Depends(get_admin_identity), runtime=Depends(get_runtime)):
+def list_sync_jobs(status: str | None = None, limit: int = Query(50, ge=1, le=200), type: str | None = None, phase: str | None = None, cursor: str | None = None, identity=Depends(get_admin_identity), runtime=Depends(get_runtime), page: int | None = Query(None, ge=1), keyword: str | None = None, sort: str = Query('desc', pattern='^(asc|desc)$')):
     with runtime.sessions() as db:
-        stmt = select(SyncJob).order_by(SyncJob.create_time.desc(), SyncJob.id.desc()).limit(limit + 1)
-        if status: stmt = stmt.where(SyncJob.status == status)
+        stmt = select(SyncJob)
+        if status == 'completed_with_errors':
+            stmt = stmt.where(SyncJob.status == 'succeeded', SyncJob.failure_count > 0)
+        elif status == 'succeeded':
+            stmt = stmt.where(SyncJob.status == 'succeeded', SyncJob.failure_count == 0)
+        elif status:
+            stmt = stmt.where(SyncJob.status == status)
         if type: stmt = stmt.where(SyncJob.type == type)
         if phase: stmt = stmt.where(SyncJob.phase == phase)
+        if isinstance(keyword, str) and keyword.strip():
+            from sqlalchemy import or_
+            prefix = keyword.strip()
+            stmt = stmt.where(or_(SyncJob.id.startswith(prefix, autoescape=True), SyncJob.name.startswith(prefix, autoescape=True)))
+        if isinstance(page, int):
+            from sqlalchemy import func
+            count = db.scalar(select(func.count()).select_from(stmt.subquery()))
+            order = SyncJob.create_time.asc() if sort == 'asc' else SyncJob.create_time.desc()
+            id_order = SyncJob.id.asc() if sort == 'asc' else SyncJob.id.desc()
+            rows = list(db.scalars(stmt.order_by(order, id_order).offset((page-1)*limit).limit(limit)))
+            from app.admin.sync_views import add_job_context
+            return {'data': add_job_context(db, rows, [_job_summary(row) for row in rows]), 'meta': {'total_count': count}}
+        stmt = stmt.order_by(SyncJob.create_time.desc(), SyncJob.id.desc()).limit(limit + 1)
         if cursor:
             boundary = db.get(SyncJob, cursor)
             if boundary is None: raise HTTPException(422, {'code': 'INVALID_CURSOR', 'message': '任务分页位置已失效'})
@@ -113,7 +131,7 @@ def retry_sync_job(job_id: str, authorization=Depends(require_admin_write), runt
 @router.get("/status")
 def admin_status(identity=Depends(get_admin_identity), runtime: Runtime = Depends(get_runtime)):
     import json
-    from app.feishu.health import connection_summary
+    from app.feishu.health import event_connection_summary
     from app.persistence.models import DatasetState, SystemSetting, EventInbox
     from sqlalchemy import func
     settings=get_settings()
@@ -129,9 +147,8 @@ def admin_status(identity=Depends(get_admin_identity), runtime: Runtime = Depend
         from app.admin.sync_views import initialization_date, sync_summary
         data['initialized_at'] = initialization_date(db)
         data['sync_summary'] = sync_summary(db)
-        observation=db.get(SystemSetting,'feishu_connection_observation')
         processed=db.get(SystemSetting,'last_event_processed_at')
-        data['connection']=connection_summary(settings,json.loads(observation.value) if observation else None)
+        data['connection']=event_connection_summary(settings, db)
         data['last_event_processed_at']=processed.value if processed else None
         data['failed_event_count']=db.scalar(select(func.count()).select_from(EventInbox).where(EventInbox.status=='failed')) or 0
     data['coverage_acceptance']={'reference':settings.coverage_acceptance_reference,'all_members_verified':settings.coverage_all_members_verified,'departmentless_verified':settings.coverage_departmentless_verified}
@@ -139,6 +156,39 @@ def admin_status(identity=Depends(get_admin_identity), runtime: Runtime = Depend
     persisted=CoverageService(runtime.sessions).get()
     if persisted: data['coverage_acceptance']=persisted
     return {"data": data, "meta": meta}
+
+
+class EventMonitorConfig(BaseModel):
+    normal_minutes: int = Field(strict=True, gt=0)
+    disconnect_minutes: int = Field(strict=True, gt=0)
+
+    @field_validator('disconnect_minutes')
+    @classmethod
+    def validate_disconnect(cls, value, info):
+        if value <= info.data.get('normal_minutes', 0):
+            raise ValueError('断开时限必须大于正常时限')
+        return value
+
+
+@router.get('/settings/event-monitor')
+def get_event_monitor(identity=Depends(get_admin_identity), runtime=Depends(get_runtime)):
+    from app.feishu.health import event_monitor_config
+    with runtime.sessions() as db:
+        return {'data': event_monitor_config(db), 'meta': {}}
+
+
+@router.put('/settings/event-monitor')
+def put_event_monitor(body: EventMonitorConfig, authorization=Depends(require_admin_write), runtime=Depends(get_runtime)):
+    from app.feishu.health import save_event_monitor_config
+    identity, _ = authorization
+    return {'data': save_event_monitor_config(runtime.sessions, body.model_dump(), f'admin:{identity.open_id}'), 'meta': {}}
+
+
+@router.get('/sync/pending-objects')
+def list_pending_objects(identity=Depends(get_admin_identity), runtime=Depends(get_runtime)):
+    from app.admin.sync_views import pending_object_rows
+    with runtime.sessions() as db:
+        return {'data': pending_object_rows(db), 'meta': {}}
 
 
 class ReconcileSchedule(BaseModel):

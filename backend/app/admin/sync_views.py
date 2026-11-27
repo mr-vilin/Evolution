@@ -9,17 +9,39 @@ from app.persistence.models import ChangeLog, Department, Employee, LoginIdentit
 from app.web import utc_datetime
 
 
-def sync_summary(db):
-    latest_job = db.execute(
-        select(SyncJob.id, SyncJob.status).order_by(SyncJob.create_time.desc(), SyncJob.id.desc()).limit(1)
-    ).one_or_none()
-    pending_objects = union(
+def pending_object_keys():
+    return union(
         select(PendingFact.object_type, PendingFact.source_id),
         select(literal('department'), Department.id).where(Department.sync_quality == 'pending_verification'),
         select(literal('employee'), Employee.id).where(Employee.sync_quality == 'pending_verification'),
-    ).subquery()
+    )
+
+
+def pending_object_rows(db):
+    rows = []
+    for kind, identifier in db.execute(pending_object_keys()):
+        model = Department if kind == 'department' else Employee
+        record = db.get(model, identifier)
+        pending = db.get(PendingFact, (kind, identifier))
+        data = pending.normalized_data if pending else {}
+        rows.append({
+            'object_type': kind, 'object_id': identifier,
+            'object_name': getattr(record, 'name', None) or data.get('name'),
+            'avatar_url': getattr(record, 'avatar_url', None),
+            'reason_code': pending.error_code if pending else 'PENDING_VERIFICATION',
+            'last_sync_at': utc_datetime(getattr(record, 'last_sync_at', None)),
+            'updated_at': utc_datetime(pending.updated_at) if pending else None,
+        })
+    return sorted(rows, key=lambda row: (row['object_type'], row['object_name'] or '', row['object_id']))
+
+
+def sync_summary(db):
+    latest_job = db.execute(
+        select(SyncJob.id, SyncJob.status, SyncJob.failure_count).order_by(SyncJob.create_time.desc(), SyncJob.id.desc()).limit(1)
+    ).one_or_none()
+    pending_objects = pending_object_keys().subquery()
     return {
-        'latest_job': {'job_id': latest_job.id, 'status': latest_job.status} if latest_job else None,
+        'latest_job': {'job_id': latest_job.id, 'status': 'completed_with_errors' if latest_job.status == 'succeeded' and latest_job.failure_count else latest_job.status} if latest_job else None,
         'pending_object_count': db.scalar(select(func.count()).select_from(pending_objects)),
     }
 
@@ -36,11 +58,17 @@ def job_progress(row, observation=None):
     # 重试前的计数不能冒充本次采集；仅使用本次开始之后保存的快照。
     progress = observation or {}
     observed = progress.get('observed_at')
-    if not row.started_at or not observed or datetime.fromisoformat(observed) < row.started_at.replace(tzinfo=None):
+    if not row.started_at or not observed or datetime.fromisoformat(observed).replace(tzinfo=None) < row.started_at.replace(tzinfo=None):
         progress = {}
     if row.status == 'succeeded':
         processed = (row.success_count or 0) + (row.failure_count or 0)
         total = row.total_count
+        # 旧发布器对同时处于已采集集合及待核实集合的对象重复加总。
+        collected = (progress.get('departments_total'), progress.get('employees_total'))
+        if (total is not None and total > processed and not row.failure_count
+                and progress.get('phase') == 'publishing'
+                and all(isinstance(value, int) for value in collected) and sum(collected) == processed):
+            total = processed
         kind = 'published'
     else:
         processed = progress.get('departments_processed', 0) + progress.get('employees_processed', 0)
@@ -62,6 +90,15 @@ def add_job_context(db, rows, summaries):
     person_names = {identifier: person.name for person in people for identifier in (person.id, person.feishu_user_id, person.open_id) if identifier}
     for row, summary in zip(rows, summaries):
         summary.update(job_progress(row, records.get(row.id)))
+        if row.status == 'succeeded' and summary['progress_total'] != row.total_count:
+            detail_count = db.scalar(select(func.count()).select_from(SyncJobDetail).where(
+                SyncJobDetail.job_id == row.id, SyncJobDetail.attempt == row.attempt, SyncJobDetail.status == 'succeeded'))
+            if detail_count == summary['processed_count']:
+                summary['total_count'] = summary['progress_total']
+            else:
+                summary['progress_total'] = row.total_count
+        if row.status == 'succeeded':
+            summary['display_status'] = 'completed_with_errors' if row.failure_count else 'succeeded'
         summary['root_department_id'] = row.root_department_id
         summary['root_department_name'] = names.get(row.root_department_id)
         source = row.trigger_source or row.requested_by
@@ -74,11 +111,14 @@ def add_job_context(db, rows, summaries):
             summary['trigger_label'] = '手动重试'
         actor = row.requested_by.removeprefix('admin:')
         summary['executor_name'] = '系统' if automatic else person_names.get(identities.get(actor, actor), person_names.get(actor, actor))
+        person = next((person for person in people if actor in (person.id, person.open_id, person.feishu_user_id) or identities.get(actor) == person.id), None)
+        summary['executor_avatar_url'] = person.avatar_url if person else None
     return summaries
 
 
 def job_details(db, job_id):
-    details = list(db.scalars(select(SyncJobDetail).where(SyncJobDetail.job_id == job_id).order_by(SyncJobDetail.id)))
+    job = db.get(SyncJob, job_id)
+    details = list(db.scalars(select(SyncJobDetail).where(SyncJobDetail.job_id == job_id, SyncJobDetail.attempt == job.attempt).order_by(SyncJobDetail.id)))
     changes = defaultdict(list)
     for log in db.scalars(select(ChangeLog).where(ChangeLog.job_id == job_id,
                             ChangeLog.object_type.in_(['employee', 'department', 'membership'])).order_by(ChangeLog.id)):

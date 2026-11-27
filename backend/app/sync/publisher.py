@@ -45,7 +45,13 @@ class Publisher:
             if initializing:
                 validate_candidate(candidate)
             if job and final:
-                job.total_count = len(candidate.departments) + len(candidate.employees) + len(candidate.pending)
+                object_keys = ({('department', key) for key in candidate.departments}
+                               | {('employee', key) for key in candidate.employees}
+                               | set(candidate.pending))
+                # 包含本次尝试中早先批次已处理的对象。
+                object_keys.update(db.execute(select(SyncJobDetail.object_type, SyncJobDetail.object_id).where(
+                    SyncJobDetail.job_id == job_id, SyncJobDetail.attempt == job.attempt)).all())
+                job.total_count = len(object_keys)
             if job and final:
                 for kind, records in [('department', candidate.departments), ('employee', candidate.employees)]:
                     for identifier, value in records.items():
@@ -55,7 +61,8 @@ class Publisher:
             for kind, identifier in candidate.pending:
                 model = Department if kind == 'department' else Employee
                 row = db.get(model, identifier)
-                self._record_detail(db, job_id, kind, identifier, getattr(row, 'name', None), 'failed', now, 'PENDING_VERIFICATION', '对象引用或字段未通过校验')
+                reason = candidate.pending_reasons.get((kind, identifier), 'PENDING_VERIFICATION')
+                self._record_detail(db, job_id, kind, identifier, getattr(row, 'name', None), 'failed', now, reason, '必填字段或关系未通过校验')
                 if row is not None and row.sync_quality != 'pending_verification':
                     self._log(db, kind, identifier, {'sync_quality': row.sync_quality}, {'sync_quality': 'pending_verification'}, job_id, now)
                     row.sync_quality = 'pending_verification'; changes += 1
@@ -83,7 +90,9 @@ class Publisher:
                 if value.get('lifecycle_only'):
                     changes+=self._publish_inactive_lifecycle(db,value,job_id,now)
                     continue
-                fields = {k: v for k, v in value.items() if k != 'department_ids'}
+                fields = {k: v for k, v in value.items() if k not in {'department_ids', 'quality_issues'}}
+                if 'MOBILE_REQUIRED' in candidate.pending_reasons.get(('employee', key), '') and db.get(Employee, key):
+                    fields.pop('mobile', None)
                 changes += self._upsert(db, Employee, fields, 'employee', job_id, now)
                 db.flush()
                 if value['status']=='inactive': self._revoke_employee_sessions(db,value['feishu_user_id'],job_id,now)
@@ -94,6 +103,17 @@ class Publisher:
                     for department, primary, active in after:
                         db.add(EmployeeDepartment(employee_id=key, department_id=department, is_primary=primary, is_active=active))
                     self._log(db, 'membership', key, {'relations': sorted(before)}, {'relations': sorted(after)}, job_id, now)
+                    changes += 1
+            # 部分事实可提交，但最终对象存在必填异常时，其唯一结果仍为失败。
+            for kind, identifier in candidate.pending:
+                model = Department if kind == 'department' else Employee
+                row = db.get(model, identifier)
+                reason = candidate.pending_reasons.get((kind, identifier), 'PENDING_VERIFICATION')
+                self._record_detail(db, job_id, kind, identifier, getattr(row, 'name', None),
+                                    'failed', now, reason, '必填字段或关系未通过校验')
+                if row is not None and row.sync_quality != 'pending_verification':
+                    self._log(db, kind, identifier, {'sync_quality': row.sync_quality}, {'sync_quality': 'pending_verification'}, job_id, now)
+                    row.sync_quality = 'pending_verification'
                     changes += 1
             if candidate.full:
                 # 缺席只降质量，保留状态、姓名与所有关系。
@@ -126,9 +146,11 @@ class Publisher:
                 StoreAdminService._rebuild_projection(db)
                 state.data_version += 1
             if job:
-                job.success_count = db.scalar(select(func.count()).select_from(SyncJobDetail).where(SyncJobDetail.job_id == job_id, SyncJobDetail.status == 'succeeded')) or 0
-                job.failure_count = db.scalar(select(func.count()).select_from(SyncJobDetail).where(SyncJobDetail.job_id == job_id, SyncJobDetail.status == 'failed')) or 0
+                job.success_count = db.scalar(select(func.count()).select_from(SyncJobDetail).where(SyncJobDetail.job_id == job_id, SyncJobDetail.attempt == job.attempt, SyncJobDetail.status == 'succeeded')) or 0
+                job.failure_count = db.scalar(select(func.count()).select_from(SyncJobDetail).where(SyncJobDetail.job_id == job_id, SyncJobDetail.attempt == job.attempt, SyncJobDetail.status == 'failed')) or 0
                 if final:
+                    if job.success_count + job.failure_count != job.total_count:
+                        raise RuntimeError('SYNC_OBJECT_COUNT_MISMATCH')
                     job.status, job.phase, job.lease_expires_at, job.finished_at = 'succeeded', 'published', None, now
                     delete_checked(db, SyncStaging, SyncStaging.job_id == job_id)
                     # 分批已提交的变更也计入最终回执。
@@ -150,6 +172,7 @@ class Publisher:
         employees=dict(candidate.employees)
         pending=set(candidate.pending)
         deferred={}
+        reasons=dict(candidate.pending_reasons)
         # 父引用缺失时递归延后依赖它的部门；已有部门保留原父引用。
         while True:
             available=known|set(departments)
@@ -159,31 +182,59 @@ class Publisher:
                 value=departments.pop(key)
                 deferred[('department',key)]=value
                 pending.add(('department',key))
+                reasons[('department',key)] = 'PARENT_DEPARTMENT_UNREADABLE'
                 if value['parent_id']:pending.add(('department',value['parent_id']))
                 if value['status']=='inactive' and key in known:
                     existing=db.get(Department,key)
                     departments[key]={'id':key,'parent_id':existing.parent_id,'status':'inactive','lifecycle_only':True}
         available=known|set(departments)
         for key,value in list(employees.items()):
+            value = dict(value)
+            issues = value.pop('quality_issues', [])
+            optional_issues = value.pop('optional_field_issues', [])
+            old = db.get(Employee, key)
+            if old is not None:
+                for field in optional_issues:
+                    value[field] = getattr(old, field)
+            employees[key] = value
+            if issues:
+                pending.add(('employee', key))
+                reasons[('employee', key)] = ','.join(issues)
+                deferred[('employee', key)] = dict(value)
+                if 'PRIMARY_DEPARTMENT_INVALID' in issues and old is not None and value['status'] == 'active':
+                    value['department_ids'] = list(db.scalars(select(EmployeeDepartment.department_id).where(
+                        EmployeeDepartment.employee_id == key, EmployeeDepartment.is_active.is_(True))))
+                    value['primary_department_id'] = old.primary_department_id
+            if value['department_ids'] is None:
+                from app.sync.collector import department_relation_exempt
+                if department_relation_exempt(value):
+                    if value['status'] == 'inactive':
+                        employees[key] = {**value, 'lifecycle_only': True}
+                        continue
+                    old = db.get(Employee, key)
+                    value['department_ids'] = list(db.scalars(select(EmployeeDepartment.department_id).where(
+                        EmployeeDepartment.employee_id == key, EmployeeDepartment.is_active.is_(True)))) if old else []
+                    value['primary_department_id'] = old.primary_department_id if old else None
             references=set(value['department_ids'] or [])
             if value['primary_department_id']: references.add(value['primary_department_id'])
             if value['department_ids'] is None or references-available:
                 deferred[('employee',key)]=value
                 if value['status']=='inactive':
-                    employees[key]={**value,'lifecycle_only':True}
+                    employees[key]={**value,'lifecycle_only':True,'sync_quality':'pending_verification'}
                 else:
                     employees.pop(key)
                 pending.add(('employee',key))
+                reasons.setdefault(('employee',key), 'DEPARTMENT_RELATION_UNREADABLE')
                 pending.update(('department',identifier) for identifier in references-available)
         for kind,identifier in pending:
             previous=db.get(PendingFact,(kind,identifier))
             value=deferred.get((kind,identifier),previous.normalized_data if previous else {})
-            db.merge(PendingFact(object_type=kind,source_id=identifier,normalized_data=value,error_code='PENDING_VERIFICATION',updated_at=now))
+            db.merge(PendingFact(object_type=kind,source_id=identifier,normalized_data=value,error_code=reasons.get((kind,identifier),'PENDING_VERIFICATION'),updated_at=now))
         for kind,records in [('department',departments),('employee',employees)]:
             for identifier in records:
                 if (kind,identifier) not in pending:
                     delete_checked(db, PendingFact, PendingFact.object_type == kind, PendingFact.source_id == identifier)
-        return replace(candidate,departments=departments,employees=employees,pending=sorted(pending))
+        return replace(candidate,departments=departments,employees=employees,pending=sorted(pending),pending_reasons=reasons)
 
     def _end_department_memberships(self,db,department_id,job_id,now):
         relations=list(db.scalars(select(EmployeeDepartment).where(EmployeeDepartment.department_id==department_id,EmployeeDepartment.is_active.is_(True))))
@@ -204,7 +255,9 @@ class Publisher:
             fields.update({key: value[key] for key in (
                 'mobile', 'email', 'avatar_url', 'join_time', 'field_readability', 'is_frozen', 'is_resigned', 'is_activated', 'is_exited', 'is_unjoin'
             ) if key in value})
-        fields['sync_quality']='pending_verification'
+        if row is not None and value.get('sync_quality') == 'pending_verification' and not value.get('mobile'):
+            fields.pop('mobile', None)
+        fields['sync_quality']=value.get('sync_quality', 'pending_verification')
         changes=self._upsert(db,Employee,fields,'employee',job_id,now)
         db.flush()
         relations=list(db.scalars(select(EmployeeDepartment).where(EmployeeDepartment.employee_id==value['id'])))

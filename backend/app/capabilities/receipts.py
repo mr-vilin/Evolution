@@ -161,7 +161,7 @@ class ReceiptRepository:
         ).order_by(OperationReceipt.operation_id).with_for_update().execution_options(populate_existing=True)))
         # 与终态及审计在同一事务冻结；当前读避免沿用调用方较早的 RR 快照。
         failed_detail_count = db.scalar(select(func.count()).select_from(SyncJobDetail).where(
-            SyncJobDetail.job_id == job.id, SyncJobDetail.status == 'failed',
+            SyncJobDetail.job_id == job.id, SyncJobDetail.attempt == job.attempt, SyncJobDetail.status == 'failed',
         ).with_for_update())
         summary = {'job_id': job.id, 'status': job.status,
                    'success_count': job.success_count, 'failure_count': job.failure_count,

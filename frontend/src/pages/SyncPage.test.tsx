@@ -44,12 +44,16 @@ it('列表显示业务信息及筛选，不再展示内部任务 ID 和事件面
   });
   setup();
   expect(await screen.findByText('测试人员')).toBeTruthy();
-  expect(screen.getByText('已采集 15 / 30')).toBeTruthy();
+  expect(screen.getByText('50%')).toBeTruthy();
+  expect(screen.getAllByLabelText('进度说明').some(element => element.closest('thead'))).toBe(true);
   expect(screen.queryByText(/random-internal-id/)).toBeNull();
   expect(screen.queryByText('同步事件')).toBeNull();
   expect(screen.queryByText('连接摘要')).toBeNull();
-  expect(screen.getByText('初始化日期')).toBeTruthy();
-  expect(screen.getByRole('link', { name: '成功' }).getAttribute('href')).toBe('/sync/jobs/recent');
+  expect(screen.getByLabelText('初始化日期')).toBeTruthy();
+  expect(screen.queryByText('最近同步任务')).toBeNull();
+  expect(screen.queryByText('飞书事件连接')).toBeNull();
+  expect(screen.queryByRole('combobox', { name: '阶段' })).toBeNull();
+  expect(screen.getByRole('button', { name: '全量更新' })).toBeTruthy();
   expect(screen.getByText('待核实对象')).toBeTruthy();
   expect(screen.getByText('3')).toBeTruthy();
   expect(screen.queryByText('通讯录覆盖')).toBeNull();
@@ -68,5 +72,5 @@ it('活动详情轮询到完成后停止，保留分批入库信息', async () =
   setup('/sync/jobs/j1');
   expect(await screen.findByText('执行中')).toBeTruthy();
   expect(screen.getByText('已入库 50 · 待核验 0')).toBeTruthy();
-  await waitFor(() => expect(screen.getByText('成功')).toBeTruthy(), { timeout: 10000 });
+  await waitFor(() => expect(screen.getByText('完成')).toBeTruthy(), { timeout: 10000 });
 });
