@@ -208,7 +208,7 @@ export function OrganizationPage() {
         </Card>
         <div ref={position} className="org-people-position" aria-hidden />
         <Card className="org-people-card" data-scroll-mode={mode} style={{ '--org-sticky-top': stickyTop + 'px' } as CSSProperties}
-          styles={{ header: { borderBottom: 0 } }} title={<div className="org-members-header">
+          title={<div className="org-members-header">
           <div className="org-department-heading">
             <Typography.Title level={5} className="org-department-name" style={{ margin: 0 }}>{statusView === 'none' ? current?.name ?? '当前部门' : statusViews[`${statusView}_count`].label}</Typography.Title>
             <Typography.Text className="org-member-count" type="secondary" aria-live="polite">共{people.total}人</Typography.Text>
@@ -224,6 +224,7 @@ export function OrganizationPage() {
               </Tooltip>
             </Space>}
           </div>
+        </div>}>
           <div className="org-members-toolbar">
             <div className="org-member-filters">
               <Select aria-label="账号状态" value={accountStatus} disabled={statusView !== 'none'} onChange={setAccountStatus} options={accountOptions}
@@ -244,7 +245,6 @@ export function OrganizationPage() {
             </div>
             <Input.Search className="org-member-search" aria-label="搜索人员" allowClear placeholder="搜索姓名、完整手机号或user_id" value={keyword} onChange={event => setKeyword(event.target.value)} />
           </div>
-        </div>}>
           {summary.error && <Alert type="error" showIcon title={summary.error.message} action={<Button onClick={summary.error.code === 'DATASET_CHANGED' ? retry : summary.reload}>重试</Button>} />}
           {(people.loading || people.error || people.cursor) && <div className="org-people-feedback">
             {people.loading && <Typography.Text role="status">正在加载人员</Typography.Text>}
