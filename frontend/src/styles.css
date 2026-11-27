@@ -30,15 +30,15 @@ body:has(.organization-page), #root:has(.organization-page) { overflow-x: clip; 
 .org-people-card { container-type: inline-size; }
 .org-people-card[data-scroll-mode="sticky"] { position: sticky; top: var(--org-sticky-top); z-index: 2; }
 .org-people-card > .ant-card-head { padding-inline: var(--org-content-padding); }
-.org-people-card > .ant-card-body { padding: 0 var(--org-content-padding) var(--org-content-padding); }
+.org-people-card > .ant-card-body { padding: 16px var(--org-content-padding) var(--org-content-padding); }
 .org-summary-card { flex: none; overflow: hidden; }
 .org-company-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .org-stat-cell { padding: 16px; border-inline-end: 1px solid var(--org-border); }
 .org-stat-cell:last-child { border-inline-end: 0; }
 .org-stat-title { display: flex; align-items: center; gap: 4px; min-height: 24px; }
 .org-account-option { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.org-members-header { display: flex; flex-direction: column; gap: 16px; padding-block: 16px; white-space: normal; font-weight: 400; }
-.org-members-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.org-members-header { display: flex; padding-block: 12px; white-space: normal; font-weight: 400; }
+.org-members-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 16px; }
 .org-member-filters { display: flex; align-items: center; flex-wrap: wrap; min-width: 0; gap: 8px; }
 @container (width < 696px) {
   .org-members-toolbar .org-member-search { flex: 1 0 100%; width: 100%; }
@@ -47,7 +47,7 @@ body:has(.organization-page), #root:has(.organization-page) { overflow-x: clip; 
 .org-department-name { overflow-wrap: anywhere; }
 .org-member-count.ant-typography { flex: none; font-size: 12px; line-height: 20px; font-weight: 400; white-space: nowrap; }
 .org-member-search { flex: none; width: 320px; max-width: 100%; margin-inline-start: auto; }
-.org-members-header .ant-select { min-width: 140px; font-weight: 400; }
+.org-members-toolbar .ant-select { min-width: 140px; font-weight: 400; }
 .org-member-scope { display: inline-flex; }
 .org-department-actions { flex: none; margin-inline-start: 4px; }
 .org-people-feedback { padding-block-end: 8px; }

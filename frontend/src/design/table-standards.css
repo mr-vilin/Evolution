@@ -25,9 +25,8 @@
 /* 对齐当前 antd Table 的分页换行布局；零样本时也测量相同的高度。 */
 .table-standards .table-pagination-probe .ant-pagination{margin:16px 0;flex-wrap:wrap;row-gap:8px;justify-content:flex-end}
 .table-standards .table-pagination-probe .ant-pagination>*{flex:none}
-.table-standards .table-demo-top{padding:16px}
-.table-standards .table-demo-top h3{font-size:16px;line-height:24px;margin:0 0 16px}
-.table-standards .table-demo-toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.table-standards .table-demo-top h3{font-size:16px;line-height:24px;margin:0;padding:16px;border-bottom:1px solid var(--line)}
+.table-standards .table-demo-toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:16px}
 .table-standards .table-toolbar-left,.table-standards .table-toolbar-right{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
 .table-standards .table-toolbar-left{flex:1 1 664px}
 .table-standards .table-toolbar-right{margin-left:auto;flex:0 1 240px}

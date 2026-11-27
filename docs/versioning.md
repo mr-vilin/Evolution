@@ -33,7 +33,7 @@ node scripts/versioning.mjs check --release
 node scripts/versioning.mjs build-info --output build-info.json
 ```
 
-本地开发镜像可通过 `deploy/release.py build --preview-version <估算版本号>` 构建。构建元信息同时记录仓库基准和带 Git 短 SHA 的预览版本，工作区有改动时附带 `.dirty`。
+本地交付由开发 Agent 按全局 Skill 估算预览版本，维护 Unreleased 后执行 `node scripts/versioning.mjs prepare-preview --version <估算版本号> --base-branch <已核实的主分支引用>`，将结果保存到被 Git 忽略的 `.cache/preview-version.json`。手动发布入口通过 `node scripts/versioning.mjs preview-version` 自动读取并核对开发分支、基准和更新日志，然后调用 `deploy/release.py build/deploy --preview-version <估算版本号>`。新交付或基准变化后由 Agent 重新生成记录。构建元信息同时记录仓库基准和带 Git 短 SHA 的预览版本，工作区有改动时附带 `.dirty`。
 
 脚本和 CI 仅检查文件格式与构建一致性；版本级别、PR 触发、首次稳定发布及日期口径由现行全局 Skill 判断。基准检查保留已有版本条目，允许补正说明和日期；不按当前递增策略追溯判定历史编号，也不要求历史日期倒序或全部齐备。发行构建仍需取得当前版本日期，以生成运行元信息。
 

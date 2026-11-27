@@ -48,7 +48,7 @@ export function SyncPage() {
   const options = (values: Record<string, string>) => Object.entries(values).map(([value, text]) => ({ value, label: text }));
   const initialization = current?.initialized_at ? formatTableTime(current.initialized_at) : status.error ? '读取失败' : status.loading ? '读取中' : '暂无历史日期';
   const title = <span className="sync-title">组织同步<Tooltip title={'初始化日期：' + initialization} trigger={['hover', 'focus']}><InfoCircleOutlined className="sync-title-info" tabIndex={0} aria-label="初始化日期" /></Tooltip></span>;
-  const pending = <Space size={4} className="sync-pending">待核实对象<Tooltip title="统计当前已发现且待核实的部门和人员" trigger={['hover', 'focus']}><QuestionCircleOutlined tabIndex={0} aria-label="待核实对象说明" /></Tooltip>{current?.sync_summary ? <Button type="link" style={{ padding: 0, height: 'auto' }} onClick={() => setPendingOpen(true)}>{current.sync_summary.pending_object_count}</Button> : '-'}</Space>;
+  const pending = <Space size={4} className="sync-pending">待核实对象<Tooltip title="统计待核实的人员和部门" trigger={['hover', 'focus']}><QuestionCircleOutlined tabIndex={0} aria-label="待核实对象说明" /></Tooltip>{current?.sync_summary ? <Button type="link" style={{ padding: 0, height: 'auto' }} onClick={() => setPendingOpen(true)}>{current.sync_summary.pending_object_count}</Button> : '-'}</Space>;
   return <PageHeader className="sync-page sync-list-page" area="组织管理" title={title} description="查看同步进度与结果；同步按批次入库，可在任务完成前查看已更新的数据。">
     <div className="sync-list-section">
       <AdaptiveTableCard<SyncJob> title="同步任务" headerExtra={pending} rowKey={row => row.job_id ?? row.id ?? ''} dataSource={jobs.data ?? []}

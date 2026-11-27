@@ -1,5 +1,6 @@
 /** 产品版本与构建元信息工具；只使用 Node.js 标准库。 */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -104,6 +105,49 @@ export function checkRepository(root = repositoryRoot, { release = false, tag, b
   return { version, records };
 }
 
+function previewContext(root, baseRef) {
+  const { version } = checkRepository(root);
+  const branch = git(root, ['symbolic-ref', '--quiet', 'HEAD']);
+  const baseCommit = git(root, ['rev-parse', '--verify', baseRef + '^{commit}']);
+  if (!branch || !baseCommit) throw new Error('无法核对开发分支或预览基准');
+  const baseVersion = JSON.parse(git(root, ['show', baseCommit + ':version.json'])).version;
+  parseVersion(baseVersion);
+  const changelogSha256 = createHash('sha256').update(readFileSync(resolve(root, 'CHANGELOG.md'))).digest('hex');
+  return { branch, baseRef, baseCommit, baseVersion, repositoryVersion: version, changelogSha256 };
+}
+
+export function preparePreview(root, version, baseRef) {
+  if (!baseRef || !version) throw new Error('准备预览版本需要估算版本号和已核实的主分支引用');
+  const context = previewContext(root, baseRef);
+  buildInfo(root, { PREVIEW_VERSION: version });
+  const record = { ...context, version };
+  const path = resolve(root, '.cache', 'preview-version.json');
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(record, null, 2) + '\n');
+  return record;
+}
+
+export function preparedPreview(root) {
+  const path = resolve(root, '.cache', 'preview-version.json');
+  const { version } = checkRepository(root);
+  const defaultBase = git(root, ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD']);
+  if (defaultBase && git(root, ['rev-parse', 'HEAD']) === git(root, ['rev-parse', defaultBase]) &&
+      git(root, ['status', '--porcelain']) === '') return version;
+  let record;
+  try { record = JSON.parse(readFileSync(path, 'utf8')); }
+  catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    throw new Error('当前开发交付尚未准备预览版本，请由开发 Agent 按版本管理规范生成本地预览记录');
+  }
+  const context = previewContext(root, record.baseRef);
+  if (Object.keys(context).some(key => context[key] !== record[key])) {
+    throw new Error('预览版本记录与当前分支、基准或更新日志不一致，请由开发 Agent 重新核对并生成');
+  }
+  if (!record.version) throw new Error('预览版本记录缺少版本号');
+  buildInfo(root, { PREVIEW_VERSION: record.version });
+  return record.version;
+}
+
 export function buildInfo(root = repositoryRoot, env = process.env) {
   const tag = env.RELEASE_TAG || undefined;
   const { version, records } = checkRepository(root, { tag });
@@ -145,6 +189,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     if (command === 'check') {
       const result = checkRepository(repositoryRoot, options);
       console.log(`版本校验通过：${result.version}，${result.records.length} 条发行记录`);
+    } else if (command === 'prepare-preview') {
+      const result = preparePreview(repositoryRoot, option('--version'), option('--base-branch'));
+      console.log(result.version);
+    } else if (command === 'preview-version') {
+      console.log(preparedPreview(repositoryRoot));
     } else if (command === 'build-info') {
       checkRepository(repositoryRoot, options);
       const output = option('--output');
@@ -152,7 +201,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       const result = buildInfo(repositoryRoot, { ...process.env, RELEASE_TAG: options.tag });
       writeFileSync(resolve(output), JSON.stringify(result, null, 2) + '\n');
       console.log(`构建元信息已生成：${result.version}（${result.stage}）`);
-    } else throw new Error('用法：node scripts/versioning.mjs check [--release] [--tag vX.Y.Z] [--base-ref SHA] 或 build-info --output 路径');
+    } else throw new Error('用法：node scripts/versioning.mjs check | build-info --output 路径 | prepare-preview --version X.Y.Z --base-branch 引用 | preview-version');
   } catch (error) {
     console.error(`版本校验失败：${error.message}`);
     process.exitCode = 1;

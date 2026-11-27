@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { parseVersion, compareVersions, releaseRecords, checkRepository, buildInfo } from './versioning.mjs';
+import { parseVersion, compareVersions, releaseRecords, checkRepository, buildInfo, preparePreview, preparedPreview } from './versioning.mjs';
 
 function fixture(t, version = '0.1.0', entries = '') {
   const root = mkdtempSync(join(tmpdir(), 'evolution-version-test-'));
@@ -126,4 +126,32 @@ test('候选版本暂缺日期仍可开发校验，但不能用于发行构建',
   assert.throws(() => checkRepository(root, { release: true }), /已确认版本日期/);
   assert.doesNotThrow(() => releaseRecords('## [Unreleased]\n## [0.2.0] — 2026-11-16\n## [0.1.0]\n日期待补正'));
   assert.doesNotThrow(() => releaseRecords('## [Unreleased]\n## [0.2.0] — 2026-11-15\n## [0.1.0] — 2026-11-16\n补正历史日期'));
+});
+
+test('手动部署自动读取已估算版本，交付和主分支基准变化后拒绝复用', t => {
+  const root = fixture(t, '0.13.0', '## [0.13.0] — 2026-11-27\n已有发布');
+  const run = args => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  run(['init', '--quiet']);
+  writeFileSync(join(root, '.gitignore'), '.cache/\n');
+  run(['add', '.']);
+  run(['-c', 'user.name=Version Test', '-c', 'user.email=version-test@example.invalid', 'commit', '--quiet', '-m', 'base']);
+  const baseRef = 'refs/remotes/origin/main';
+  run(['update-ref', baseRef, 'HEAD']);
+  run(['symbolic-ref', 'refs/remotes/origin/HEAD', baseRef]);
+  assert.equal(preparedPreview(root), '0.13.0');
+  run(['switch', '-c', 'local-preview', '--quiet']);
+  writeFileSync(join(root, 'CHANGELOG.md'), '## [Unreleased]\n\n### 修复\n\n- 修正界面\n\n## [0.13.0] — 2026-11-27\n已有发布');
+  assert.throws(() => preparedPreview(root), /尚未准备/);
+  assert.throws(() => preparePreview(root, undefined, baseRef), /估算版本号/);
+  assert.equal(preparePreview(root, '0.13.1', baseRef).version, '0.13.1');
+  assert.equal(preparedPreview(root), '0.13.1');
+  writeFileSync(join(root, 'CHANGELOG.md'), '## [Unreleased]\n\n### 新增\n\n- 新功能\n\n## [0.13.0] — 2026-11-27\n已有发布');
+  assert.throws(() => preparedPreview(root), /不一致/);
+  assert.equal(preparePreview(root, '0.14.0', baseRef).version, '0.14.0');
+  assert.equal(preparedPreview(root), '0.14.0');
+  run(['add', 'CHANGELOG.md']);
+  run(['-c', 'user.name=Version Test', '-c', 'user.email=version-test@example.invalid', 'commit', '--quiet', '-m', 'advance']);
+  run(['update-ref', baseRef, 'HEAD']);
+  writeFileSync(join(root, 'new.txt'), 'work in progress');
+  assert.throws(() => preparedPreview(root), /不一致/);
 });
