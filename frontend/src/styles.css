@@ -137,7 +137,7 @@ body:has(.organization-page), #root:has(.organization-page) { overflow-x: clip; 
 .change-detail-table .ant-table-cell { overflow-wrap: anywhere; }
 
 .raw-change-summary { display: flex; margin-bottom: 16px; color: var(--app-muted); }
-.raw-change-diff { margin-top: 8px; border: 1px solid var(--app-line); border-radius: 6px; overflow: auto; max-height: 60vh; }
+.raw-change-diff { border: 1px solid var(--app-line); border-radius: 6px; overflow: auto; max-height: 60vh; }
 .raw-change-diff-header, .raw-change-diff-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .raw-change-diff-header { position: sticky; top: 0; z-index: 1; background: var(--color-fill-alter); border-bottom: 1px solid var(--app-line); font-weight: 600; }
 .raw-change-diff-header > span, .raw-change-diff-row > code { padding: 2px 8px; min-width: 0; }

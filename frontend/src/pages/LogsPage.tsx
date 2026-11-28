@@ -248,14 +248,14 @@ function LogsView({ objectType, objectId, initialView }: { objectType?: ObjectTy
         pagination={pagination} scroll={{ x: 1040 }} expandable={expandable}>
         {toolbar}{!showTable && tableState}
       </AdaptiveTableCard>}
-    <Modal title={<Space size={8}><span>原始记录 JSON</span>{rawSelected && <Tag variant="filled">{rawSelected.id}</Tag>}</Space>}
+    <Modal title="原始记录 JSON"
       width={1100} open={Boolean(rawSelected)} onCancel={() => setRawSelected(null)} footer={null}>
       {rawSelected && <Space className="raw-change-summary" size={[8, 4]} separator={<span aria-hidden="true">·</span>} wrap>
         <span>{rawSelected.object_name || rawSelected.object_id}</span>
         <span>{sources[rawSelected.source ?? ''] ?? '历史来源待核实'}</span>
         <span>{formatTableTime(rawSelected.committed_at)}</span>
       </Space>}
-      <RawChangeDiff records={rawSelected?.raw_records ?? []} />
+      <RawChangeDiff key={rawSelected?.id} records={rawSelected?.raw_records ?? []} />
     </Modal>
   </PageHeader>;
 }

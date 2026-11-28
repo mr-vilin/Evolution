@@ -1,4 +1,4 @@
-import { Empty, Space, Tag, Typography } from 'antd';
+import { Empty, Space, Tabs, Tag } from 'antd';
 import { CopyValue } from './CopyValue';
 
 export interface RawRecord { id: number; object_type: string; before: unknown; after: unknown }
@@ -10,8 +10,8 @@ function formatJson(value: unknown): string {
 }
 
 function compareLines(before: unknown, after: unknown): LinePair[] {
-  const left = formatJson(before).split('\n');
-  const right = formatJson(after).split('\n');
+  const left = before == null ? [] : formatJson(before).split('\n');
+  const right = after == null ? [] : formatJson(after).split('\n');
   // Align unchanged lines using the longest common subsequence.
   const lengths = Array.from({ length: left.length + 1 }, () => new Uint32Array(right.length + 1));
   for (let i = left.length - 1; i >= 0; i--) {
@@ -40,29 +40,32 @@ function compareLines(before: unknown, after: unknown): LinePair[] {
       result.push({ before: removed[k], after: added[k] });
     }
   }
-  return result;
+  return result.length ? result : [{}];
 }
 
 const types: Record<string, string> = { employee: '人员信息', department: '部门信息', membership: '部门归属' };
 
 export function RawChangeDiff({ records }: { records: RawRecord[] }) {
   if (!records.length) return <Empty description="暂无原始记录" />;
-  return <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-    {records.map(record => <section key={record.id}>
-      <Space size={8}>
-        <Typography.Text strong>{types[record.object_type] ?? record.object_type}</Typography.Text>
-        {records.length > 1 && <Tag variant="filled">{record.id}</Tag>}
-      </Space>
-      <div className="raw-change-diff" role="table" aria-label="原始 JSON 对比">
-        <div className="raw-change-diff-header" role="row">
-          <span role="columnheader"><Space size={4}>变更前<CopyValue value={formatJson(record.before)} label="变更前 JSON" /></Space></span>
-          <span role="columnheader"><Space size={4}>变更后<CopyValue value={formatJson(record.after)} label="变更后 JSON" /></Space></span>
-        </div>
-        {compareLines(record.before, record.after).map((pair, index) => <div className="raw-change-diff-row" role="row" key={index}>
-          <code role="cell" className={pair.before?.changed ? 'raw-change-before' : undefined}>{pair.before?.text ?? ''}</code>
-          <code role="cell" className={pair.after?.changed ? 'raw-change-after' : undefined}>{pair.after?.text ?? ''}</code>
-        </div>)}
-      </div>
-    </section>)}
-  </Space>;
+  return <Tabs items={records.map(record => ({
+    key: String(record.id),
+    label: <Space size={8}>
+      <span>{types[record.object_type] ?? record.object_type}</span>
+      <Tag variant="filled" style={{ marginInlineEnd: 0, fontSize: 12, lineHeight: "18px", fontWeight: 400, paddingInline: 6, color: "var(--app-muted)", background: "var(--color-fill-alter)" }}>{record.id}</Tag>
+    </Space>,
+    children: <RawRecordDiff record={record} />,
+  }))} />;
+}
+
+function RawRecordDiff({ record }: { record: RawRecord }) {
+  return <div className="raw-change-diff" role="table" aria-label="原始 JSON 对比">
+    <div className="raw-change-diff-header" role="row">
+      <span role="columnheader"><Space size={4}>变更前<CopyValue value={formatJson(record.before)} label="变更前 JSON" /></Space></span>
+      <span role="columnheader"><Space size={4}>变更后<CopyValue value={formatJson(record.after)} label="变更后 JSON" /></Space></span>
+    </div>
+    {compareLines(record.before, record.after).map((pair, index) => <div className="raw-change-diff-row" role="row" key={index}>
+      <code role="cell" className={pair.before?.changed ? 'raw-change-before' : undefined}>{pair.before?.text ?? ''}</code>
+      <code role="cell" className={pair.after?.changed ? 'raw-change-after' : undefined}>{pair.after?.text ?? ''}</code>
+    </div>)}
+  </div>;
 }
