@@ -5,6 +5,8 @@ import type { FilterValue, SortOrder } from 'antd/es/table/interface';
 import { CopyOutlined, DeleteOutlined, EditOutlined, EyeOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SendOutlined } from '@ant-design/icons';
 import { compareNumbers, compareTimes, demoRecords, displayValue, filterFields, personInitial, selectDemoRecords, statusColors, tableColumnLayout, type DemoRecord, type FilterField, type TableMeasurements } from './tableStandardsModel';
 
+import { TableActionButton } from '../components/TableActionButton';
+
 type Filters = Partial<Record<FilterField, FilterValue | null>>;
 type SortState = { key: string | null; order: SortOrder };
 type EditValues = { name: string; quantity: number | null };
@@ -155,11 +157,11 @@ export default function TableDemo({ showCreate = true, maxHeight = 520, recordLi
     { key: 'createdAt', className: 'table-time', title: '创建时间', dataIndex: 'createdAt', width: 184, ...sortableColumn('createdAt'), render: displayValue },
     { key: 'updatedAt', className: 'table-time', title: '更新时间', dataIndex: 'updatedAt', width: 184, ...sortableColumn('updatedAt'), render: displayValue },
     { key: 'actions', title: '操作', width: actionWidth, fixed: fixActions ? 'right' : undefined, render: (_value, row) => <div className="table-row-actions">
-      <Tooltip title="查看" trigger={['hover', 'focus']}><Button type="text" size="small" aria-label={`查看：${row.name}`} icon={<EyeOutlined />} onClick={() => modal.info({ centered: true, title: row.name, content: <p>负责人：{row.owner}；状态：{row.status}；数量：{displayValue(row.quantity)}。本地演示记录，时间按北京时间展示。</p>, okText: '关闭' })} /></Tooltip>
-      <Tooltip title="编辑" trigger={['hover', 'focus']}><Button type="text" size="small" aria-label={`编辑：${row.name}`} icon={<EditOutlined />} onClick={() => edit(row)} /></Tooltip>
+      <TableActionButton tooltip="查看" size="small" aria-label={`查看：${row.name}`} icon={<EyeOutlined />} onClick={() => modal.info({ centered: true, title: row.name, content: <p>负责人：{row.owner}；状态：{row.status}；数量：{displayValue(row.quantity)}。本地演示记录，时间按北京时间展示。</p>, okText: '关闭' })} />
+      <TableActionButton tooltip="编辑" size="small" aria-label={`编辑：${row.name}`} icon={<EditOutlined />} onClick={() => edit(row)} />
       <Dropdown trigger={['click']} menu={{ items: [
         { key: 'resend', label: '重发', icon: <SendOutlined /> }, { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
-      ], onClick: ({ key }) => key === 'delete' ? remove(row) : message.success(`已模拟重发“${row.name}”`) }}><Tooltip title="更多操作" trigger={['hover', 'focus']}><Button type="text" size="small" aria-label={`更多操作：${row.name}`} icon={<MoreOutlined />} /></Tooltip></Dropdown>
+      ], onClick: ({ key }) => key === 'delete' ? remove(row) : message.success(`已模拟重发“${row.name}”`) }}><TableActionButton tooltip="更多操作" size="small" aria-label={`更多操作：${row.name}`} icon={<MoreOutlined />} /></Dropdown>
     </div> },
   ];
   const onChange: TableProps<DemoRecord>['onChange'] = (pagination, nextFilters, sorter, extra) => {

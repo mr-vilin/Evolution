@@ -123,9 +123,27 @@ body:has(.organization-page), #root:has(.organization-page) { overflow-x: clip; 
 .sync-title-info { font-size: 14px; line-height: 1; color: var(--app-muted); cursor: help; }
 .sync-pending { font-weight: 400; font-size: 14px; }
 .sync-pending .anticon { color: var(--app-muted); }
-.sync-list-page.page-heading { margin-bottom: 0; }
-.sync-list-page .ant-pro-page-container-children-container { padding-bottom: 0; }
-.ant-pro-layout .ant-pro-layout-content:has(.sync-list-page) { padding-bottom: 24px; min-width: 0; }
+.sync-list-page.page-heading, .logs-list-page.page-heading { margin-bottom: 0; }
+.sync-list-page .ant-pro-page-container-children-container,
+.logs-list-page .ant-pro-page-container-children-container { padding-bottom: 0; }
+.ant-pro-layout .ant-pro-layout-content:has(.sync-list-page, .logs-list-page) { padding-bottom: 24px; min-width: 0; }
 .sync-list-section { min-width: 0; }
 .sync-progress-cell { min-width: 0; width: 100%; }
 .sync-progress-detail { width: min(320px, 100%); }
+
+.logs-list-page tr.ant-table-expanded-row > td.ant-table-cell {
+  background: var(--color-primary-bg);
+}
+.change-detail-table .ant-table-cell { overflow-wrap: anywhere; }
+
+.raw-change-summary { display: flex; margin-bottom: 16px; color: var(--app-muted); }
+.raw-change-diff { margin-top: 8px; border: 1px solid var(--app-line); border-radius: 6px; overflow: auto; max-height: 60vh; }
+.raw-change-diff-header, .raw-change-diff-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.raw-change-diff-header { position: sticky; top: 0; z-index: 1; background: var(--color-fill-alter); border-bottom: 1px solid var(--app-line); font-weight: 600; }
+.raw-change-diff-header > span, .raw-change-diff-row > code { padding: 2px 8px; min-width: 0; }
+.raw-change-diff-row > code { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 20px; }
+.raw-change-diff-header > :first-child, .raw-change-diff-row > :first-child { border-right: 1px solid var(--app-line); }
+.raw-change-diff-row > .raw-change-before { background: var(--app-accent-bg); }
+.raw-change-diff-row > .raw-change-after { background: var(--app-accent-bg); color: var(--app-accent); }
+.table-action-button.ant-btn:not(:disabled):not(.ant-btn-dangerous) { color: #595959; }
+.table-action-button.ant-btn:not(:disabled):not(.ant-btn-dangerous):is(:hover, :focus-visible) { color: var(--app-primary); }

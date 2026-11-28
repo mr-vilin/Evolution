@@ -41,6 +41,13 @@ class Publisher:
                         or db.get(SystemSetting, 'coverage_invalidated')):
                     raise InitializationFailure('INITIALIZATION_WIZARD_REQUIRED', '缺少有效预检或当前初始化流程已失效')
                 validate_candidate(candidate)
+            from app.sync.change_records import executor_name
+            db.info['organization_change_context'] = {
+                'publication_id': uuid.uuid4().hex,
+                'event_id': event_id,
+                'sync_source': job.type if job else 'event' if event_id else None,
+                'executor_name': executor_name(db, job.requested_by) if job else '系统',
+            }
             candidate=self._defer_unresolved(db,candidate,now)
             if initializing:
                 validate_candidate(candidate)
@@ -239,8 +246,12 @@ class Publisher:
     def _end_department_memberships(self,db,department_id,job_id,now):
         relations=list(db.scalars(select(EmployeeDepartment).where(EmployeeDepartment.department_id==department_id,EmployeeDepartment.is_active.is_(True))))
         for relation in relations:
-            relation.is_active=False
-            self._log(db,'membership',relation.employee_id,{'department_id':department_id,'active':True},{'department_id':department_id,'active':False},job_id,now)
+            memberships = list(db.scalars(select(EmployeeDepartment).where(
+                EmployeeDepartment.employee_id == relation.employee_id)))
+            before = sorted((row.department_id, row.is_primary, row.is_active) for row in memberships)
+            relation.is_active = False
+            after = sorted((row.department_id, row.is_primary, row.is_active) for row in memberships)
+            self._log(db, 'membership', relation.employee_id, {'relations': before}, {'relations': after}, job_id, now)
         return len(relations)
 
     def _publish_inactive_lifecycle(self,db,value,job_id,now):
@@ -324,6 +335,13 @@ class Publisher:
 
     @staticmethod
     def _log(db, kind, identifier, before, after, job_id, now):
-        change = ChangeLog(object_type=kind, object_id=identifier, source='feishu', actor='sync', job_id=job_id, before_data=before, after_data=after, committed_at=now)
+        model = Department if kind == 'department' else Employee
+        name = (after or {}).get('name') or (before or {}).get('name')
+        if not name:
+            row = db.get(model, identifier)
+            name = row.name if row else None
+        change = ChangeLog(object_type=kind, object_id=identifier, source='feishu', actor='sync',
+                           job_id=job_id, before_data=before, after_data=after, committed_at=now,
+                           object_name=name, **db.info.get('organization_change_context', {}))
         db.add(change)
         return change

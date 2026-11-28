@@ -349,6 +349,32 @@ def patch_store(store_id: str, body: StoreChange, data_version: int, authorizati
     return apply_stores(StoreBatch(data_version=data_version, changes=[body]), authorization, runtime)
 
 
+@router.get('/organization-changes')
+def list_organization_changes(
+        object_type: str = Query('employee', pattern='^(employee|department)$'),
+        object_id: str | None = Query(None, max_length=191),
+        keyword: str | None = Query(None, max_length=255),
+        source: str | None = Query(None, pattern='^(initialize|full|subtree|reconcile|event)$'),
+        action: str | None = Query(None, pattern='^(create|update|deactivate|reactivate)$'),
+        actor: str | None = Query(None, max_length=255),
+        committed_after: datetime | None = None, committed_before: datetime | None = None,
+        view: str = Query('all', pattern='^(all|grouped)$'),
+        page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
+        identity=Depends(get_admin_identity), runtime: Runtime = Depends(get_runtime)):
+    from app.sync.change_records import organization_changes
+    for boundary in (committed_after, committed_before):
+        if boundary is not None and boundary.tzinfo is None:
+            raise HTTPException(422, {'code': 'VALIDATION_ERROR', 'message': '日志时间必须包含 UTC 时区'})
+    if committed_after and committed_before and committed_after > committed_before:
+        raise HTTPException(422, {'code': 'VALIDATION_ERROR', 'message': '开始时间不能晚于结束时间'})
+    with runtime.sessions() as db:
+        return organization_changes(
+            db, object_type=object_type, object_id=object_id, keyword=keyword, source=source,
+            action=action, actor=actor, view=view, page=page, page_size=page_size,
+            committed_after=committed_after.astimezone(timezone.utc).replace(tzinfo=None) if committed_after else None,
+            committed_before=committed_before.astimezone(timezone.utc).replace(tzinfo=None) if committed_before else None,
+        )
+
 @router.get("/change-logs")
 def change_logs(object_type: str | None = None, object_id: str | None = None, source: str | None = None, job_id: str | None = None, actor: str | None = None, action: str | None = None, committed_after: datetime | None = None, committed_before: datetime | None = None, limit: int = Query(100, ge=1, le=500), cursor: int | None = None, identity=Depends(get_admin_identity), runtime: Runtime = Depends(get_runtime)):
     if action not in (None,'create','update','delete'):

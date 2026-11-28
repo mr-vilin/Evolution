@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Card } from 'antd';
+import { Card, type CardProps } from 'antd';
 import type { TableProps } from 'antd';
 import { ResourceTable } from './ResourceTable';
 
 /** 管理后台的整块表格：以实际顶栏、工具栏、分页和三行预算决定容纳与吸顶。 */
-export function AdaptiveTableCard<T extends object>({title,headerExtra,children,showTable=true,...table}: Omit<TableProps<T>,'title'> & {title:string;headerExtra?:ReactNode;children?:ReactNode;showTable?:boolean}) {
+export function AdaptiveTableCard<T extends object>({title,headerExtra,tabList,tabBarExtraContent,activeTabKey,onTabChange,children,showTable=true,...table}: Omit<TableProps<T>,'title'> & {title?:string;headerExtra?:ReactNode;children?:ReactNode;showTable?:boolean} & Pick<CardProps,'tabList'|'tabBarExtraContent'|'activeTabKey'|'onTabChange'>) {
   const marker = useRef<HTMLDivElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const [layout,setLayout] = useState({body:240,top:0,tail:0,sticky:false,width:1000});
@@ -52,6 +52,6 @@ export function AdaptiveTableCard<T extends object>({title,headerExtra,children,
   });
   // ProTable 在内部缓存初始 fixed；布局模式变化时重建列状态，排序和页码仍由外部保留。
   return <div ref={marker} style={{minWidth:0,paddingBottom:layout.tail}}><div ref={card} style={{position:layout.sticky ? 'sticky':'relative',top:layout.sticky ? layout.top:undefined,zIndex:layout.sticky ? 2:undefined}}>
-    <Card title={title} extra={headerExtra}>{children}{showTable && <ResourceTable<T> key={columns?.map(column=>`${String(column.key)}:${String(column.fixed)}`).join('|')} {...table} columns={columns} scroll={{...table.scroll,y:layout.body}} />}</Card>
+    <Card title={title} extra={headerExtra} tabList={tabList} tabBarExtraContent={tabBarExtraContent} activeTabKey={activeTabKey} onTabChange={onTabChange}>{children}{showTable && <ResourceTable<T> key={columns?.map(column=>`${String(column.key)}:${String(column.fixed)}`).join('|')} {...table} columns={columns} scroll={{...table.scroll,y:layout.body}} />}</Card>
   </div></div>;
 }
