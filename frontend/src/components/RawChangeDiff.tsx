@@ -1,4 +1,4 @@
-import { Empty, Space, Typography } from 'antd';
+import { Empty, Space, Tag, Typography } from 'antd';
 import { CopyValue } from './CopyValue';
 
 export interface RawRecord { id: number; object_type: string; before: unknown; after: unknown }
@@ -51,7 +51,7 @@ export function RawChangeDiff({ records }: { records: RawRecord[] }) {
     {records.map(record => <section key={record.id}>
       <Space size={8}>
         <Typography.Text strong>{types[record.object_type] ?? record.object_type}</Typography.Text>
-        {records.length > 1 && <code className="raw-change-id">id: {record.id}</code>}
+        {records.length > 1 && <Tag variant="filled">{record.id}</Tag>}
       </Space>
       <div className="raw-change-diff" role="table" aria-label="原始 JSON 对比">
         <div className="raw-change-diff-header" role="row">

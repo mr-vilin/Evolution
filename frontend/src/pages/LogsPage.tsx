@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from '@umijs/max';
-import { Button, DatePicker, Input, Modal, Select, Space, Table, Tag, Tooltip } from 'antd';
+import { Avatar, Button, DatePicker, Input, Modal, Select, Space, Table, Tag, Tooltip } from 'antd';
 import type { TableProps } from 'antd';
-import { DownOutlined, EyeOutlined, FileTextOutlined, ReloadOutlined, UpOutlined } from '@ant-design/icons';
+import { DownOutlined, EyeOutlined, FileTextOutlined, ReloadOutlined, UpOutlined, UserOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import { query } from '../services/http';
 import { PageHeader } from '../components/PageHeader';
@@ -18,7 +18,11 @@ import { EventConnectionStatus, formatTableTime, syncTypes } from '../components
 type ObjectType = 'employee' | 'department';
 type View = 'all' | 'grouped';
 interface DepartmentItem { id: string; name: string; primary: boolean }
-interface Difference { field: string; label?: string; before: unknown; after: unknown }
+interface PersonSummary { name: string; avatar_url?: string | null }
+interface Difference {
+  field: string; label?: string; before: unknown; after: unknown;
+  before_person?: PersonSummary; after_person?: PersonSummary;
+}
 interface OrganizationChange {
   id: number;
   object_id: string;
@@ -44,7 +48,7 @@ const fieldNames: Record<string, string> = {
   name: '名称', parent_id: '上级部门', leader_user_id: '负责人', status: '状态',
   primary_department_id: '主部门', departments: '部门', job_title: '职位', employee_no: '员工编号',
   email: '电子邮箱', mobile: '手机号', avatar_url: '头像', join_time: '入职时间',
-  employee_type_id: '员工类型 ID', employee_type_name: '员工类型',
+  employee_type_name: '员工类型',
   permission_role_name: '权限角色', store_attribute_id: '门店属性 ID', store_attribute_name: '门店属性',
   is_frozen: '账号冻结', is_resigned: '离职状态', is_activated: '账号激活', is_exited: '退出企业',
   is_unjoin: '未加入', feishu_user_id: '飞书用户 ID', feishu_department_id: '飞书部门 ID',
@@ -72,11 +76,21 @@ function departmentValue(value: unknown, accent: boolean) {
 function ChangeDetails({ record }: { record: OrganizationChange }) {
   const rows = [...record.changes.filter(change => !change.field.startsWith('membership:') && change.field !== 'primary_department_id'),
     ...(record.department_change ? [record.department_change] : [])];
-  const changes = rows.filter(change => change.field !== 'permission_role_id'
+  const hiddenFields = new Set(['permission_role_id', 'employee_type_id', 'is_virtual_root']);
+  const changes = rows.filter(change => !hiddenFields.has(change.field)
     && JSON.stringify(change.before) !== JSON.stringify(change.after));
   function value(difference: Difference, side: 'before' | 'after') {
     const current = difference[side];
     if (difference.field === 'departments') return departmentValue(current, side === 'after');
+    if (difference.field === 'avatar_url' && typeof current === 'string' && current.trim()) {
+      return <Avatar size={24} src={current} icon={<UserOutlined />} alt={side === 'before' ? '变更前头像' : '变更后头像'} />;
+    }
+    const person = side === 'before' ? difference.before_person : difference.after_person;
+    if (difference.field === 'leader_user_id' && person) {
+      return <span style={side === 'after' ? { color: 'var(--app-accent)' } : undefined}>
+        <EmployeeIdentity name={person.name} avatar={person.avatar_url} />
+      </span>;
+    }
     return <span style={side === 'after' ? { color: 'var(--app-accent)' } : undefined}>
       {displayValue(difference.field, current)}
     </span>;
@@ -234,7 +248,7 @@ function LogsView({ objectType, objectId, initialView }: { objectType?: ObjectTy
         pagination={pagination} scroll={{ x: 1040 }} expandable={expandable}>
         {toolbar}{!showTable && tableState}
       </AdaptiveTableCard>}
-    <Modal title={<Space size={8}><span>原始记录 JSON</span>{rawSelected && <code className="raw-change-id">id: {rawSelected.id}</code>}</Space>}
+    <Modal title={<Space size={8}><span>原始记录 JSON</span>{rawSelected && <Tag variant="filled">{rawSelected.id}</Tag>}</Space>}
       width={1100} open={Boolean(rawSelected)} onCancel={() => setRawSelected(null)} footer={null}>
       {rawSelected && <Space className="raw-change-summary" size={[8, 4]} separator={<span aria-hidden="true">·</span>} wrap>
         <span>{rawSelected.object_name || rawSelected.object_id}</span>

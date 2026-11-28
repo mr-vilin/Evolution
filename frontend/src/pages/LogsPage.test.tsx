@@ -20,6 +20,9 @@ const record = {
     { field: 'email', before: 'old@example.test', after: null },
     { field: 'avatar_url', before: null, after: 'https://example.test/' + 'a'.repeat(360) },
     { field: 'permission_role_id', before: 'role-old', after: 'role-new' },
+    { field: 'employee_type_id', before: 'type-a', after: 'type-b' },
+    { field: 'employee_type_name', before: '正式', after: '兼职' },
+    { field: 'is_virtual_root', before: false, after: true },
     { field: 'permission_role_name', before: '店员', after: '店长' },
     { field: 'primary_department_id', before: '原门店', after: '新门店' },
     { field: 'membership:d1', before: '主部门', after: null },
@@ -32,19 +35,26 @@ const record = {
   raw_records: [{ id: 1, object_type: 'employee', before: { name: '测试员工', job_title: '专员' }, after: { name: '测试员工', job_title: '主管' } }],
 };
 
-function setup() {
+const departmentRecord = {
+  ...record, id: 2, object_id: 'd1', object_type: 'department', object_name: '运营部',
+  changes: [{ field: 'leader_user_id', before: 'unresolved-leader', after: 'leader',
+    after_person: { name: '部门负责人', avatar_url: 'https://example.test/leader.png' } }],
+  department_change: null,
+};
+
+function setup(initialPath = '/logs') {
   const urls: string[] = [];
   vi.stubGlobal('fetch', async (url: string) => {
     urls.push(url);
     const params = new URL(url, 'http://local').searchParams;
     if (url === '/admin/api/status') return Response.json({ data: { connection: { status: 'disconnected' } }, meta: {} });
-    if (params.get('object_type') === 'department') return Response.json({ data: [], meta: { total: 0 } });
+    if (params.get('object_type') === 'department') return Response.json({ data: [departmentRecord], meta: { total: 1 } });
     if (params.get('view') === 'grouped') return Response.json({ data: [
       { object_id: 'u1', object_name: '测试员工', total: 8, records: [record] },
     ], meta: { total: 1 } });
     return Response.json({ data: [record], meta: { total: 1 } });
   });
-  render(<App><MemoryRouter initialEntries={['/logs']}><Routes><Route path="/logs" element={<LogsPage />} /></Routes></MemoryRouter></App>);
+  render(<App><MemoryRouter initialEntries={[initialPath]}><Routes><Route path="/logs" element={<LogsPage />} /></Routes></MemoryRouter></App>);
   return urls;
 }
 
@@ -81,6 +91,11 @@ it('支持行内部门差异和执行人头像', async () => {
   expect(screen.getByText('店长')).toBeTruthy();
   expect(screen.queryByText('权限角色 ID')).toBeNull();
   expect(screen.queryByText('role-old')).toBeNull();
+  expect(screen.queryByText('员工类型 ID')).toBeNull();
+  expect(screen.queryByText('is_virtual_root')).toBeNull();
+  expect(screen.getByText('员工类型', { selector: 'td' })).toBeTruthy();
+  expect(screen.getByAltText('变更后头像').getAttribute('src')).toBe(record.changes[2].after);
+  expect(screen.queryByText(record.changes[2].after as string)).toBeNull();
   expect(screen.getByText('部门', { selector: 'td' })).toBeTruthy();
   expect(screen.getByText('原门店')).toBeTruthy();
   expect(screen.getByText('其他门店')).toBeTruthy();
@@ -111,7 +126,7 @@ it('支持原始记录 JSON 对比和完整 JSON 复制', async () => {
   expect(document.querySelector('.ant-tooltip-open')?.getAttribute('aria-label')).toBe('原始记录');
   fireEvent.click(rawButton);
   const title = screen.getByText('原始记录 JSON').closest('.ant-modal-title');
-  expect(title?.textContent).toContain('id: 1');
+  expect(title?.querySelector('.ant-tag')?.textContent).toBe('1');
   const modal = title?.closest('.ant-modal');
   expect(modal?.querySelector('.raw-change-summary')?.textContent)
     .toBe('测试员工·飞书订阅事件·2026-11-27 09:00:00');
@@ -168,4 +183,14 @@ it('按对象查看使用主子表、共享差异和原始记录，独立历史�
   await waitFor(() => expect(urls.some(url => url.includes('object_id=u1') && url.includes('view=all'))).toBe(true));
   fireEvent.click(screen.getByText('返回列表'));
   expect(await screen.findByText('记录总数', { selector: 'th' })).toBeTruthy();
+});
+
+it('部门负责人使用人员头像和姓名，无法解析时显示原始 ID', async () => {
+  setup('/logs?object_type=department');
+  expect(await screen.findByText('运营部')).toBeTruthy();
+  fireEvent.click(document.querySelector('.ant-table-row-expand-icon-collapsed')!);
+  expect(await screen.findByText('部门负责人')).toBeTruthy();
+  expect(screen.getByAltText('部门负责人的头像')).toBeTruthy();
+  expect(screen.getByText('unresolved-leader')).toBeTruthy();
+  expect(screen.queryByText('leader')).toBeNull();
 });

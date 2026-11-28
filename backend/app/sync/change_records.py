@@ -153,6 +153,25 @@ def _record(logs, object_type, jobs, names, departments, executors, snapshots):
     }
 
 
+def _attach_department_leaders(db, records):
+    changes = [change for record in records for change in record['changes']
+               if change['field'] == 'leader_user_id']
+    identifiers = {change[side] for change in changes for side in ('before', 'after')
+                   if isinstance(change[side], str) and change[side]}
+    if not identifiers:
+        return
+    people = db.execute(select(Employee.id, Employee.feishu_user_id, Employee.name, Employee.avatar_url).where(
+        (Employee.id.in_(identifiers)) | (Employee.feishu_user_id.in_(identifiers))
+    )).all()
+    summaries = {person.feishu_user_id: {'name': person.name, 'avatar_url': person.avatar_url} for person in people}
+    summaries.update({person.id: {'name': person.name, 'avatar_url': person.avatar_url} for person in people})
+    for change in changes:
+        for side in ('before', 'after'):
+            identifier = change[side]
+            if isinstance(identifier, str) and identifier in summaries:
+                change[side + '_person'] = summaries[identifier]
+
+
 def organization_changes(db, *, object_type, object_id=None, keyword=None, source=None,
                          action=None, actor=None, committed_after=None, committed_before=None,
                          view='all', page=1, page_size=20):
@@ -206,4 +225,8 @@ def organization_changes(db, *, object_type, object_id=None, keyword=None, sourc
                 group['records'].append(row)
         rows = list(groups.values())
     start = (page - 1) * page_size
-    return {'data': rows[start:start + page_size], 'meta': {'total': len(rows), 'page': page, 'page_size': page_size}}
+    result = rows[start:start + page_size]
+    if object_type == 'department':
+        records = [record for group in result for record in group['records']] if view == 'grouped' else result
+        _attach_department_leaders(db, records)
+    return {'data': result, 'meta': {'total': len(rows), 'page': page, 'page_size': page_size}}

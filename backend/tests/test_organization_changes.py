@@ -131,3 +131,25 @@ def test_department_before_after_preserves_all_memberships_and_primary(sqlite_se
         assert row['actor_is_user'] is True
         assert row['actor_avatar_url'] == 'https://example.test/avatar.png'
         assert len(row['raw_records']) == 2
+
+
+def test_department_leader_display_resolves_current_employee_and_preserves_missing_id(sqlite_sessions):
+    from app.persistence.models import Department, Employee
+
+    with sqlite_sessions.begin() as db:
+        db.add(Department(id='dep', feishu_department_id='dep', name='部门'))
+        db.add(Employee(id='leader-local', feishu_user_id='leader-feishu', name='负责人',
+                        avatar_url='https://example.test/leader.png'))
+        db.add(ChangeLog(object_type='department', object_id='dep', source='feishu',
+                         before_data={'leader_user_id': 'unknown'},
+                         after_data={'leader_user_id': 'leader-feishu'}, committed_at=datetime(2026, 11, 27, 1)))
+    with sqlite_sessions() as db:
+        for view in ('all', 'grouped'):
+            result = organization_changes(db, object_type='department', view=view)['data'][0]
+            record = result['records'][0] if view == 'grouped' else result
+            change = next(item for item in record['changes'] if item['field'] == 'leader_user_id')
+            assert change['before'] == 'unknown'
+            assert 'before_person' not in change
+            assert change['after'] == 'leader-feishu'
+            assert change['after_person'] == {'name': '负责人', 'avatar_url': 'https://example.test/leader.png'}
+            assert record['raw_records'][0]['after']['leader_user_id'] == 'leader-feishu'

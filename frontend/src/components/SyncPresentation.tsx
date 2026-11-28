@@ -1,4 +1,5 @@
-import { Badge, Progress, Space, Tag, Tooltip, theme } from 'antd';
+import { Progress, Space, Tag, Tooltip, theme } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, MinusCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import type { SyncJob } from '../domain';
 
 export const syncTypes = { initialize: '初始化任务', full: '全量同步任务', subtree: '局部同步任务', reconcile: '全量校准任务' };
@@ -21,8 +22,14 @@ export function formatTableTime(value?: string | null) {
 }
 
 export function EventConnectionStatus({ status }: { status: string }) {
-  const value = ({ normal: ['success', '正常'], warning: ['warning', '告警'], disconnected: ['error', '断开'], unconfigured: ['default', '未配置'] } as const)[status as 'normal' | 'warning' | 'disconnected' | 'unconfigured'] ?? ['default', '未知'];
-  return <Badge status={value[0]} text={value[1]} />;
+  const states = {
+    normal: { color: 'success', label: '正常', icon: <CheckCircleOutlined /> },
+    warning: { color: 'warning', label: '告警', icon: <ExclamationCircleOutlined /> },
+    disconnected: { color: 'error', label: '断开', icon: <CloseCircleOutlined /> },
+    unconfigured: { color: 'default', label: '未配置', icon: <MinusCircleOutlined /> },
+  };
+  const state = states[status as keyof typeof states] ?? { color: 'default', label: '未知', icon: <QuestionCircleOutlined /> };
+  return <Tag color={state.color} variant="filled" icon={state.icon} style={{ marginInlineEnd: 0 }}>{state.label}</Tag>;
 }
 
 export function SyncProgress({ job, compact = false }: { job: SyncJob; compact?: boolean }) {
