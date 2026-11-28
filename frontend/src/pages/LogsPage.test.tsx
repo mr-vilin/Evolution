@@ -1,9 +1,10 @@
 import { App } from 'antd';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { LogsPage } from './LogsPage';
+import type { RawRecord } from '../components/RawChangeDiff';
 
 beforeEach(() => {
   vi.stubGlobal('matchMedia', () => ({ matches: false, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() }));
@@ -42,7 +43,7 @@ const departmentRecord = {
   department_change: null,
 };
 
-function setup(initialPath = '/logs') {
+function setup(initialPath = '/logs', rawRecords: RawRecord[] = record.raw_records) {
   const urls: string[] = [];
   vi.stubGlobal('fetch', async (url: string) => {
     urls.push(url);
@@ -52,7 +53,7 @@ function setup(initialPath = '/logs') {
     if (params.get('view') === 'grouped') return Response.json({ data: [
       { object_id: 'u1', object_name: '测试员工', total: 8, records: [record] },
     ], meta: { total: 1 } });
-    return Response.json({ data: [record], meta: { total: 1 } });
+    return Response.json({ data: [{ ...record, raw_records: rawRecords }], meta: { total: 1 } });
   });
   render(<App><MemoryRouter initialEntries={[initialPath]}><Routes><Route path="/logs" element={<LogsPage />} /></Routes></MemoryRouter></App>);
   return urls;
@@ -126,11 +127,11 @@ it('支持原始记录 JSON 对比和完整 JSON 复制', async () => {
   expect(document.querySelector('.ant-tooltip-open')?.getAttribute('aria-label')).toBe('原始记录');
   fireEvent.click(rawButton);
   const title = screen.getByText('原始记录 JSON').closest('.ant-modal-title');
-  expect(title?.querySelector('.ant-tag')?.textContent).toBe('1');
+  expect(title?.querySelector('.ant-tag')).toBeNull();
   const modal = title?.closest('.ant-modal');
   expect(modal?.querySelector('.raw-change-summary')?.textContent)
     .toBe('测试员工·飞书订阅事件·2026-11-27 09:00:00');
-  expect(screen.getByText('人员信息')).toBeTruthy();
+  expect(screen.getByRole('tab', { name: /人员信息\s*1/ }).getAttribute('aria-selected')).toBe('true');
   fireEvent.click(modal!.querySelector('[aria-label="复制变更前 JSON"]')!);
   expect(clipboard).toHaveBeenCalledWith(JSON.stringify(record.raw_records[0].before, null, 2));
   fireEvent.click(modal!.querySelector('[aria-label="复制变更后 JSON"]')!);
@@ -144,6 +145,56 @@ it('支持原始记录 JSON 对比和完整 JSON 复制', async () => {
   await waitFor(() => expect(rawButton.classList.contains('ant-tooltip-open')).toBe(false));
   fireEvent.mouseMove(rawButton);
   await waitFor(() => expect(rawButton.classList.contains('ant-tooltip-open')).toBe(true));
+});
+
+it('多个原始记录按各自 ID 切换标签页，显示并复制当前记录 JSON', async () => {
+  const user = userEvent.setup();
+  const clipboard = vi.spyOn(navigator.clipboard, 'writeText');
+  const membership = { id: 1130, object_type: 'membership', before: { relations: [] }, after: { relations: [['d3', true, true]] } };
+  setup('/logs', [record.raw_records[0], membership]);
+  await screen.findByText('测试员工');
+  fireEvent.click(screen.getByRole('button', { name: '原始记录' }));
+  const dialog = within(screen.getByRole('dialog'));
+  const employeeTab = dialog.getByRole('tab', { name: /人员信息\s*1/ });
+  const membershipTab = dialog.getByRole('tab', { name: /部门归属\s*1130/ });
+  expect(employeeTab.getAttribute('aria-selected')).toBe('true');
+  expect(dialog.getAllByRole('table', { name: '原始 JSON 对比' })).toHaveLength(1);
+  await user.click(membershipTab);
+  expect(membershipTab.getAttribute('aria-selected')).toBe('true');
+  expect(dialog.getAllByRole('table', { name: '原始 JSON 对比' })).toHaveLength(1);
+  const panel = within(dialog.getByRole('tabpanel'));
+  expect(panel.getByText('"d3",')).toBeTruthy();
+  await user.click(panel.getByRole('button', { name: '复制变更后 JSON' }));
+  expect(clipboard).toHaveBeenCalledWith(JSON.stringify(membership.after, null, 2));
+  await user.click(employeeTab);
+  expect(within(dialog.getByRole('tabpanel')).getByText('"job_title": "主管"')).toBeTruthy();
+  clipboard.mockRestore();
+});
+
+it('原始 JSON 整侧为 null 时展示空行，字段内 null 及复制值仍保留', async () => {
+  const user = userEvent.setup();
+  const clipboard = vi.spyOn(navigator.clipboard, 'writeText');
+  const value = { name: '测试员工', email: null };
+  setup('/logs', [
+    { id: 1, object_type: 'employee', before: null, after: value },
+    { id: 2, object_type: 'membership', before: value, after: null },
+  ]);
+  await screen.findByText('测试员工');
+  fireEvent.click(screen.getByRole('button', { name: '原始记录' }));
+  const dialog = within(screen.getByRole('dialog'));
+  let panel = within(dialog.getByRole('tabpanel'));
+  expect(panel.queryByText('null', { exact: true })).toBeNull();
+  expect(panel.getByText('"email": null')).toBeTruthy();
+  expect(panel.getAllByRole('cell').filter((_, index) => index % 2 === 0).every(cell => cell.textContent === '')).toBe(true);
+  await user.click(panel.getByRole('button', { name: '复制变更前 JSON' }));
+  expect(clipboard).toHaveBeenCalledWith('null');
+  await user.click(dialog.getByRole('tab', { name: /部门归属\s*2/ }));
+  panel = within(dialog.getByRole('tabpanel'));
+  expect(panel.queryByText('null', { exact: true })).toBeNull();
+  expect(panel.getAllByRole('cell').filter((_, index) => index % 2 === 1).every(cell => cell.textContent === '')).toBe(true);
+  await user.click(panel.getByRole('button', { name: '复制变更后 JSON' }));
+  expect(clipboard).toHaveBeenCalledWith('null');
+  clipboard.mockRestore();
 });
 
 it('按对象查看使用主子表、共享差异和原始记录，独立历史可返回聚合列表', async () => {
